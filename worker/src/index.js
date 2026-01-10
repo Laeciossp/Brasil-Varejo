@@ -10,7 +10,6 @@ var src_default = {
       "Access-Control-Allow-Credentials": "true",
     };
 
-    // Resposta para Pre-flight (OPTIONS)
     if (req.method === "OPTIONS") {
       return new Response(null, { headers });
     }
@@ -50,7 +49,6 @@ var src_default = {
         const data = await response.json();
 
         if (data.access_token) {
-          // Salva no KV
           await env.CARRINHO.put("MELHORENVIO_TOKEN", data.access_token);
           return new Response("Autorizado com Sucesso no Brasil Varejo! Pode fechar esta aba.", { headers });
         }
@@ -85,10 +83,9 @@ var src_default = {
             }
         }
 
-        // Configurações Gerais (CEP Origem, Token ME)
-        // Se a query falhar, usa valores padrão
+        // Configurações Gerais
         let handlingTime = 0;
-        let cepOrigem = "43805000"; // Fallback
+        let cepOrigem = "43805000";
         let token = await env.CARRINHO.get("MELHORENVIO_TOKEN");
 
         try {
@@ -102,22 +99,23 @@ var src_default = {
             if (settings) {
                 handlingTime = settings.handlingTime || 0;
                 if (settings.originCep) cepOrigem = settings.originCep.replace(/\D/g, "");
-                if (settings.apiToken) token = settings.apiToken; // Token manual tem prioridade se existir
+                if (settings.apiToken) token = settings.apiToken;
             }
         } catch(e) { console.log("Erro config sanity", e); }
 
-       // Retorno Frete Grátis
+        // Retorno Frete Grátis (FIXADO EM 12 DIAS)
         if (isFreeShipping) {
              const freeOption = [{
                 name: "FRETE GRÁTIS",
                 price: 0,
-                delivery_time: 12,  // <--- MUDAMOS AQUI PARA FIXAR EM 12 DIAS
-                delivery_range: { min: 5, max: 12 }, // <--- MUDAMOS O MÁXIMO PARA 12
+                delivery_time: 12, 
+                delivery_range: { min: 5, max: 12 },
                 company: { picture: null },
                 custom_msg: "Promoção Brasil Varejo"
              }];
              return new Response(JSON.stringify(freeOption), { headers });
         }
+
         // Cálculo Melhor Envio
         if (!token) return new Response(JSON.stringify([]), { headers });
         
@@ -162,12 +160,15 @@ var src_default = {
       }
 
       // =================================================================
-      // 4. ROTA: CHECKOUT MERCADO PAGO
+      // 4. ROTA: CHECKOUT MERCADO PAGO (CORRIGIDO PARA BOLETO)
       // =================================================================
       if (req.method === "POST" && url.pathname.includes("checkout")) {
         const { items, email, orderId, shipping, tipoPagamento, shippingAddress, customerDocument } = await req.json();
         
-        const fatorDesconto = (tipoPagamento === 'pix' || tipoPagamento === 'boleto') ? 0.9 : 1.0;
+        // Verifica se é pagamento à vista (Pix ou Boleto)
+        const isCashPayment = (tipoPagamento === 'pix' || tipoPagamento === 'boleto');
+        
+        const fatorDesconto = isCashPayment ? 0.9 : 1.0;
 
         const mpItems = items.map((item) => ({
           title: item.title || "Produto Brasil Varejo",
@@ -207,13 +208,14 @@ var src_default = {
             pending: "https://brasil-varejo.vercel.app/cart"
           },
           auto_return: "approved",
-          external_reference: orderId, // ID do pedido no Sanity
+          external_reference: orderId,
           notification_url: "https://brasil-varejo-api.laeciossp.workers.dev/webhook",
           
           payment_methods: {
-            excluded_payment_types: tipoPagamento === 'pix' 
-              ? [{ id: "credit_card" }, { id: "debit_card" }] 
-              : [{ id: "ticket" }, { id: "bank_transfer" }],
+            // AQUI ESTAVA O ERRO: AGORA VERIFICA SE É À VISTA (PIX OU BOLETO)
+            excluded_payment_types: isCashPayment
+              ? [{ id: "credit_card" }, { id: "debit_card" }]  // Se for à vista, TIRA cartões (Sobra Boleto/Ticket e Pix)
+              : [{ id: "ticket" }, { id: "bank_transfer" }],   // Se for cartão, TIRA boleto e pix
             installments: 12
           },
           binary_mode: true
@@ -237,14 +239,13 @@ var src_default = {
       }
 
       // =================================================================
-      // 5. ROTA: WEBHOOK (ATUALIZAÇÃO DE STATUS + EMAIL RESEND)
+      // 5. ROTA: WEBHOOK
       // =================================================================
       if (url.pathname.includes("webhook")) {
         const urlParams = new URLSearchParams(url.search);
         const dataId = urlParams.get("data.id") || urlParams.get("id");
 
         if (dataId) {
-          // 1. Busca detalhes do pagamento no Mercado Pago
           const respPagamento = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
             headers: { "Authorization": `Bearer ${env.MP_ACCESS_TOKEN}` }
           });
@@ -255,7 +256,6 @@ var src_default = {
             if (pagamento.status === "approved") {
               const sanityId = pagamento.external_reference;
               
-              // 2. Atualiza Sanity
               if (sanityId && env.SANITY_TOKEN && env.SANITY_PROJECT_ID) {
                 const mutation = {
                   mutations: [
@@ -281,7 +281,6 @@ var src_default = {
                   body: JSON.stringify(mutation)
                 });
 
-                // 3. Envia Email de Confirmação via RESEND (NOVO)
                 if (env.RESEND_API_KEY && pagamento.payer.email) {
                     try {
                         await fetch("https://api.resend.com/emails", {
@@ -291,7 +290,7 @@ var src_default = {
                                 "Content-Type": "application/json"
                             },
                             body: JSON.stringify({
-                                from: "Brasil Varejo <onboarding@resend.dev>", // Altere para seu domínio verificado quando tiver
+                                from: "Brasil Varejo <onboarding@resend.dev>",
                                 to: [pagamento.payer.email],
                                 subject: "Pagamento Aprovado! - Brasil Varejo",
                                 html: `
@@ -314,7 +313,7 @@ var src_default = {
         return new Response("OK", { status: 200 });
       }
 
-      return new Response(JSON.stringify({ status: "API Online", projeto: "Brasil Varejo", versao: "1.1" }), { status: 200, headers });
+      return new Response(JSON.stringify({ status: "API Online", projeto: "Brasil Varejo", versao: "1.2" }), { status: 200, headers });
 
     } catch (err) {
       return new Response(JSON.stringify({ erro: err.message, stack: err.stack }), { status: 500, headers });

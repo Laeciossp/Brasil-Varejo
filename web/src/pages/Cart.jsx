@@ -1,10 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Trash2, ShoppingCart, ArrowRight, ShieldCheck, Minus, Plus, MapPin, X, CreditCard } from 'lucide-react';
+import { Trash2, ShoppingCart, ArrowRight, ShieldCheck, Minus, Plus, MapPin, X, CreditCard, Barcode, QrCode } from 'lucide-react';
 import { client } from '../lib/sanity';
-import useCartStore from '../store/useCartStore'; 
-import { formatCurrency } from '../lib/utils'; 
+import useCartStore from '../store/useCartStore';
+import { formatCurrency } from '../lib/utils';
 
+// --- COMPONENTE DO SELO MERCADO PAGO ---
+const MercadoPagoTrust = () => {
+  return (
+    <div className="mt-6 flex flex-col items-center justify-center gap-2 pt-4 border-t border-slate-100">
+      {/* Container do Selo */}
+      <div className="group flex items-center gap-3 rounded-full bg-[#f5fbfe] px-4 py-2 border border-[#e0f1f9] transition-all hover:bg-[#e0f1f9]">
+        
+        {/* Ícone Clássico do Mercado Pago (SVG Inline) */}
+        <svg 
+          className="h-6 w-6 text-[#009EE3]" 
+          viewBox="0 0 24 24" 
+          fill="currentColor" 
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path d="M16.03 8.3c-1.84 0-3.32.74-4.03 1.86-.7-1.12-2.19-1.86-4.03-1.86C5.55 8.3 3.5 10.35 3.5 12.78c0 3.75 4.97 7.22 8.5 7.22 3.53 0 8.5-3.47 8.5-7.22 0-2.43-2.05-4.48-4.47-4.48zM12 18.8c-2.43 0-5.88-2.52-6.66-5.26-.06-.21-.09-.43-.09-.66 0-1.48 1.25-2.68 2.72-2.68 1.13 0 2.06.67 2.47 1.63.11.26.47.26.58 0 .41-.96 1.34-1.63 2.47-1.63 1.47 0 2.72 1.2 2.72 2.68 0 .23-.03.45-.09.66-.78 2.74-4.23 5.26-6.66 5.26z"/>
+          <path d="M12 14.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" opacity="0.5"/>
+        </svg>
+
+        {/* Texto de Garantia */}
+        <div className="flex flex-col leading-none">
+          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+            Processado por
+          </span>
+          <span className="text-sm font-black text-slate-700">
+            Mercado Pago
+          </span>
+        </div>
+      </div>
+
+      {/* Texto de Segurança Secundário */}
+      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-400">
+        <ShieldCheck className="h-3 w-3" />
+        <span>Pagamento seguro e com garantia</span>
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENTE PRINCIPAL ---
 export default function Cart() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -28,9 +67,6 @@ export default function Cart() {
         setRecalculatingShipping(true);
         try {
             const workerUrl = 'https://brasil-varejo-api.laeciossp.workers.dev/shipping';
-            // Pega o primeiro produto para verificar a flag de frete grátis no backend
-            const mainProduct = items[0];
-
             const response = await fetch(workerUrl, { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -38,7 +74,7 @@ export default function Cart() {
                   from: { postal_code: "43805000" },
                   to: { postal_code: activeAddress.zip },
                   products: items.map(p => ({
-                    id: p._id, // Envia ID correto
+                    id: p._id,
                     width: p.logistics?.width || 15,
                     height: p.logistics?.height || 15,
                     length: p.logistics?.length || 15,
@@ -51,12 +87,11 @@ export default function Cart() {
             const options = await response.json();
             
             if (Array.isArray(options) && options.length > 0) {
-                // Tenta manter a mesma opção (ex: SEDEX) se existir, senão pega a primeira (mais barata/grátis)
                 const currentName = selectedShipping?.name;
                 const sameOption = options.find(o => o.name === currentName);
                 setShipping(sameOption || options[0]);
             } else {
-                setShipping(null); // Nenhum frete disponível
+                setShipping(null);
             }
         } catch (error) {
             console.error("Erro ao recalcular frete", error);
@@ -66,7 +101,7 @@ export default function Cart() {
     };
 
     recalculate();
-  }, [customer.activeAddressId, items.length]); // Executa quando muda endereço ou itens
+  }, [customer.activeAddressId, items.length]);
 
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
 
@@ -84,6 +119,7 @@ export default function Cart() {
     setLoading(true);
     
     try {
+      // Cria pedido no Sanity
       const order = {
         _type: 'order',
         orderNumber: `BV-${Math.floor(Math.random() * 10000)}`,
@@ -96,6 +132,7 @@ export default function Cart() {
       };
       const createdOrder = await client.create(order);
       
+      // Chama Worker para Checkout
       const response = await fetch('https://brasil-varejo-api.laeciossp.workers.dev/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -104,9 +141,9 @@ export default function Cart() {
             shipping: parseFloat(selectedShipping.price), 
             email: "cliente@brasilvarejo.com", 
             orderId: createdOrder._id, 
-            tipoPagamento,
-            shippingAddress: activeAddress, // Envia endereço completo
-            customerDocument: customer.document // Envia documento
+            tipoPagamento, 
+            shippingAddress: activeAddress,
+            customerDocument: customer.document
         })
       });
       
@@ -217,18 +254,31 @@ export default function Cart() {
           <div className="bg-white p-6 rounded-3xl border-2 border-slate-100 shadow-sm space-y-4">
             <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 uppercase tracking-tighter italic"><CreditCard size={20} className="text-blue-600"/> Pagamento</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              {/* OPÇÃO 1: PIX E BOLETO JUNTOS */}
               <label className={`flex items-center justify-between p-5 border-2 rounded-2xl cursor-pointer transition-all ${tipoPagamento === 'pix' ? 'border-green-500 bg-green-50' : 'border-slate-100 hover:border-green-200'}`}>
                 <div className="flex items-center gap-3">
                   <input type="radio" checked={tipoPagamento === 'pix'} onChange={() => setTipoPagamento('pix')} />
-                  <div><span className="block font-black text-xs uppercase">Pix</span><span className="text-[10px] font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">10% OFF</span></div>
+                  <div>
+                      <span className="block font-black text-xs uppercase flex items-center gap-1">
+                          Pix / Boleto <QrCode size={14}/> <Barcode size={14}/>
+                      </span>
+                      <span className="text-[10px] font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">10% OFF</span>
+                  </div>
                 </div>
               </label>
+
+              {/* OPÇÃO 2: CARTÃO */}
               <label className={`flex items-center justify-between p-5 border-2 rounded-2xl cursor-pointer transition-all ${tipoPagamento === 'cartao' ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:border-blue-200'}`}>
                 <div className="flex items-center gap-3">
                   <input type="radio" checked={tipoPagamento === 'cartao'} onChange={() => setTipoPagamento('cartao')} />
-                  <div><span className="block font-black text-xs uppercase">Cartão</span><span className="text-[10px] font-bold text-slate-400 uppercase">Até 12x</span></div>
+                  <div>
+                      <span className="block font-black text-xs uppercase">Cartão de Crédito</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Até 12x</span>
+                  </div>
                 </div>
               </label>
+
             </div>
           </div>
         </div>
@@ -244,15 +294,20 @@ export default function Cart() {
             </div>
             {tipoPagamento === 'pix' && (
               <div className="flex justify-between text-green-600 font-black text-xs uppercase bg-green-50 p-3 rounded-xl border border-green-100">
-                <span>Desconto Pix (10%)</span>
+                <span>Desconto à Vista (10%)</span>
                 <span>-{formatCurrency((subtotal + (selectedShipping ? parseFloat(selectedShipping.price) : 0)) * 0.1)}</span>
               </div>
             )}
           </div>
           <div className="flex justify-between mb-8 text-3xl font-black text-blue-900 border-t border-slate-50 pt-6"><span>Total</span><span>{formatCurrency(totalFinal)}</span></div>
+          
           <button onClick={handleCheckout} disabled={loading || !selectedShipping || !activeAddress} className={`w-full py-5 rounded-[24px] font-black uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-3 ${!selectedShipping || !activeAddress ? 'bg-slate-200 text-slate-400' : 'bg-orange-500 text-white hover:scale-105 shadow-orange-500/30'}`}>
             {loading ? 'Aguarde...' : 'Pagar Agora'} <ArrowRight size={22}/>
           </button>
+          
+          {/* --- AQUI ESTÁ O SELO DO MERCADO PAGO INTEGRADO --- */}
+          <MercadoPagoTrust />
+          
         </div>
       </div>
     </div>
