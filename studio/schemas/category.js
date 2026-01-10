@@ -1,46 +1,69 @@
+// studio/schemas/category.js
+
 export default {
   name: 'category',
-  title: 'Departamentos e Categorias',
+  title: 'Categorias',
   type: 'document',
   fields: [
     {
+      name: 'isActive',
+      title: 'ATIVO NO SITE?',
+      type: 'boolean',
+      initialValue: true,
+      description: 'Se desligar, essa categoria some do menu e a página dela para de funcionar.'
+    },
+    {
       name: 'title',
       title: 'Nome da Categoria',
-      type: 'string', // Ex: "Celulares"
-      validation: Rule => Rule.required()
+      type: 'string',
     },
     {
       name: 'slug',
-      title: 'Link Amigável',
+      title: 'Link (Slug)',
       type: 'slug',
-      options: { source: 'title', maxLength: 96 }
-    },
-    {
-      name: 'isActive',
-      title: 'Visível no Site?',
-      type: 'boolean',
-      initialValue: true,
-      description: 'Desmarque para ocultar esta categoria do menu temporariamente.'
+      options: {
+        source: 'title',
+        maxLength: 96,
+      },
     },
     {
       name: 'isRoot',
       title: 'É Departamento Principal?',
       type: 'boolean',
       initialValue: false,
-      description: 'Marque SIM se deve aparecer na primeira lista (Ex: Informática, Móveis).'
+      description: 'Marque se for um departamento raiz (Ex: Tecnologia, Moda, Casa).'
     },
     {
       name: 'parent',
       title: 'Categoria Mãe (Opcional)',
       type: 'reference',
       to: [{type: 'category'}],
-      description: 'Se esta for uma subcategoria, selecione a mãe aqui (Ex: Selecione "Informática" se esta for "Notebooks").'
+      description: 'Se esta for uma subcategoria, escolha a quem ela pertence.'
     },
     {
-      name: 'icon',
-      title: 'Ícone (Opcional)',
-      type: 'image',
-      description: 'Ícone para o menu (estilo Mercado Livre/Magalu)'
+      name: 'description',
+      title: 'Descrição (SEO)',
+      type: 'text',
+      rows: 3
     }
-  ]
+  ],
+  // --- AQUI ESTÁ A MÁGICA VISUAL ---
+  preview: {
+    select: {
+      title: 'title',
+      active: 'isActive',
+      isRoot: 'isRoot',
+      parentName: 'parent.title'
+    },
+    prepare({ title, active, isRoot, parentName }) {
+      const statusEmoji = active ? '🟢' : '🔴 [OFF]';
+      const typeEmoji = isRoot ? '🏢 Dep.' : '📂 Cat.';
+      const subtitle = parentName ? `Filho de: ${parentName}` : (isRoot ? 'Departamento Principal' : 'Categoria Solta');
+
+      return {
+        title: `${statusEmoji} ${title}`,
+        subtitle: `${typeEmoji} | ${subtitle}`
+      }
+    }
+  }
 }

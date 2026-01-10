@@ -2,7 +2,9 @@ import {defineCliConfig} from 'sanity/cli'
 
 export default defineCliConfig({
   api: {
-    projectId: 'o4upb251', // <--- IMPORTANTE: Pegue este código no manage.sanity.io ou no terminal quando criou o projeto
+    projectId: 'o4upb251',
     dataset: 'production'
-  }
+  }, // <--- A vírgula que faltava estava aqui
+  
+  studioHost: 'brasil-varejo-admin' 
 })

@@ -2,18 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Estilos personalizados para barra de rolagem (opcional, fica mais bonito) */
+/* --- UTILITÁRIOS PERSONALIZADOS --- */
 @layer utilities {
-  .no-scrollbar::-webkit-scrollbar {
+  /* Esconde barra de rolagem nos carrosséis */
+  .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
   }
 }
 
+/* --- ESTILOS GERAIS --- */
 body {
-  background-color: #ffffff;
-  color: #111111;
+  /* Fundo off-white sofisticado para destacar os cards brancos */
+  background-color: #f8fafc; 
+  color: #1e293b; /* Cor de texto padrão elegante */
+  
+  /* Melhora a nitidez das fontes */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Garante que o rodapé fique sempre no final */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }

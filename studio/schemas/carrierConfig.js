@@ -2,77 +2,81 @@
 
 export default {
   name: 'carrierConfig',
-  title: 'Gerenciador de Transportadoras',
+  title: '⚙️ Config. Transportadoras',
   type: 'document',
   fields: [
     {
       name: 'title',
-      title: 'Título da Configuração',
+      title: 'Título Interno',
       type: 'string',
-      initialValue: 'Filtro de Transportadoras',
+      initialValue: 'Gerenciador de Transportadoras',
       readOnly: true
     },
     {
       name: 'carriers',
-      title: 'Regras por Transportadora',
+      title: 'Lista de Transportadoras',
       type: 'array',
-      description: 'Configure quais serviços aparecem para o cliente.',
       of: [
         {
           type: 'object',
           title: 'Transportadora',
           fields: [
             {
-              name: 'serviceCode',
-              title: 'Código do Serviço (API)',
-              type: 'string',
-              description: 'Ex: "04014" (Sedex), "1" (PAC), "3" (Jadlog Package). Se deixar vazio, aplica a todas desta empresa.',
-            },
-            {
-              name: 'carrierName',
-              title: 'Nome Original (Referência)',
-              type: 'string',
-              description: 'Apenas para sua organização. Ex: Jadlog.'
-            },
-            {
-              name: 'label',
-              title: 'Nome para o Cliente',
-              type: 'string',
-              description: 'Como aparece no site. Ex: "Entrega Expressa" em vez de "Sedex".'
-            },
-            {
               name: 'isActive',
-              title: 'Ativo?',
+              title: 'ATIVO?',
               type: 'boolean',
-              initialValue: true
+              initialValue: true,
+              description: 'Desmarque para parar de oferecer esta opção.'
+            },
+            {
+              name: 'name',
+              title: 'Nome da Transportadora',
+              type: 'string',
+              description: 'Ex: Correios, Jadlog, Azul Cargo'
+            },
+            {
+              name: 'serviceName',
+              title: 'Nome do Serviço (Exibido no Checkout)',
+              type: 'string',
+              description: 'Ex: SEDEX Express, .Package, Amanhã'
+            },
+            {
+              name: 'logoUrl',
+              title: 'URL do Logo (PNG/JPG)',
+              type: 'url',
+              description: 'Copie o link da logo da internet.'
+            },
+            {
+              name: 'trackingUrlTemplate',
+              title: 'Modelo de Link de Rastreio',
+              type: 'string',
+              description: 'Use {CODE} onde vai o código. Ex: https://rastreio.com/{CODE}'
             },
             {
               name: 'additionalPrice',
               title: 'Taxa Extra (R$)',
               type: 'number',
-              description: 'Valor a ser somado ao frete (embalagem, manuseio).',
               initialValue: 0
             },
             {
               name: 'additionalDays',
-              title: 'Margem de Prazo (Dias)',
+              title: 'Dias Extras de Prazo',
               type: 'number',
-              description: 'Dias a somar na estimativa de entrega.',
               initialValue: 0
             }
           ],
           preview: {
             select: {
-              title: 'carrierName',
-              subtitle: 'label',
-              active: 'isActive',
-              code: 'serviceCode'
+              title: 'name',
+              subtitle: 'serviceName',
+              active: 'isActive'
             },
-            prepare({title, subtitle, active, code}) {
-              const status = active ? '🟢' : '🔴';
+            prepare({title, subtitle, active}) {
+              // REMOVEMOS O JSX (<img...>) PARA NÃO TRAVAR O DEPLOY
+              const statusEmoji = active ? '🟢' : '🔴';
               return {
-                title: `${status} ${title || 'Nova Regra'}`,
-                subtitle: `${subtitle || ''} [Cód: ${code || 'Todos'}]`
+                title: `${statusEmoji} ${title}`,
+                subtitle: subtitle
               }
             }
           }

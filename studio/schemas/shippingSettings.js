@@ -1,31 +1,40 @@
 export default {
   name: 'shippingSettings',
-  title: 'Configuração de Frete (API)',
+  title: '🚚 Config. Frete e API',
   type: 'document',
   fields: [
     {
-      name: 'activeProvider',
-      title: 'Quem calcula o frete?',
+      name: 'originCep',
+      title: 'CEP de Origem (Estoque)',
+      type: 'string',
+      description: 'De onde seus produtos saem. Ex: 01001-000'
+    },
+    {
+      name: 'provider',
+      title: 'Provedor de Frete Principal',
       type: 'string',
       options: {
         list: [
-          { title: '📦 Melhor Envio', value: 'melhor_envio' },
-          { title: '🚛 Frenet', value: 'frenet' },
-          { title: '📮 Correios Direto', value: 'correios' },
+          { title: 'Melhor Envio (API)', value: 'melhor_envio' },
+          { title: 'Tabela Manual / Fixa', value: 'manual' }
         ],
         layout: 'radio'
-      }
+      },
+      initialValue: 'melhor_envio'
     },
     {
-      name: 'melhorEnvioToken',
-      title: 'Token Melhor Envio',
+      name: 'apiToken',
+      title: 'Token de Integração (Melhor Envio)',
       type: 'string',
-      hidden: ({document}) => document?.activeProvider !== 'melhor_envio'
+      description: 'Cole aqui seu Token gerado no painel do Melhor Envio. Se vazio, o sistema usará o modo Simulação Profissional.',
+      hidden: ({document}) => document?.provider !== 'melhor_envio'
     },
     {
-      name: 'originCep',
-      title: 'CEP de Origem (Estoque)',
-      type: 'string'
+      name: 'handlingTime',
+      title: 'Dias de Manuseio (Separação)',
+      type: 'number',
+      description: 'Dias adicionados ao prazo da transportadora.',
+      initialValue: 1
     }
   ]
 }

@@ -1,52 +1,50 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom'; // Removi o Router aqui pois ele geralmente fica no main.jsx
 
-// Importando os Layouts
-import Header from './components/layout/Header';
+// --- COMPONENTES DE LAYOUT ---
+// Certifique-se que eles estão na pasta web/src/components/
+import Header from './components/Header';
+import Footer from './components/Footer';
 
-// Importando as Páginas REAIS (que criamos nos passos anteriores)
+// --- PÁGINAS ---
 import Home from './pages/Home';
 import ProductDetails from './pages/ProductDetails';
 import Category from './pages/Category';
 import Cart from './pages/Cart';
-import Profile from './pages/Profile'; // Aqui está a tela de Meus Pedidos/Rastreio
+import Profile from './pages/Profile';
 
 function App() {
   return (
-    <Router>
-      <div className="min-h-screen bg-white font-sans text-gray-900 flex flex-col">
-        {/* Header fixo no topo (inclui o Menu Cascata) */}
-        <Header />
-        
-        {/* Conteúdo Principal */}
-        <main className="flex-1">
-          <Routes>
-            {/* 1. Home (Vitrine) */}
-            <Route path="/" element={<Home />} />
-            
-            {/* 2. Página de Produto (Clone Best Buy) */}
-            <Route path="/product/:slug" element={<ProductDetails />} />
-            
-            {/* 3. Página de Categoria (Listagem) */}
-            <Route path="/category/:slug" element={<Category />} />
-            
-            {/* 4. Carrinho de Compras */}
-            <Route path="/cart" element={<Cart />} />
-            
-            {/* 5. Área do Cliente (Rastreio e Status) */}
-            <Route path="/profile" element={<Profile />} />
-          </Routes>
-        </main>
+    // A div abaixo garante que o Footer sempre vá para o final (Sticky Footer)
+    <div className="flex flex-col min-h-screen bg-[#f2f2f2] font-sans text-gray-900">
+      
+      {/* O Header aparece em todas as telas */}
+      <Header />
+      
+      {/* Área principal onde as páginas trocam */}
+      <main className="flex-grow">
+        <Routes>
+          {/* 1. Home (Vitrine Estilo Magalu) */}
+          <Route path="/" element={<Home />} />
+          
+          {/* 2. Página de Produto */}
+          <Route path="/product/:slug" element={<ProductDetails />} />
+          
+          {/* 3. Página de Categoria/Departamento */}
+          <Route path="/category/:slug" element={<Category />} />
+          
+          {/* 4. Carrinho de Compras */}
+          <Route path="/cart" element={<Cart />} />
+          
+          {/* 5. Área do Cliente (Pedidos, Rastreio, SAC) */}
+          <Route path="/profile" element={<Profile />} />
+        </Routes>
+      </main>
 
-        {/* Rodapé Simples (Opcional, para fechar o layout) */}
-        <footer className="bg-gray-100 py-8 mt-auto border-t border-gray-200">
-          <div className="container mx-auto px-4 text-center text-gray-500 text-sm">
-            <p>&copy; {new Date().getFullYear()} Mercado Solar. Todos os direitos reservados.</p>
-            <p className="mt-2">CNPJ: 00.000.000/0001-00</p>
-          </div>
-        </footer>
-      </div>
-    </Router>
+      {/* O Footer Gigante aparece no final de tudo */}
+      <Footer />
+      
+    </div>
   );
 }
 

@@ -1,113 +1,185 @@
-import React from 'react';
-import { Trash2, Plus, Minus, Lock } from 'lucide-react';
+// src/pages/Cart.jsx
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import useCartStore from '../store/useCartStore';
-import { formatCurrency } from '../lib/utils';
-import { urlFor } from '../lib/sanity';
+import { Trash2, ShoppingCart, ArrowRight } from 'lucide-react';
+import { client } from '../lib/sanity'; // Removido urlFor se não usado no exemplo, mantido client
 
-const Cart = () => {
-  const { items, removeItem, updateQuantity, getTotalPrice } = useCartStore();
-  const total = getTotalPrice();
+export default function Cart() {
+  const [cartItems, setCartItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingCart, setLoadingCart] = useState(true);
 
-  if (items.length === 0) {
+  // No futuro, mude para pegar o ID real do usuário logado
+  const userId = "cliente_brasil_varejo_1"; 
+
+  // --- 1. BUSCAR CARRINHO DO CLOUDFLARE KV ---
+  useEffect(() => {
+    async function loadCartFromKV() {
+      try {
+        const response = await fetch(`https://brasil-varejo-api.laeciossp.workers.dev/cart/get?userId=${userId}`);
+        if (response.ok) {
+          const savedItems = await response.json();
+          if (Array.isArray(savedItems)) {
+            setCartItems(savedItems);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao carregar dados do KV:", err);
+      } finally {
+        setLoadingCart(false);
+      }
+    }
+    loadCartFromKV();
+  }, [userId]);
+
+  // --- 2. FUNÇÃO PARA ATUALIZAR ESTADO E SALVAR NO KV ---
+  const updateAndSyncCart = async (newItems) => {
+    setCartItems(newItems);
+    try {
+      await fetch('https://brasil-varejo-api.laeciossp.workers.dev/cart/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, items: newItems })
+      });
+    } catch (err) {
+      console.error("Erro ao sincronizar com banco de dados:", err);
+    }
+  };
+
+  // --- 3. REMOVER ITEM ---
+  const removeItem = (index) => {
+    const updatedItems = cartItems.filter((_, i) => i !== index);
+    updateAndSyncCart(updatedItems);
+  };
+
+  // Calcula total
+  const total = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+
+  // --- 4. LÓGICA DE CHECKOUT (Mantendo Sanity e Mercado Pago) ---
+  const handleCheckout = async () => {
+    if (cartItems.length === 0) return;
+    setLoading(true);
+    
+    const customerEmail = "cliente@teste.com"; 
+
+    try {
+      // Cria pedido no Sanity (Status: pending)
+      const order = {
+        _type: 'order',
+        orderNumber: `BV-${Math.floor(Math.random() * 10000)}`,
+        status: 'pending',
+        totalAmount: total,
+        items: cartItems.map(item => ({
+          _key: Math.random().toString(36).substring(7),
+          productName: item.title,
+          quantity: item.quantity,
+          price: item.price
+        }))
+      };
+
+      const createdOrder = await client.create(order);
+
+      // Chama o Worker para gerar Link do Mercado Pago
+      const response = await fetch('https://brasil-varejo-api.laeciossp.workers.dev/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cartItems,
+          email: customerEmail,
+          orderId: createdOrder._id 
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert("Erro ao gerar link de pagamento.");
+      }
+
+    } catch (error) {
+      console.error(error);
+      alert("Erro no processamento do pedido.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loadingCart) {
+    return <div className="min-h-screen flex items-center justify-center font-bold text-crocus-deep">Carregando seu carrinho...</div>;
+  }
+
+  if (cartItems.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-12 text-center">
-        <h1 className="text-2xl font-bold mb-4">Seu carrinho está vazio</h1>
-        <Link to="/" className="text-brand-blue underline hover:text-brand-darkBlue">
-          Continuar comprando
-        </Link>
+      <div className="min-h-[60vh] flex flex-col items-center justify-center text-center p-4">
+        <ShoppingCart size={64} className="text-gray-200 mb-4"/>
+        <h2 className="text-2xl font-black text-brand-dark mb-2">Seu carrinho está vazio</h2>
+        <Link to="/" className="text-crocus-vivid font-bold hover:underline">Voltar às compras</Link>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen">
-      <h1 className="text-2xl font-bold mb-6">Carrinho de Compras</h1>
-
+    <div className="container mx-auto px-4 py-10">
+      <h1 className="text-3xl font-black text-brand-dark mb-8">Meu Carrinho</h1>
+      
       <div className="flex flex-col lg:flex-row gap-8">
-        
-        {/* Lista de Itens */}
-        <div className="flex-1 bg-white rounded-lg shadow-sm p-6">
-          {items.map((item) => (
-            <div key={item._id} className="flex flex-col sm:flex-row gap-4 py-6 border-b last:border-0">
-              <div className="w-24 h-24 flex-shrink-0 bg-gray-100 rounded p-2 flex items-center justify-center">
-                {item.images && (
-                  <img src={urlFor(item.images[0]).width(100).url()} alt="" className="max-h-full object-contain" />
-                )}
+        {/* LISTA DE ITENS */}
+        <div className="flex-1 space-y-4">
+          {cartItems.map((item, idx) => (
+            <div key={idx} className="flex gap-4 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+              <div className="w-24 h-24 bg-gray-50 rounded-lg flex items-center justify-center font-bold text-gray-400">
+                 IMG
               </div>
-              
               <div className="flex-1">
-                <Link to={`/product/${item.slug.current}`} className="text-lg font-medium text-brand-blue hover:underline">
-                  {item.title}
-                </Link>
-                <div className="text-sm text-green-600 font-medium mt-1">Em estoque</div>
-              </div>
-
-              <div className="flex flex-col items-end gap-4">
-                <div className="font-bold text-xl">{formatCurrency(item.price * item.quantity)}</div>
-                
-                <div className="flex items-center border rounded">
-                  <button 
-                    onClick={() => updateQuantity(item._id, item.quantity - 1)}
-                    className="p-2 hover:bg-gray-100"
-                    disabled={item.quantity <= 1}
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <span className="w-10 text-center font-medium">{item.quantity}</span>
-                  <button 
-                    onClick={() => updateQuantity(item._id, item.quantity + 1)}
-                    className="p-2 hover:bg-gray-100"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
+                <h3 className="font-bold text-brand-dark">{item.title}</h3>
+                <p className="text-crocus-deep font-black">R$ {item.price?.toFixed(2)}</p>
+                <div className="flex items-center gap-4 mt-2">
+                   <span className="text-sm text-gray-500">Qtd: {item.quantity}</span>
+                   <button 
+                    onClick={() => removeItem(idx)}
+                    className="text-red-400 hover:text-red-600 transition-colors"
+                   >
+                    <Trash2 size={18}/>
+                   </button>
                 </div>
-
-                <button 
-                  onClick={() => removeItem(item._id)}
-                  className="flex items-center text-sm text-red-600 hover:text-red-800 gap-1"
-                >
-                  <Trash2 className="w-4 h-4" /> Remover
-                </button>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Resumo do Pedido (Right Rail) */}
-        <div className="lg:w-80">
-          <div className="bg-white p-6 rounded-lg shadow-sm sticky top-24">
-            <h2 className="text-xl font-bold mb-4">Resumo do Pedido</h2>
-            
-            <div className="flex justify-between mb-2 text-gray-600">
-              <span>Subtotal ({items.length} itens)</span>
-              <span>{formatCurrency(total)}</span>
-            </div>
-            <div className="flex justify-between mb-4 text-gray-600">
-              <span>Frete Estimado</span>
-              <span className="text-sm">Calculado no checkout</span>
-            </div>
-            
-            <div className="border-t pt-4 mb-6 flex justify-between items-center">
-              <span className="font-bold text-lg">Total</span>
-              <span className="font-bold text-2xl text-brand-blue">{formatCurrency(total)}</span>
-            </div>
-
-            <button className="w-full bg-brand-yellow text-brand-blue font-bold py-3 rounded-lg hover:bg-yellow-400 transition-colors flex justify-center items-center gap-2 mb-3">
-              <Lock className="w-4 h-4" /> Ir para Pagamento
-            </button>
-            
-            <div className="text-center">
-              <Link to="/" className="text-sm text-brand-blue hover:underline">
-                Continuar Comprando
-              </Link>
-            </div>
+        {/* RESUMO DO PEDIDO */}
+        <div className="w-full lg:w-96 bg-white p-6 rounded-2xl shadow-xl h-fit border border-gray-100">
+          <h3 className="font-black text-lg text-brand-dark mb-4 uppercase">Resumo do Pedido</h3>
+          
+          <div className="flex justify-between mb-2 text-sm text-gray-600">
+            <span>Subtotal</span>
+            <span>R$ {total.toFixed(2)}</span>
           </div>
-        </div>
+          <div className="flex justify-between mb-6 text-sm text-green-600 font-bold">
+            <span>Frete</span>
+            <span>Grátis</span>
+          </div>
+          
+          <div className="flex justify-between mb-8 text-xl font-black text-crocus-deep border-t pt-4">
+            <span>Total</span>
+            <span>R$ {total.toFixed(2)}</span>
+          </div>
 
+          <button 
+            onClick={handleCheckout}
+            disabled={loading}
+            className="w-full bg-orange-500 text-white py-4 rounded-xl font-black uppercase tracking-widest hover:brightness-110 transition-all shadow-lg hover:shadow-orange-500/40 flex items-center justify-center gap-2"
+          >
+            {loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={20}/>
+          </button>
+          
+          <p className="text-[10px] text-center text-gray-400 mt-4 font-medium">
+            Pagamento seguro via Mercado Pago
+          </p>
+        </div>
       </div>
     </div>
   );
-};
-
-export default Cart;
+}
