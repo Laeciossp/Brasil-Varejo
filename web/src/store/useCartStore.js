@@ -6,6 +6,7 @@ const useCartStore = create(
     (set, get) => ({
       items: [],
       selectedShipping: null,
+      tipoPagamento: 'cartao', // 'cartao' ou 'pix'
       customer: {
         document: '', 
         addresses: [],
@@ -27,9 +28,17 @@ const useCartStore = create(
         set({ items: get().items.map((item) => item._id === productId ? { ...item, quantity } : item) })
       },
 
-      removeItem: (productId) => set({ items: get().items.filter((item) => item._id !== productId) }),
+      removeItem: (productId) => {
+        const newItems = get().items.filter((item) => item._id !== productId);
+        set({ 
+          items: newItems,
+          selectedShipping: newItems.length === 0 ? null : get().selectedShipping 
+        });
+      },
       
       setShipping: (shipping) => set({ selectedShipping: shipping }),
+      
+      setTipoPagamento: (tipo) => set({ tipoPagamento: tipo }),
 
       setDocument: (doc) => set((state) => ({ customer: { ...state.customer, document: doc } })),
       
@@ -46,20 +55,27 @@ const useCartStore = create(
 
       setActiveAddress: (id) => set((state) => ({ customer: { ...state.customer, activeAddressId: id } })),
 
-      // CORREÇÃO: Zera o preço se o carrinho estiver vazio
+      // CÁLCULO COM DESCONTO DE 10% PARA PIX
       getTotalPrice: () => {
-        const { items, selectedShipping } = get();
-        if (items.length === 0) return 0;
+        const { items, selectedShipping, tipoPagamento } = get();
+        if (!items || items.length === 0) return 0;
 
         const subtotal = items.reduce((total, item) => total + (item.price * item.quantity), 0);
         const shippingPrice = selectedShipping ? parseFloat(selectedShipping.price) : 0;
-        return subtotal + shippingPrice;
+        const totalSemDesconto = subtotal + shippingPrice;
+
+        // Se for Pix ou Boleto, abate 10% do TOTAL (Produtos + Frete)
+        if (tipoPagamento === 'pix') {
+          return totalSemDesconto * 0.9;
+        }
+
+        return totalSemDesconto;
       },
       
-      clearCart: () => set({ items: [], selectedShipping: null })
+      clearCart: () => set({ items: [], selectedShipping: null, tipoPagamento: 'cartao' })
     }),
     { name: 'cart-storage' }
   )
 )
 
-export default useCartStore
+export default useCartStore;

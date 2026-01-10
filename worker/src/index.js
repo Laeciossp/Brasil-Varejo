@@ -5,10 +5,10 @@ var src_default = {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization"
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Credentials": "true",
     };
 
-    // Resposta para Preflight (CORS)
     if (req.method === "OPTIONS") {
       return new Response(null, { headers });
     }
@@ -98,14 +98,17 @@ var src_default = {
         return new Response(JSON.stringify(resultado), { headers });
       }
 
-      // --- ROTA: CHECKOUT MERCADO PAGO (COM SUPORTE A MODAL) ---
+      // --- ROTA: CHECKOUT MERCADO PAGO (ATUALIZADA) ---
       if (req.method === "POST" && url.pathname.includes("checkout")) {
-        const { items, email, orderId, shipping } = await req.json();
+        const { items, email, orderId, shipping, tipoPagamento } = await req.json();
         
+        // Aplica o desconto de 10% se for Pix
+        const fatorDesconto = tipoPagamento === 'pix' ? 0.9 : 1.0;
+
         const mpItems = items.map((item) => ({
           title: item.title || "Produto Brasil Varejo",
           quantity: Number(item.quantity || 1),
-          unit_price: Number(item.price),
+          unit_price: Number((Number(item.price) * fatorDesconto).toFixed(2)),
           currency_id: "BRL"
         }));
 
@@ -113,7 +116,7 @@ var src_default = {
           mpItems.push({
             title: "Frete Brasil Varejo",
             quantity: 1,
-            unit_price: Number(shipping),
+            unit_price: Number((Number(shipping) * fatorDesconto).toFixed(2)),
             currency_id: "BRL"
           });
         }
@@ -128,7 +131,15 @@ var src_default = {
           },
           auto_return: "approved",
           external_reference: orderId,
-          notification_url: "https://brasil-varejo-api.laeciossp.workers.dev/webhook"
+          notification_url: "https://brasil-varejo-api.laeciossp.workers.dev/webhook",
+          
+          // LÓGICA DE BLOQUEIO DE MÉTODOS
+          payment_methods: {
+            excluded_payment_types: tipoPagamento === 'pix' 
+              ? [{ id: "credit_card" }, { id: "debit_card" }] // Bloqueia Cartão
+              : [{ id: "ticket" }, { id: "bank_transfer" }], // Bloqueia Pix/Boleto
+            installments: 12
+          }
         };
 
         const mpResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
@@ -142,7 +153,6 @@ var src_default = {
 
         const mpSession = await mpResponse.json();
         
-        // Retorna URL para redirecionamento e id_preferencia para o Modal Popup
         return new Response(JSON.stringify({ 
           url: mpSession.init_point,
           id_preferencia: mpSession.id 
@@ -196,7 +206,6 @@ var src_default = {
         return new Response("OK", { status: 200 });
       }
 
-      // Rota Padrão
       return new Response(JSON.stringify({ status: "API Online", projeto: "Brasil Varejo" }), { status: 200, headers });
 
     } catch (err) {

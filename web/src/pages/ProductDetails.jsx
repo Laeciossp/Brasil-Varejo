@@ -200,9 +200,7 @@ export default function ProductDetails() {
               <div className="text-4xl font-black text-blue-600">
                 {formatCurrency(product.price)}
               </div>
-              <p className="text-sm text-gray-500 mt-1">
-                em até 12x de {formatCurrency(product.price / 12)} sem juros
-              </p>
+             <p className="text-sm text-gray-500 mt-1">em até 12x de {formatCurrency(product.price / 12)}</p>
             </div>
 
             {/* FRETE */}
