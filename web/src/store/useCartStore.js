@@ -6,7 +6,7 @@ const useCartStore = create(
     (set, get) => ({
       items: [],
       selectedShipping: null,
-      tipoPagamento: 'cartao', // 'cartao' ou 'pix'
+      tipoPagamento: 'cartao', 
       customer: {
         document: '', 
         addresses: [],
@@ -37,9 +37,7 @@ const useCartStore = create(
       },
       
       setShipping: (shipping) => set({ selectedShipping: shipping }),
-      
       setTipoPagamento: (tipo) => set({ tipoPagamento: tipo }),
-
       setDocument: (doc) => set((state) => ({ customer: { ...state.customer, document: doc } })),
       
       addAddress: (address) => set((state) => {
@@ -55,21 +53,20 @@ const useCartStore = create(
 
       setActiveAddress: (id) => set((state) => ({ customer: { ...state.customer, activeAddressId: id } })),
 
-      // CÁLCULO COM DESCONTO DE 10% PARA PIX
+      // CORREÇÃO: Desconto apenas sobre os PRODUTOS
       getTotalPrice: () => {
         const { items, selectedShipping, tipoPagamento } = get();
         if (!items || items.length === 0) return 0;
 
-        const subtotal = items.reduce((total, item) => total + (item.price * item.quantity), 0);
-        const shippingPrice = selectedShipping ? parseFloat(selectedShipping.price) : 0;
-        const totalSemDesconto = subtotal + shippingPrice;
+        const subtotalProdutos = items.reduce((total, item) => total + (item.price * item.quantity), 0);
+        const valorFrete = selectedShipping ? parseFloat(selectedShipping.price) : 0;
 
-        // Se for Pix ou Boleto, abate 10% do TOTAL (Produtos + Frete)
         if (tipoPagamento === 'pix') {
-          return totalSemDesconto * 0.9;
+          // 10% de desconto apenas no subtotal, frete integral
+          return (subtotalProdutos * 0.9) + valorFrete;
         }
 
-        return totalSemDesconto;
+        return subtotalProdutos + valorFrete;
       },
       
       clearCart: () => set({ items: [], selectedShipping: null, tipoPagamento: 'cartao' })

@@ -16,7 +16,7 @@ var src_default = {
     try {
       const url = new URL(req.url);
 
-      // --- ROTA: LOGIN MELHOR ENVIO ---
+      // --- 1. ROTA: LOGIN MELHOR ENVIO ---
       if (url.pathname === "/login/melhorenvio") {
         const client_id = env.MELHORENVIO_CLIENT_ID;
         const redirect_uri = "https://brasil-varejo-api.laeciossp.workers.dev/callback/melhorenvio";
@@ -25,7 +25,7 @@ var src_default = {
         return Response.redirect(authUrl, 302);
       }
 
-      // --- ROTA: CALLBACK MELHOR ENVIO ---
+      // --- 2. ROTA: CALLBACK MELHOR ENVIO ---
       if (url.pathname === "/callback/melhorenvio") {
         const code = url.searchParams.get("code");
         const response = await fetch("https://www.melhorenvio.com.br/oauth/token", {
@@ -47,7 +47,7 @@ var src_default = {
         return new Response(JSON.stringify({ error: "Erro na autorização" }), { status: 400, headers });
       }
 
-      // --- ROTA: CÁLCULO DE FRETE ---
+      // --- 3. ROTA: CÁLCULO DE FRETE ---
       if (req.method === "POST" && url.pathname.includes("shipping")) {
         const body = await req.json();
         const sanityQuery = encodeURIComponent('*[_type == "shippingSettings"][0]');
@@ -98,25 +98,28 @@ var src_default = {
         return new Response(JSON.stringify(resultado), { headers });
       }
 
-      // --- ROTA: CHECKOUT MERCADO PAGO (ATUALIZADA) ---
+      // --- 4. ROTA: CHECKOUT MERCADO PAGO ---
       if (req.method === "POST" && url.pathname.includes("checkout")) {
         const { items, email, orderId, shipping, tipoPagamento } = await req.json();
         
-        // Aplica o desconto de 10% se for Pix
-        const fatorDesconto = tipoPagamento === 'pix' ? 0.9 : 1.0;
+        // Fator de desconto 10% (0.9) apenas para Pix ou Boleto
+        const fatorDesconto = (tipoPagamento === 'pix' || tipoPagamento === 'boleto') ? 0.9 : 1.0;
 
+        // APLICA DESCONTO APENAS NOS ITENS
         const mpItems = items.map((item) => ({
           title: item.title || "Produto Brasil Varejo",
           quantity: Number(item.quantity || 1),
+          // Desconto aplicado aqui
           unit_price: Number((Number(item.price) * fatorDesconto).toFixed(2)),
           currency_id: "BRL"
         }));
 
+        // FRETE COM VALOR INTEGRAL (SEM DESCONTO)
         if (shipping > 0) {
           mpItems.push({
             title: "Frete Brasil Varejo",
             quantity: 1,
-            unit_price: Number((Number(shipping) * fatorDesconto).toFixed(2)),
+            unit_price: Number(Number(shipping).toFixed(2)),
             currency_id: "BRL"
           });
         }
@@ -133,13 +136,13 @@ var src_default = {
           external_reference: orderId,
           notification_url: "https://brasil-varejo-api.laeciossp.workers.dev/webhook",
           
-          // LÓGICA DE BLOQUEIO DE MÉTODOS
           payment_methods: {
             excluded_payment_types: tipoPagamento === 'pix' 
-              ? [{ id: "credit_card" }, { id: "debit_card" }] // Bloqueia Cartão
-              : [{ id: "ticket" }, { id: "bank_transfer" }], // Bloqueia Pix/Boleto
+              ? [{ id: "credit_card" }, { id: "debit_card" }] 
+              : [{ id: "ticket" }, { id: "bank_transfer" }],
             installments: 12
-          }
+          },
+          binary_mode: true
         };
 
         const mpResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
@@ -159,7 +162,7 @@ var src_default = {
         }), { headers });
       }
 
-      // --- ROTA: WEBHOOK MERCADO PAGO ---
+      // --- 5. ROTA: WEBHOOK MERCADO PAGO ---
       if (url.pathname.includes("webhook")) {
         const urlParams = new URLSearchParams(url.search);
         const dataId = urlParams.get("data.id") || urlParams.get("id");
