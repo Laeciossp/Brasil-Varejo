@@ -43,6 +43,13 @@ export default {
       type: 'array',
       of: [{type: 'reference', to: {type: 'category'}}]
     },
+{
+  name: 'freeShipping',
+  title: 'Frete Grátis?',
+  type: 'boolean',
+  description: 'Ative para zerar o frete deste produto no carrinho.',
+  initialValue: false,
+},
     // --- Logística Obrigatória para Melhor Envio ---
     {
       name: 'logistics',

@@ -8,11 +8,13 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // CORREÇÃO 1: Adicionado o campo 'freeShipping' na consulta
     const query = `*[_type == "product"][0..7] {
       title,
       slug,
       price,
       oldPrice,
+      freeShipping,
       "image": images[0]
     }`;
 
@@ -76,7 +78,7 @@ export default function Home() {
         {/* 2. DEPARTAMENTOS */}
         <div className="bg-white rounded-2xl shadow-crocus p-8 mb-12 overflow-x-auto border border-white">
           <h3 className="font-bold text-brand-dark mb-6 text-sm uppercase tracking-wide flex items-center gap-2">
-             Tem no Brasil Varejo <span className="w-10 h-[2px] bg-crocus-vivid block"></span>
+              Tem no Brasil Varejo <span className="w-10 h-[2px] bg-crocus-vivid block"></span>
           </h3>
           <div className="flex gap-8 min-w-max pb-2">
             {departments.map((dept, idx) => (
@@ -107,7 +109,7 @@ export default function Home() {
 
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-             {[1,2,3,4].map(i => <div key={i} className="h-80 bg-gray-200 rounded-xl animate-pulse"></div>)}
+              {[1,2,3,4].map(i => <div key={i} className="h-80 bg-gray-200 rounded-xl animate-pulse"></div>)}
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
@@ -119,7 +121,7 @@ export default function Home() {
               >
                 {product.oldPrice && (
                    <span className="absolute top-3 left-3 bg-crocus-deep text-white text-[10px] font-black px-2 py-1 rounded shadow-sm z-10">
-                     -{Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)}%
+                      -{Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)}%
                    </span>
                 )}
 
@@ -157,9 +159,12 @@ export default function Home() {
                     à vista no Pix ou em até 10x sem juros
                   </p>
 
-                  <div className="w-full bg-surface-primary text-crocus-deep text-[10px] font-bold py-2 px-2 rounded-lg flex items-center justify-center gap-1 group-hover:bg-crocus-light/20 transition-colors">
-                    <Truck size={14}/> Frete Grátis
-                  </div>
+                  {/* CORREÇÃO 2: Só exibe se product.freeShipping for VERDADEIRO */}
+                  {product.freeShipping && (
+                    <div className="w-full bg-surface-primary text-crocus-deep text-[10px] font-bold py-2 px-2 rounded-lg flex items-center justify-center gap-1 group-hover:bg-crocus-light/20 transition-colors">
+                      <Truck size={14}/> Frete Grátis
+                    </div>
+                  )}
                 </div>
               </Link>
             ))}
@@ -173,10 +178,10 @@ export default function Home() {
              <p className="opacity-80 mb-8 text-lg">Ofertas exclusivas, rastreio de pedidos em tempo real e cupons de desconto que só tem no app.</p>
              <div className="flex gap-4">
                <button className="bg-white text-brand-dark px-6 py-3 rounded-xl font-bold text-sm hover:bg-gray-100 transition-colors flex items-center gap-2">
-                  Google Play
+                 Google Play
                </button>
                <button className="bg-transparent border border-white/30 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-white/10 transition-colors flex items-center gap-2">
-                  App Store
+                 App Store
                </button>
              </div>
            </div>

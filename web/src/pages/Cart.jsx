@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Trash2, ShoppingCart, ArrowRight, ShieldCheck, Minus, Plus, MapPin, X, CreditCard } from 'lucide-react';
 import { client } from '../lib/sanity';
@@ -8,9 +8,10 @@ import { formatCurrency } from '../lib/utils';
 export default function Cart() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   
   const { 
-    items, removeItem, updateQuantity, selectedShipping, 
+    items, removeItem, updateQuantity, selectedShipping, setShipping,
     getTotalPrice, customer, setActiveAddress, addAddress, 
     setDocument, tipoPagamento, setTipoPagamento 
   } = useCartStore();
@@ -18,6 +19,54 @@ export default function Cart() {
   const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const totalFinal = getTotalPrice();
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
+
+  // --- RECALCULAR FRETE AO MUDAR ENDEREÇO ---
+  useEffect(() => {
+    const recalculate = async () => {
+        if (!activeAddress || items.length === 0) return;
+        
+        setRecalculatingShipping(true);
+        try {
+            const workerUrl = 'https://brasil-varejo-api.laeciossp.workers.dev/shipping';
+            // Pega o primeiro produto para verificar a flag de frete grátis no backend
+            const mainProduct = items[0];
+
+            const response = await fetch(workerUrl, { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  from: { postal_code: "43805000" },
+                  to: { postal_code: activeAddress.zip },
+                  products: items.map(p => ({
+                    id: p._id, // Envia ID correto
+                    width: p.logistics?.width || 15,
+                    height: p.logistics?.height || 15,
+                    length: p.logistics?.length || 15,
+                    weight: p.logistics?.weight || 0.5,
+                    insurance_value: p.price,
+                    quantity: p.quantity
+                  }))
+                })
+            });
+            const options = await response.json();
+            
+            if (Array.isArray(options) && options.length > 0) {
+                // Tenta manter a mesma opção (ex: SEDEX) se existir, senão pega a primeira (mais barata/grátis)
+                const currentName = selectedShipping?.name;
+                const sameOption = options.find(o => o.name === currentName);
+                setShipping(sameOption || options[0]);
+            } else {
+                setShipping(null); // Nenhum frete disponível
+            }
+        } catch (error) {
+            console.error("Erro ao recalcular frete", error);
+        } finally {
+            setRecalculatingShipping(false);
+        }
+    };
+
+    recalculate();
+  }, [customer.activeAddressId, items.length]); // Executa quando muda endereço ou itens
 
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
 
@@ -50,22 +99,25 @@ export default function Cart() {
       const response = await fetch('https://brasil-varejo-api.laeciossp.workers.dev/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, shipping: parseFloat(selectedShipping.price), email: "cliente@brasilvarejo.com", orderId: createdOrder._id, tipoPagamento })
+        body: JSON.stringify({ 
+            items, 
+            shipping: parseFloat(selectedShipping.price), 
+            email: "cliente@brasilvarejo.com", 
+            orderId: createdOrder._id, 
+            tipoPagamento,
+            shippingAddress: activeAddress, // Envia endereço completo
+            customerDocument: customer.document // Envia documento
+        })
       });
       
       const data = await response.json();
 
-      // INICIALIZA O MODAL (BLOQUEANDO O REDIRECIONAMENTO)
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
-        
-        // Abre o Modal imediatamente por cima do site
-        const checkout = mp.checkout({
-          preference: { id: data.id_preferencia }
-        });
+        const checkout = mp.checkout({ preference: { id: data.id_preferencia } });
         checkout.open(); 
       } else {
-        window.location.href = data.url; // Fallback
+        window.location.href = data.url; 
       }
 
     } catch (error) {
@@ -108,7 +160,7 @@ export default function Cart() {
             ))}
           </div>
 
-          {/* 📍 SEÇÃO DE ENDEREÇOS (RESTAURADA E SINCRONIZADA) */}
+          {/* ENDEREÇOS */}
           <div className="bg-white p-8 rounded-[40px] border-2 border-slate-100 shadow-sm">
             <div className="flex justify-between items-center mb-6">
                <div>
@@ -148,56 +200,34 @@ export default function Cart() {
                     <p className="text-sm font-black text-slate-800 uppercase leading-tight">{addr.street}, {addr.number}</p>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{addr.neighborhood} - {addr.city}/{addr.state}</p>
                     <p className="text-[10px] font-mono mt-3 text-slate-300 font-bold italic">CEP: {addr.zip}</p>
-                    <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center">
-                       <span className="text-[9px] font-black text-slate-300 uppercase">Faturamento vinculado</span>
-                       <span className="text-[10px] font-black text-blue-900">{customer.document || '---'}</span>
-                    </div>
                  </div>
                ))}
             </div>
 
-            {/* SEÇÃO DE FATURAMENTO (DARK MODE PORTAL) */}
             <div className="bg-slate-900 rounded-[40px] p-10 text-white relative overflow-hidden shadow-2xl">
                <div className="relative z-10">
-                  <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2 mb-2"><ShieldCheck className="text-blue-400" size={24}/> Faturamento Oficial</h3>
-                  <p className="text-xs text-slate-400 font-bold mb-8 uppercase tracking-widest">Defina o documento padrão para emissão de Notas Fiscais</p>
-                  
-                  <div className="max-w-md space-y-4">
-                     <div className="flex gap-3">
-                        <button onClick={() => setDocument('')} className="flex-1 py-4 border border-white/10 rounded-2xl text-[9px] font-black uppercase hover:bg-white/5 transition-all">Pessoa Física (CPF)</button>
-                        <button onClick={() => setDocument('')} className="flex-1 py-4 border border-white/10 rounded-2xl text-[9px] font-black uppercase hover:bg-white/5 transition-all">Empresa (CNPJ)</button>
-                     </div>
-                     <input type="text" placeholder="Digite seu documento..." value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full bg-white/5 border border-white/10 p-5 rounded-[24px] outline-none focus:border-blue-400 font-mono text-sm transition-all" />
-                     <button onClick={() => alert("Informações salvas!")} className="w-full bg-blue-600 text-white py-5 rounded-[24px] font-black uppercase tracking-widest text-xs shadow-2xl">Atualizar Informações</button>
+                  <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2 mb-2"><ShieldCheck className="text-blue-400" size={24}/> FATURAR CNPJ OU CPF; INSIRA NÚMERO:</h3>
+                  <div className="max-w-md space-y-4 mt-6">
+                     <input type="text" placeholder="CPF/CNPJ para Nota Fiscal..." value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full bg-white/5 border border-white/10 p-5 rounded-[24px] outline-none focus:border-blue-400 font-mono text-sm transition-all" />
                   </div>
                </div>
             </div>
           </div>
 
-          {/* FORMA DE PAGAMENTO */}
           <div className="bg-white p-6 rounded-3xl border-2 border-slate-100 shadow-sm space-y-4">
             <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 uppercase tracking-tighter italic"><CreditCard size={20} className="text-blue-600"/> Pagamento</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className={`flex items-center justify-between p-5 border-2 rounded-2xl cursor-pointer transition-all ${tipoPagamento === 'pix' ? 'border-green-500 bg-green-50' : 'border-slate-100 hover:border-green-200'}`}>
                 <div className="flex items-center gap-3">
                   <input type="radio" checked={tipoPagamento === 'pix'} onChange={() => setTipoPagamento('pix')} />
-                  <div>
-                    <span className="block font-black text-xs uppercase">Pix ou Boleto</span>
-                    <span className="text-[10px] font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">10% DE DESCONTO</span>
-                  </div>
+                  <div><span className="block font-black text-xs uppercase">Pix</span><span className="text-[10px] font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">10% OFF</span></div>
                 </div>
-                <span className="text-xl">💠</span>
               </label>
-
               <label className={`flex items-center justify-between p-5 border-2 rounded-2xl cursor-pointer transition-all ${tipoPagamento === 'cartao' ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:border-blue-200'}`}>
                 <div className="flex items-center gap-3">
                   <input type="radio" checked={tipoPagamento === 'cartao'} onChange={() => setTipoPagamento('cartao')} />
-                  <div>
-                    <span className="block font-black text-xs uppercase">Cartão de Crédito</span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Em até 12x</span>
-                  </div>
+                  <div><span className="block font-black text-xs uppercase">Cartão</span><span className="text-[10px] font-bold text-slate-400 uppercase">Até 12x</span></div>
                 </div>
-                <span className="text-xl">💳</span>
               </label>
             </div>
           </div>
@@ -208,7 +238,10 @@ export default function Cart() {
           <h3 className="font-black text-xl text-slate-900 mb-6 uppercase tracking-tighter">Resumo</h3>
           <div className="space-y-3 mb-6">
             <div className="flex justify-between text-slate-400 font-bold text-[11px] uppercase"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-            <div className="flex justify-between text-slate-400 font-bold text-[11px] uppercase"><span>Frete</span><span>{selectedShipping ? formatCurrency(selectedShipping.price) : 'R$ 0,00'}</span></div>
+            <div className="flex justify-between text-slate-400 font-bold text-[11px] uppercase">
+                <span>Frete</span>
+                {recalculatingShipping ? <span className="animate-pulse">...</span> : <span>{selectedShipping ? formatCurrency(selectedShipping.price) : 'R$ 0,00'}</span>}
+            </div>
             {tipoPagamento === 'pix' && (
               <div className="flex justify-between text-green-600 font-black text-xs uppercase bg-green-50 p-3 rounded-xl border border-green-100">
                 <span>Desconto Pix (10%)</span>

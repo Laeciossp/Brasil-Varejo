@@ -1,5 +1,5 @@
-name = "brasil-varejo-api"
-main = "src/index.js"
+name = "brasil-varejo-api"    # <--- Corrigido de "ame" para "name"
+main = "src/index.js"         # <--- Apontando para a pasta src (padrão)
 compatibility_date = "2024-01-01"
 compatibility_flags = [ "nodejs_compat" ]
 
@@ -8,7 +8,7 @@ binding = "CARRINHO"
 id = "1ceee220165e4b6cabc16a6928c08bcc"
 
 [vars]
-SANITY_PROJECT_ID = "o4upb251" # <--- Cole aqui o ID do seu projeto Sanity
+SANITY_PROJECT_ID = "o4upb251"
 SANITY_DATASET = "production"
 SANITY_TOKEN = "skfY9C4yTiwToMwHfqy3kZK1gNe5FQ67IvWYNMH8jZVGsomxBS5rB54cQOnsoqFgoeiUQC9mOenKnR6DDrZ30GeVsg4LReWh57uubOYfhDnKJ7LESZExnyK9sy3Og2R76nT1dLp3AK3h8Qz7hXmX1B5bWnJlSsuYHVjfKvvcaC3Mhg471zEa"
 MP_ACCESS_TOKEN = "APP_USR-7169422151606991-010921-65c4fa0e492f0ea093b55dadcdc8521a-3116067230"
