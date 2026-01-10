@@ -6,9 +6,8 @@ const useCartStore = create(
     (set, get) => ({
       items: [],
       selectedShipping: null,
-      // Dados do Cliente e Endereços
       customer: {
-        document: '', // CPF ou CNPJ
+        document: '', 
         addresses: [],
         activeAddressId: null
       },
@@ -32,7 +31,6 @@ const useCartStore = create(
       
       setShipping: (shipping) => set({ selectedShipping: shipping }),
 
-      // Gerenciamento de Endereços e Faturamento
       setDocument: (doc) => set((state) => ({ customer: { ...state.customer, document: doc } })),
       
       addAddress: (address) => set((state) => {
@@ -48,9 +46,13 @@ const useCartStore = create(
 
       setActiveAddress: (id) => set((state) => ({ customer: { ...state.customer, activeAddressId: id } })),
 
+      // CORREÇÃO: Zera o preço se o carrinho estiver vazio
       getTotalPrice: () => {
-        const subtotal = get().items.reduce((total, item) => total + (item.price * item.quantity), 0);
-        const shippingPrice = get().selectedShipping ? parseFloat(get().selectedShipping.price) : 0;
+        const { items, selectedShipping } = get();
+        if (items.length === 0) return 0;
+
+        const subtotal = items.reduce((total, item) => total + (item.price * item.quantity), 0);
+        const shippingPrice = selectedShipping ? parseFloat(selectedShipping.price) : 0;
         return subtotal + shippingPrice;
       },
       

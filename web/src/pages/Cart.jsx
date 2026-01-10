@@ -33,6 +33,7 @@ export default function Cart() {
     }
     setLoading(true);
     try {
+      // 1. Cria o pedido no Sanity
       const order = {
         _type: 'order',
         orderNumber: `BV-${Math.floor(Math.random() * 10000)}`,
@@ -40,22 +41,33 @@ export default function Cart() {
         totalAmount: total,
         customerDocument: customer.document,
         shippingAddress: activeAddress,
-        items: items.map(item => ({ _key: Math.random().toString(36).substr(7), productName: item.title, quantity: item.quantity, price: item.price }))
+        items: items.map(item => ({ 
+          _key: Math.random().toString(36).substr(7), 
+          productName: item.title, 
+          quantity: item.quantity, 
+          price: item.price 
+        }))
       };
       const createdOrder = await client.create(order);
       
+      // 2. Busca a preferência no Worker
       const response = await fetch('https://brasil-varejo-api.laeciossp.workers.dev/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, shipping: parseFloat(selectedShipping.price), email: "cliente@brasilvarejo.com", orderId: createdOrder._id })
+        body: JSON.stringify({ 
+          items, 
+          shipping: parseFloat(selectedShipping.price), 
+          email: "cliente@brasilvarejo.com", 
+          orderId: createdOrder._id 
+        })
       });
       
       const data = await response.json();
 
-      // INICIALIZA O MODAL DO MERCADO PAGO
+      // 3. ABRE O MODAL (POPUP) DO MERCADO PAGO
       if (data.id_preferencia && window.MercadoPago) {
-        // SUBSTITUA ABAIXO PELA SUA PUBLIC_KEY (começa com APP_USR-...)
-        const mp = new window.MercadoPago('SUA_PUBLIC_KEY_AQUI', {
+        // --- SUBSTITUA PELA SUA PUBLIC KEY (APP_USR-...) ---
+        const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', {
           locale: 'pt-BR'
         });
 
@@ -63,10 +75,11 @@ export default function Cart() {
           preference: {
             id: data.id_preferencia
           },
-          autoOpen: true, // Abre o popup automaticamente
+          autoOpen: true, // Abre o popup por cima do site
         });
       } else if (data.url) {
-        window.location.href = data.url; // Fallback caso o modal falhe
+        // Fallback: Se o modal falhar, redireciona normalmente
+        window.location.href = data.url;
       }
 
     } catch (error) {
@@ -118,12 +131,12 @@ export default function Cart() {
               <div className="bg-slate-50 p-6 rounded-2xl border-2 border-dashed border-slate-200 mb-6 space-y-3">
                 <div className="flex justify-between items-center mb-2"><span className="text-[10px] font-black uppercase text-slate-400">Cadastrar Endereço</span><button onClick={() => setShowForm(false)}><X size={18}/></button></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <input placeholder="Apelido (Ex: Casa)" className="col-span-2 p-3 rounded-xl text-sm border-none shadow-sm" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
-                  <input placeholder="CEP" className="p-3 rounded-xl text-sm border-none shadow-sm" value={newAddr.zip} onChange={e => setNewAddr({...newAddr, zip: e.target.value})} />
-                  <input placeholder="Cidade" className="p-3 rounded-xl text-sm border-none shadow-sm" value={newAddr.city} onChange={e => setNewAddr({...newAddr, city: e.target.value})} />
-                  <input placeholder="Rua" className="col-span-2 p-3 rounded-xl text-sm border-none shadow-sm" value={newAddr.street} onChange={e => setNewAddr({...newAddr, street: e.target.value})} />
-                  <input placeholder="Nº" className="p-3 rounded-xl text-sm border-none shadow-sm" value={newAddr.number} onChange={e => setNewAddr({...newAddr, number: e.target.value})} />
-                  <input placeholder="Bairro" className="p-3 rounded-xl text-sm border-none shadow-sm" value={newAddr.neighborhood} onChange={e => setNewAddr({...newAddr, neighborhood: e.target.value})} />
+                  <input placeholder="Apelido" className="col-span-2 p-3 rounded-xl text-sm shadow-sm" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
+                  <input placeholder="CEP" className="p-3 rounded-xl text-sm shadow-sm" value={newAddr.zip} onChange={e => setNewAddr({...newAddr, zip: e.target.value})} />
+                  <input placeholder="Cidade" className="p-3 rounded-xl text-sm shadow-sm" value={newAddr.city} onChange={e => setNewAddr({...newAddr, city: e.target.value})} />
+                  <input placeholder="Rua" className="col-span-2 p-3 rounded-xl text-sm shadow-sm" value={newAddr.street} onChange={e => setNewAddr({...newAddr, street: e.target.value})} />
+                  <input placeholder="Nº" className="p-3 rounded-xl text-sm shadow-sm" value={newAddr.number} onChange={e => setNewAddr({...newAddr, number: e.target.value})} />
+                  <input placeholder="Bairro" className="p-3 rounded-xl text-sm shadow-sm" value={newAddr.neighborhood} onChange={e => setNewAddr({...newAddr, neighborhood: e.target.value})} />
                 </div>
                 <button onClick={handleSaveAddress} className="w-full bg-blue-600 text-white font-black py-3 rounded-xl text-xs uppercase shadow-lg">Salvar e Usar</button>
               </div>
