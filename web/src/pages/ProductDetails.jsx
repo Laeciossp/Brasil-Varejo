@@ -3,8 +3,11 @@ import { useParams } from 'react-router-dom';
 import { client, urlFor } from '../lib/sanity';
 import { PortableText } from '@portabletext/react'; 
 import { ShoppingCart, Truck, ShieldCheck, PlayCircle } from 'lucide-react';
+import { formatCurrency } from '../lib/utils';
+// Importação da sua Store oficial
+import useCartStore from '../store/useCartStore';
 
-// --- CONFIGURAÇÃO DE COMO EXIBIR O TEXTO RICO (PRESERVADO) ---
+// --- CONFIGURAÇÃO DE COMO EXIBIR O TEXTO RICO (PRESERVADO INTEGRALMENTE) ---
 const myPortableTextComponents = {
   types: {
     image: ({ value }) => {
@@ -35,6 +38,12 @@ const myPortableTextComponents = {
 
 export default function ProductDetails() {
   const { slug } = useParams();
+  
+  // Conecta com a Store do Zustand
+  const addItem = useCartStore((state) => state.addItem);
+  const setShipping = useCartStore((state) => state.setShipping);
+  const selectedShipping = useCartStore((state) => state.selectedShipping);
+
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeMedia, setActiveMedia] = useState(null); 
@@ -45,6 +54,7 @@ export default function ProductDetails() {
 
   useEffect(() => {
     const query = `*[_type == "product" && slug.current == $slug][0]{
+      _id,
       title,
       price,
       oldPrice,
@@ -74,7 +84,7 @@ export default function ProductDetails() {
       });
   }, [slug]);
 
-  // --- FUNÇÃO QUE CHAMA O SEU WORKER (ATUALIZADA) ---
+  // --- FUNÇÃO DE FRETE (PRESERVADA) ---
   const handleCalculateShipping = async () => {
     const cleanCep = cep.replace(/\D/g, '');
     if (cleanCep.length !== 8) return alert("Digite um CEP válido com 8 dígitos");
@@ -83,14 +93,13 @@ export default function ProductDetails() {
     setShippingOptions(null); 
 
     try {
-      // URL REAL DO SEU WORKER NO CLOUDFLARE
       const workerUrl = 'https://brasil-varejo-api.laeciossp.workers.dev/shipping'; 
 
       const response = await fetch(workerUrl, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: { postal_code: "43805000" }, // Origem fixa do Brasil Varejo
+          from: { postal_code: "43805000" },
           to: { postal_code: cleanCep },
           products: [{ 
             width: product.logistics?.width || 15,
@@ -102,19 +111,30 @@ export default function ProductDetails() {
           }]
         })
       });
-      
+
       const data = await response.json();
-      
-      // SOLUÇÃO PARA TELA BRANCA: Garante que data seja um array antes de salvar
       setShippingOptions(Array.isArray(data) ? data : []);
       
     } catch (err) {
       console.error(err);
-      // Se der erro, define como array vazio para o .map não quebrar
       setShippingOptions([]); 
     } finally {
       setCalculating(false);
     }
+  };
+
+  // --- FUNÇÃO DE COMPRA (ATUALIZADA) ---
+  const handleBuyNow = () => {
+    if (!product) return;
+    if (!selectedShipping) return alert("Selecione uma opção de frete clicando nela antes de prosseguir.");
+
+    const cartItem = {
+      ...product,
+      image: product.images?.[0] ? urlFor(product.images[0].asset).url() : ''
+    };
+
+    addItem(cartItem);
+    window.location.href = '/cart'; 
   };
 
   if (loading) return <div className="p-20 text-center font-bold text-gray-400">Carregando detalhes...</div>;
@@ -123,10 +143,9 @@ export default function ProductDetails() {
   return (
     <div className="bg-gray-50 min-h-screen py-10">
       <div className="container mx-auto px-4 max-w-7xl">
-        
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col lg:flex-row mb-10">
           
-          {/* 1. GALERIA MULTIMÍDIA (PRESERVADA) */}
+          {/* 1. GALERIA MULTIMÍDIA (PRESERVADA COM VÍDEO) */}
           <div className="lg:w-3/5 p-6 border-b lg:border-b-0 lg:border-r border-gray-100">
             <div className="aspect-video w-full bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden relative">
               {activeMedia?._type === 'file' || activeMedia?.asset?.mimeType?.includes('video') ? (
@@ -169,28 +188,28 @@ export default function ProductDetails() {
             </div>
           </div>
 
-          {/* 2. INFORMAÇÕES DE VENDA (PRESERVADA) */}
+          {/* 2. INFORMAÇÕES DE VENDA E FRETE CLICÁVEL */}
           <div className="lg:w-2/5 p-8 flex flex-col">
             <h1 className="text-3xl font-black text-gray-900 leading-tight mb-4">{product.title}</h1>
-            
             <div className="mb-6">
               {product.oldPrice > product.price && (
-                <span className="text-gray-400 line-through text-sm">De: R$ {product.oldPrice?.toFixed(2)}</span>
+                <span className="text-gray-400 line-through text-sm">
+                  De: {formatCurrency(product.oldPrice)}
+                </span>
               )}
               <div className="text-4xl font-black text-blue-600">
-                R$ {product.price?.toFixed(2)}
+                {formatCurrency(product.price)}
               </div>
               <p className="text-sm text-gray-500 mt-1">
-                em até 12x de R$ {(product.price / 12).toFixed(2)} sem juros
+                em até 12x de {formatCurrency(product.price / 12)} sem juros
               </p>
             </div>
 
-            {/* --- CALCULADORA DE FRETE (PRESERVADA COM FIX) --- */}
+            {/* FRETE */}
             <div className="bg-gray-50 p-5 rounded-lg mb-6 border border-gray-200">
               <p className="font-bold text-gray-700 text-sm mb-2 flex items-center gap-2">
                 <Truck size={18} /> Calcular Frete e Prazo
               </p>
-              
               <div className="flex gap-2 mb-2">
                 <input 
                   type="text" 
@@ -209,80 +228,82 @@ export default function ProductDetails() {
                 </button>
               </div>
 
-              {/* LISTA DE OPÇÕES (TRAVADA CONTRA TELA BRANCA) */}
               {shippingOptions && Array.isArray(shippingOptions) && (
-                <div className="space-y-2 mt-3 animate-fade-in border-t border-gray-200 pt-3">
-                  {shippingOptions.length > 0 ? shippingOptions.filter(o => !o.error).map((opt, idx) => (
-                    <div key={idx} className="flex justify-between items-center bg-white p-2 rounded border border-gray-100 shadow-sm">
-                      <div className="flex items-center gap-3">
-                        {opt.company?.picture ? (
-                          <img src={opt.company.picture} alt={opt.name} className="h-6 w-12 object-contain mix-blend-multiply" />
-                        ) : (
-                          <Truck size={20} className="text-gray-400"/>
-                        )}
-                        <div>
-                          <p className="text-xs font-bold text-gray-800">{opt.name}</p>
-                          <p className="text-[10px] text-gray-500">
-                             {opt.custom_delivery_range?.max || opt.delivery_range?.max} dias úteis
-                          </p>
+                <div className="space-y-2 mt-3 border-t border-gray-200 pt-3">
+                  {shippingOptions.length > 0 ? shippingOptions.filter(o => !o.error).map((opt, idx) => {
+                    const isSelected = selectedShipping?.name === opt.name;
+                    return (
+                      <div 
+                        key={idx} 
+                        onClick={() => setShipping(opt)} 
+                        className={`flex justify-between items-center p-3 rounded-xl border cursor-pointer transition-all ${
+                          isSelected ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600 shadow-sm' : 'border-gray-100 bg-white hover:border-blue-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {opt.company?.picture && <img src={opt.company.picture} alt={opt.name} className="h-6 w-12 object-contain mix-blend-multiply" />}
+                          <div>
+                            <p className="text-xs font-bold text-gray-800">{opt.name}</p>
+                            <p className="text-[10px] text-gray-500">{opt.custom_delivery_range?.max || opt.delivery_range?.max} dias úteis</p>
+                          </div>
                         </div>
+                        <p className={`font-bold text-sm ${isSelected ? 'text-blue-700' : 'text-green-700'}`}>
+                          {parseFloat(opt.price) === 0 ? 'Grátis' : formatCurrency(opt.price)}
+                        </p>
                       </div>
-                      <p className="font-bold text-green-700 text-sm">
-                        {parseFloat(opt.price) === 0 ? 'Grátis' : `R$ ${parseFloat(opt.price).toFixed(2)}`}
-                      </p>
-                    </div>
-                  )) : <p className="text-xs text-red-500 text-center py-2">Nenhuma transportadora disponível para este CEP.</p>}
+                    )
+                  }) : <p className="text-xs text-red-500 text-center py-2">Nenhuma transportadora disponível.</p>}
                 </div>
               )}
-              
-              <a 
-                href="https://buscacepinter.correios.com.br/app/endereco/index.php" 
-                target="_blank" 
-                rel="noreferrer"
-                className="text-[10px] text-gray-400 underline block text-right mt-1 hover:text-blue-600"
-              >
-                Não sei meu CEP
-              </a>
             </div>
 
-            <button className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-lg font-black text-lg uppercase flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl mb-4 transform active:scale-95">
-              <ShoppingCart /> Comprar Agora
-            </button>
+            {/* BOTÕES DE COMPRA INTEGRADOS */}
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={handleBuyNow}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-lg font-black text-lg uppercase flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl transform active:scale-95"
+              >
+                <ShoppingCart /> Comprar Agora
+              </button>
+              
+              <button 
+                onClick={() => {
+                  addItem({ ...product, image: product.images?.[0] ? urlFor(product.images[0].asset).url() : '' });
+                  alert("Produto adicionado ao carrinho!");
+                }}
+                className="w-full border-2 border-crocus-vivid text-crocus-vivid hover:bg-crocus-light/10 py-3 rounded-lg font-bold text-sm uppercase transition-all flex items-center justify-center gap-2"
+              >
+                Adicionar ao Carrinho
+              </button>
+            </div>
 
-            <div className="flex items-center gap-2 text-xs text-gray-500 justify-center">
+            <div className="flex items-center gap-2 text-xs text-gray-500 justify-center mt-4">
               <ShieldCheck size={16} /> Compra 100% Segura e Garantida
             </div>
           </div>
         </div>
 
-        {/* --- BLOCO INFERIOR: DESCRIÇÃO RICA E ESPECIFICAÇÕES (PRESERVADA) --- */}
+        {/* DESCRIÇÃO E ESPECIFICAÇÕES */}
         <div className="grid lg:grid-cols-3 gap-10">
           <div className="lg:col-span-2 bg-white p-8 rounded-xl shadow-sm border border-gray-100 prose prose-blue max-w-none">
             <h3 className="text-xl font-black uppercase mb-6 border-b pb-2">Descrição do Produto</h3>
             {product.description ? (
               <PortableText value={product.description} components={myPortableTextComponents} />
-            ) : (
-              <p className="text-gray-400 italic">Sem descrição detalhada.</p>
-            )}
+            ) : <p className="text-gray-400 italic">Sem descrição detalhada.</p>}
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-fit sticky top-24">
             <h3 className="text-sm font-black uppercase mb-4 text-gray-500">Ficha Técnica</h3>
-            {product.specifications?.length > 0 ? (
-              <div className="divide-y divide-gray-100">
-                {product.specifications.map((spec, idx) => (
-                  <div key={idx} className="py-3 flex justify-between text-sm">
-                    <span className="font-bold text-gray-700">{spec.label}</span>
-                    <span className="text-gray-500 text-right">{spec.value}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-gray-400">Nenhuma especificação cadastrada.</p>
-            )}
+            <div className="divide-y divide-gray-100">
+              {product.specifications?.map((spec, idx) => (
+                <div key={idx} className="py-3 flex justify-between text-sm">
+                  <span className="font-bold text-gray-700">{spec.label}</span>
+                  <span className="text-gray-500 text-right">{spec.value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-
       </div>
     </div>
   );

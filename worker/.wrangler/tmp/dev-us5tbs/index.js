@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// .wrangler/tmp/bundle-hcJoYe/checked-fetch.js
+// .wrangler/tmp/bundle-XhIaGk/checked-fetch.js
 var urls = /* @__PURE__ */ new Set();
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
@@ -27,7 +27,7 @@ globalThis.fetch = new Proxy(globalThis.fetch, {
   }
 });
 
-// .wrangler/tmp/bundle-hcJoYe/strip-cf-connecting-ip-header.js
+// .wrangler/tmp/bundle-XhIaGk/strip-cf-connecting-ip-header.js
 function stripCfConnectingIPHeader(input, init) {
   const request = new Request(input, init);
   request.headers.delete("CF-Connecting-IP");
@@ -52,8 +52,9 @@ var src_default = {
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization"
     };
-    if (req.method === "OPTIONS")
+    if (req.method === "OPTIONS") {
       return new Response(null, { headers });
+    }
     try {
       const url = new URL(req.url);
       if (url.pathname === "/login/melhorenvio") {
@@ -77,35 +78,72 @@ var src_default = {
           })
         });
         const data = await response.json();
-        await env.CARRINHO.put("MELHORENVIO_TOKEN", data.access_token);
-        return new Response("Autorizado com Sucesso no Brasil Varejo! Pode fechar esta aba.", { headers });
+        if (data.access_token) {
+          await env.CARRINHO.put("MELHORENVIO_TOKEN", data.access_token);
+          return new Response("Autorizado com Sucesso no Brasil Varejo! Pode fechar esta aba.", { headers });
+        }
+        return new Response(JSON.stringify({ error: "Erro na autoriza\xE7\xE3o" }), { status: 400, headers });
       }
       if (req.method === "POST" && url.pathname.includes("shipping")) {
         const body = await req.json();
-        const token = await env.CARRINHO.get("MELHORENVIO_TOKEN");
-        if (!token) {
+        const sanityQuery = encodeURIComponent('*[_type == "shippingSettings"][0]');
+        const sanityResp = await fetch(`https://o4upb251.api.sanity.io/v2021-06-07/data/query/production?query=${sanityQuery}`);
+        const { result: settings } = await sanityResp.json();
+        const token = settings?.apiToken || await env.CARRINHO.get("MELHORENVIO_TOKEN");
+        const cepOrigem = settings?.originCep?.replace(/\D/g, "") || "43805000";
+        const handlingTime = settings?.handlingTime || 0;
+        if (!token)
           return new Response(JSON.stringify([]), { headers });
-        }
+        const payload = {
+          from: { postal_code: cepOrigem },
+          to: { postal_code: (body.to?.postal_code || body.cepDestino || "").replace(/\D/g, "") },
+          products: (body.products || body.items || []).map((p) => ({
+            id: p.id || "item",
+            width: Number(p.width || 15),
+            height: Number(p.height || 15),
+            length: Number(p.length || 15),
+            weight: Number(p.weight || 0.5),
+            insurance_value: Number(p.insurance_value || 100),
+            quantity: Number(p.quantity || 1)
+          }))
+        };
         const meResponse = await fetch("https://www.melhorenvio.com.br/api/v2/me/shipment/calculate", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${token}`,
             "Content-Type": "application/json",
+            "Accept": "application/json",
             "User-Agent": "Brasil Varejo (laeciossp@gmail.com)"
           },
-          body: JSON.stringify(body)
+          body: JSON.stringify(payload)
         });
         const fretes = await meResponse.json();
-        return new Response(JSON.stringify(Array.isArray(fretes) ? fretes : []), { headers });
+        const resultado = Array.isArray(fretes) ? fretes.filter((f) => !f.error).map((f) => ({
+          ...f,
+          delivery_time: Number(f.delivery_time) + Number(handlingTime),
+          custom_delivery_range: f.delivery_range ? {
+            min: Number(f.delivery_range.min) + Number(handlingTime),
+            max: Number(f.delivery_range.max) + Number(handlingTime)
+          } : null
+        })) : [];
+        return new Response(JSON.stringify(resultado), { headers });
       }
       if (req.method === "POST" && url.pathname.includes("checkout")) {
-        const { items, email, orderId } = await req.json();
+        const { items, email, orderId, shipping } = await req.json();
         const mpItems = items.map((item) => ({
-          title: item.title || item.nome || "Produto Brasil Varejo",
-          quantity: Number(item.quantity || item.qtd || 1),
-          unit_price: Number(item.price || item.preco),
+          title: item.title || "Produto Brasil Varejo",
+          quantity: Number(item.quantity || 1),
+          unit_price: Number(item.price),
           currency_id: "BRL"
         }));
+        if (shipping > 0) {
+          mpItems.push({
+            title: "Frete Brasil Varejo",
+            quantity: 1,
+            unit_price: Number(shipping),
+            currency_id: "BRL"
+          });
+        }
         const preferenceData = {
           items: mpItems,
           payer: { email: email || "cliente@brasilvarejo.com" },
@@ -127,7 +165,10 @@ var src_default = {
           body: JSON.stringify(preferenceData)
         });
         const mpSession = await mpResponse.json();
-        return new Response(JSON.stringify({ url: mpSession.init_point }), { headers });
+        return new Response(JSON.stringify({
+          url: mpSession.init_point,
+          id_preferencia: mpSession.id
+        }), { headers });
       }
       if (url.pathname.includes("webhook")) {
         const urlParams = new URLSearchParams(url.search);
@@ -141,15 +182,27 @@ var src_default = {
             if (pagamento.status === "approved") {
               const sanityId = pagamento.external_reference;
               if (sanityId && env.SANITY_TOKEN) {
+                const mutation = {
+                  mutations: [
+                    {
+                      patch: {
+                        id: sanityId,
+                        set: {
+                          status: "paid",
+                          paidAt: (/* @__PURE__ */ new Date()).toISOString(),
+                          paymentMethod: pagamento.payment_method_id
+                        }
+                      }
+                    }
+                  ]
+                };
                 await fetch(`https://o4upb251.api.sanity.io/v2021-06-07/data/mutate/production`, {
                   method: "POST",
                   headers: {
                     "Authorization": `Bearer ${env.SANITY_TOKEN}`,
                     "Content-Type": "application/json"
                   },
-                  body: JSON.stringify({
-                    mutations: [{ patch: { id: sanityId, set: { status: "paid" } } }]
-                  })
+                  body: JSON.stringify(mutation)
                 });
               }
             }
@@ -157,7 +210,7 @@ var src_default = {
         }
         return new Response("OK", { status: 200 });
       }
-      return new Response(JSON.stringify({ mensagem: "API Brasil Varejo Online" }), { status: 200, headers });
+      return new Response(JSON.stringify({ status: "API Online", projeto: "Brasil Varejo" }), { status: 200, headers });
     } catch (err) {
       return new Response(JSON.stringify({ erro: err.message }), { status: 500, headers });
     }
@@ -205,7 +258,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-hcJoYe/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-XhIaGk/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -237,7 +290,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-hcJoYe/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-XhIaGk/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

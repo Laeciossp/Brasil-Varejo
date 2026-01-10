@@ -5,7 +5,7 @@ export default {
   fields: [
     {
       name: 'originCep',
-      title: 'CEP de Origem (Estoque)',
+      title: 'CEP de Origem (Estoque)', // Aqui é só o nome do campo
       type: 'string',
       description: 'De onde seus produtos saem. Ex: 01001-000'
     },
@@ -26,7 +26,7 @@ export default {
       name: 'apiToken',
       title: 'Token de Integração (Melhor Envio)',
       type: 'string',
-      description: 'Cole aqui seu Token gerado no painel do Melhor Envio. Se vazio, o sistema usará o modo Simulação Profissional.',
+      description: 'Cole o Token Gerado no painel do Melhor Envio aqui.',
       hidden: ({document}) => document?.provider !== 'melhor_envio'
     },
     {

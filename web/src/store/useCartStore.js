@@ -5,56 +5,58 @@ const useCartStore = create(
   persist(
     (set, get) => ({
       items: [],
+      selectedShipping: null,
+      // Dados do Cliente e Endereços
+      customer: {
+        document: '', // CPF ou CNPJ
+        addresses: [],
+        activeAddressId: null
+      },
       
-      // Adicionar item
       addItem: (product) => {
         const items = get().items
         const existingItem = items.find((item) => item._id === product._id)
-
         if (existingItem) {
-          // Se já existe, aumenta a quantidade
-          const updatedItems = items.map((item) =>
-            item._id === product._id
-              ? { ...item, quantity: item.quantity + 1 }
-              : item
-          )
-          set({ items: updatedItems })
+          set({ items: items.map((item) => item._id === product._id ? { ...item, quantity: item.quantity + 1 } : item) })
         } else {
-          // Se não existe, adiciona com quantidade 1
           set({ items: [...items, { ...product, quantity: 1 }] })
         }
       },
 
-      // Remover item
-      removeItem: (productId) => {
-        set({ items: get().items.filter((item) => item._id !== productId) })
-      },
-
-      // Atualizar quantidade
       updateQuantity: (productId, quantity) => {
         if (quantity < 1) return
-        set({
-          items: get().items.map((item) =>
-            item._id === productId ? { ...item, quantity } : item
-          ),
-        })
+        set({ items: get().items.map((item) => item._id === productId ? { ...item, quantity } : item) })
       },
 
-      // Limpar carrinho
-      clearCart: () => set({ items: [] }),
+      removeItem: (productId) => set({ items: get().items.filter((item) => item._id !== productId) }),
+      
+      setShipping: (shipping) => set({ selectedShipping: shipping }),
 
-      // Cálculos
+      // Gerenciamento de Endereços e Faturamento
+      setDocument: (doc) => set((state) => ({ customer: { ...state.customer, document: doc } })),
+      
+      addAddress: (address) => set((state) => {
+        const newAddress = { ...address, id: Math.random().toString(36).substr(2, 9) };
+        return { 
+          customer: { 
+            ...state.customer, 
+            addresses: [...state.customer.addresses, newAddress],
+            activeAddressId: newAddress.id 
+          } 
+        };
+      }),
+
+      setActiveAddress: (id) => set((state) => ({ customer: { ...state.customer, activeAddressId: id } })),
+
       getTotalPrice: () => {
-        return get().items.reduce((total, item) => total + (item.price * item.quantity), 0)
+        const subtotal = get().items.reduce((total, item) => total + (item.price * item.quantity), 0);
+        const shippingPrice = get().selectedShipping ? parseFloat(get().selectedShipping.price) : 0;
+        return subtotal + shippingPrice;
       },
       
-      getItemsCount: () => {
-        return get().items.reduce((count, item) => count + item.quantity, 0)
-      }
+      clearCart: () => set({ items: [], selectedShipping: null })
     }),
-    {
-      name: 'cart-storage', // Nome no LocalStorage do navegador
-    }
+    { name: 'cart-storage' }
   )
 )
 

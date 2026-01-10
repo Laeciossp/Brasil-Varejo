@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Truck } from 'lucide-react';
-import { formatCurrency } from '../../lib/utils';
 
-const ShippingCalc = ({ logistics }) => {
+const ShippingCalc = ({ logistics, price }) => {
   const [cep, setCep] = useState('');
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState(null);
@@ -12,16 +11,37 @@ const ShippingCalc = ({ logistics }) => {
     if (cep.length < 8) return;
     
     setLoading(true);
-    // Simulação enquanto não conectamos a API real do Melhor Envio
-    // Depois substituiremos por fetch('/api/shipping', ...)
-    setTimeout(() => {
-      setOptions([
-        { name: 'PAC', price: 22.90, days: 8, company: 'Correios' },
-        { name: 'SEDEX', price: 45.50, days: 3, company: 'Correios' },
-        { name: 'Jadlog .Com', price: 19.90, days: 5, company: 'Jadlog' }
-      ]);
+    setOptions(null);
+
+    try {
+      // CONEXÃO REAL COM SEU WORKER
+      const response = await fetch('https://brasil-varejo-api.laeciossp.workers.dev/shipping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: { postal_code: cep },
+          products: [{
+            width: Number(logistics?.width || 15),
+            height: Number(logistics?.height || 15),
+            length: Number(logistics?.length || 15),
+            weight: Number(logistics?.weight || 0.5),
+            insurance_value: Number(price || 100),
+            quantity: 1
+          }]
+        })
+      });
+
+      const data = await response.json();
+      
+      // Filtra apenas opções que não retornaram erro da transportadora
+      setOptions(Array.isArray(data) ? data.filter(opt => !opt.error) : []);
+      
+    } catch (err) {
+      console.error("Erro ao calcular frete:", err);
+      setOptions([]);
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -38,28 +58,37 @@ const ShippingCalc = ({ logistics }) => {
           onChange={(e) => setCep(e.target.value.replace(/\D/g, ''))}
           maxLength={8}
           placeholder="Digite seu CEP"
-          className="flex-1 h-10 px-3 border rounded focus:ring-2 focus:ring-brand-blue outline-none"
+          className="flex-1 h-10 px-3 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
         />
         <button 
           type="submit" 
           disabled={loading || cep.length < 8}
-          className="px-4 h-10 bg-white border border-gray-300 text-brand-blue font-bold rounded hover:bg-gray-50 disabled:opacity-50"
+          className="px-4 h-10 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
         >
           {loading ? '...' : 'Calcular'}
         </button>
       </form>
 
       {options && (
-        <div className="mt-4 space-y-2">
-          {options.map((opt, idx) => (
+        <div className="mt-4 space-y-2 border-t pt-4">
+          {options.length > 0 ? options.map((opt, idx) => (
             <div key={idx} className="flex justify-between text-sm items-center py-2 border-b last:border-0 border-gray-200">
-              <div>
-                <span className="font-bold text-gray-800">{opt.company} {opt.name}</span>
-                <p className="text-gray-500 text-xs">Chega em até {opt.days} dias úteis</p>
+              <div className="flex items-center gap-2">
+                {opt.company?.picture && (
+                  <img src={opt.company.picture} alt="" className="h-4 w-8 object-contain" />
+                )}
+                <div>
+                  <span className="font-bold text-gray-800">{opt.name}</span>
+                  <p className="text-gray-500 text-[10px]">Chega em até {opt.delivery_time} dias úteis</p>
+                </div>
               </div>
-              <span className="font-bold text-brand-darkBlue">{formatCurrency(opt.price)}</span>
+              <span className="font-bold text-blue-900">
+                {Number(opt.price) === 0 ? 'Grátis' : `R$ ${parseFloat(opt.price).toFixed(2)}`}
+              </span>
             </div>
-          ))}
+          )) : (
+            <p className="text-xs text-red-500 text-center">Nenhuma transportadora disponível.</p>
+          )}
         </div>
       )}
     </div>
