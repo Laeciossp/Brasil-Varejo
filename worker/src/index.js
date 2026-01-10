@@ -1,12 +1,11 @@
 export default {
   async fetch(req, env) {
-    // 1. Configuração de CORS (Permite que seu site acesse essa API)
     const origin = req.headers.get("Origin") || "*";
     const headers = {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
     };
 
     if (req.method === "OPTIONS") return new Response(null, { headers });
@@ -14,11 +13,63 @@ export default {
     try {
       const url = new URL(req.url);
 
-      // --- ROTA DE CHECKOUT (CRIA O PAGAMENTO) ---
+      // --- ROTA DE LOGIN MELHOR ENVIO (PARA VOCÊ AUTORIZAR) ---
+      if (url.pathname === "/login/melhorenvio") {
+        const client_id = env.MELHORENVIO_CLIENT_ID;
+        const redirect_uri = "https://brasil-varejo-api.laeciossp.workers.dev/callback/melhorenvio";
+        const scope = "shipping-calculate shipping-checkout shipping-info user-read";
+        
+        const authUrl = `https://www.melhorenvio.com.br/oauth/authorize?client_id=${client_id}&redirect_uri=${encodeURIComponent(redirect_uri)}&response_type=code&scope=${encodeURIComponent(scope)}`;
+        
+        return Response.redirect(authUrl, 302);
+      }
+
+      // --- ROTA DE CALLBACK MELHOR ENVIO (RECEBE O TOKEN) ---
+      if (url.pathname === "/callback/melhorenvio") {
+        const code = url.searchParams.get("code");
+        const response = await fetch("https://www.melhorenvio.com.br/oauth/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            grant_type: "authorization_code",
+            client_id: env.MELHORENVIO_CLIENT_ID,
+            client_secret: env.MELHORENVIO_CLIENT_SECRET,
+            redirect_uri: "https://brasil-varejo-api.laeciossp.workers.dev/callback/melhorenvio",
+            code: code
+          })
+        });
+        const data = await response.json();
+        // Salva o token no KV para uso futuro
+        await env.CARRINHO.put("MELHORENVIO_TOKEN", data.access_token);
+        return new Response("Autorizado com Sucesso no Brasil Varejo! Pode fechar esta aba.", { headers });
+      }
+
+      // --- ROTA DE CÁLCULO DE FRETE (EVITA TELA BRANCA NO SITE) ---
+      if (req.method === "POST" && url.pathname.includes("shipping")) {
+        const body = await req.json();
+        const token = await env.CARRINHO.get("MELHORENVIO_TOKEN");
+
+        if (!token) {
+          return new Response(JSON.stringify([]), { headers }); // Retorna array vazio para não quebrar o .map
+        }
+
+        const meResponse = await fetch("https://www.melhorenvio.com.br/api/v2/me/shipment/calculate", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+            "User-Agent": "Brasil Varejo (laeciossp@gmail.com)"
+          },
+          body: JSON.stringify(body)
+        });
+
+        const fretes = await meResponse.json();
+        return new Response(JSON.stringify(Array.isArray(fretes) ? fretes : []), { headers });
+      }
+
+      // --- ROTA DE CHECKOUT (MERCADO PAGO) ---
       if (req.method === "POST" && url.pathname.includes("checkout")) {
         const { items, email, orderId } = await req.json();
-
-        // Formata itens para o Mercado Pago
         const mpItems = items.map(item => ({
           title: item.title || item.nome || "Produto Brasil Varejo",
           quantity: Number(item.quantity || item.qtd || 1),
@@ -30,15 +81,12 @@ export default {
           items: mpItems,
           payer: { email: email || "cliente@brasilvarejo.com" },
           back_urls: {
-            // URLs para onde o cliente volta após pagar
-            success: "http://localhost:5173/profile", // Volta para a área de pedidos
-            failure: "http://localhost:5173/cart",
-            pending: "http://localhost:5173/cart"
+            success: "https://brasil-varejo.vercel.app/profile",
+            failure: "https://brasil-varejo.vercel.app/cart",
+            pending: "https://brasil-varejo.vercel.app/cart"
           },
           auto_return: "approved",
-          external_reference: orderId, // O "Crachá" que liga ao Sanity
-          // URL que o Mercado Pago vai avisar (Seu Worker)
-          // ATENÇÃO: Quando subir para produção, substitua pelo seu subdomínio real
+          external_reference: orderId,
           notification_url: "https://brasil-varejo-api.laeciossp.workers.dev/webhook" 
         };
 
@@ -55,27 +103,19 @@ export default {
         return new Response(JSON.stringify({ url: mpSession.init_point }), { headers });
       }
 
-      // --- ROTA DE WEBHOOK (RECEBE AVISO DO PAGAMENTO) ---
+      // --- ROTA DE WEBHOOK (MERCADO PAGO -> SANITY) ---
       if (url.pathname.includes("webhook")) {
         const urlParams = new URLSearchParams(url.search);
         const dataId = urlParams.get('data.id') || urlParams.get('id');
-        const type = urlParams.get('type') || urlParams.get('topic');
-
-        if ((type === 'payment' || urlParams.get('topic') === 'payment') && dataId) {
-          // Valida no Mercado Pago
+        if (dataId) {
           const respPagamento = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
             headers: { "Authorization": `Bearer ${env.MP_ACCESS_TOKEN}` }
           });
-          
           if (respPagamento.ok) {
             const pagamento = await respPagamento.json();
-            
             if (pagamento.status === 'approved') {
               const sanityId = pagamento.external_reference;
-              
-              // Atualiza o Sanity para "Pago"
               if (sanityId && env.SANITY_TOKEN) {
-                // ID DO PROJETO BRASIL VAREJO: o4upb251
                 await fetch(`https://o4upb251.api.sanity.io/v2021-06-07/data/mutate/production`, {
                   method: "POST",
                   headers: {
@@ -83,16 +123,14 @@ export default {
                     "Content-Type": "application/json"
                   },
                   body: JSON.stringify({
-                    mutations: [
-                      { patch: { id: sanityId, set: { status: 'paid' } } } // 'paid' é o código interno
-                    ]
+                    mutations: [{ patch: { id: sanityId, set: { status: 'paid' } } }]
                   })
                 });
               }
             }
           }
         }
-        return new Response("Webhook Recebido", { status: 200 });
+        return new Response("OK", { status: 200 });
       }
 
       return new Response(JSON.stringify({ mensagem: "API Brasil Varejo Online" }), { status: 200, headers });

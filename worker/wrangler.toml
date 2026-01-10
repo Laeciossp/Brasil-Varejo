@@ -6,3 +6,8 @@ compatibility_flags = [ "nodejs_compat" ]
 [[kv_namespaces]]
 binding = "CARRINHO"
 id = "1ceee220165e4b6cabc16a6928c08bcc"
+
+[vars]
+# Aqui é onde o Worker busca a chave se você não usar o comando 'secret'
+# Mas para segurança, recomendo usar: npx wrangler secret put RESEND_API_KEY
+RESEND_API_KEY = "re_Yr1tfCgq_NigfG8QTmmuywWVtnWvJLN8C"
