@@ -1,47 +1,72 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom'; // Removi o Router aqui pois ele geralmente fica no main.jsx
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
 
 // --- COMPONENTES DE LAYOUT ---
-// Certifique-se que eles estão na pasta web/src/components/
 import Header from './components/Header';
 import Footer from './components/Footer';
 
 // --- PÁGINAS ---
 import Home from './pages/Home';
 import ProductDetails from './pages/ProductDetails';
-import Category from './pages/Category';
+import CategoryPage from './pages/CategoryPage'; 
 import Cart from './pages/Cart';
 import Profile from './pages/Profile';
+import Success from './pages/Success';
+import Favorites from './pages/Favorites';
+
+// Páginas Institucionais
+import About from './pages/About';
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
 
 function App() {
   return (
-    // A div abaixo garante que o Footer sempre vá para o final (Sticky Footer)
     <div className="flex flex-col min-h-screen bg-[#f2f2f2] font-sans text-gray-900">
       
-      {/* O Header aparece em todas as telas */}
       <Header />
       
-      {/* Área principal onde as páginas trocam */}
       <main className="flex-grow">
         <Routes>
-          {/* 1. Home (Vitrine Estilo Magalu) */}
           <Route path="/" element={<Home />} />
-          
-          {/* 2. Página de Produto */}
           <Route path="/product/:slug" element={<ProductDetails />} />
           
-          {/* 3. Página de Categoria/Departamento */}
-          <Route path="/category/:slug" element={<Category />} />
+          {/* --- SOLUÇÃO DO PROBLEMA DE ROTA --- */}
+          {/* Mantemos as duas opções ativas para garantir que o link funcione 
+              tanto se vier do Sanity (Inglês) quanto se digitado (Português) */}
+          <Route path="/category/:slug" element={<CategoryPage />} />
+          <Route path="/categoria/:slug" element={<CategoryPage />} />
           
-          {/* 4. Carrinho de Compras */}
           <Route path="/cart" element={<Cart />} />
+          <Route path="/favoritos" element={<Favorites />} />
+
+          {/* ROTAS INSTITUCIONAIS */}
+          <Route path="/sobre" element={<About />} />
+          <Route path="/termos-de-uso" element={<Terms />} />
+          <Route path="/politica-de-privacidade" element={<Privacy />} />
+
+          {/* ROTA PROTEGIDA */}
+          <Route 
+            path="/profile" 
+            element={
+              <>
+                <SignedIn>
+                  <Profile />
+                </SignedIn>
+                <SignedOut>
+                  <RedirectToSignIn />
+                </SignedOut>
+              </>
+            } 
+          />
+
+          <Route path="/sucesso" element={<Success />} />
           
-          {/* 5. Área do Cliente (Pedidos, Rastreio, SAC) */}
-          <Route path="/profile" element={<Profile />} />
+          {/* Se a rota não existir, volta para a Home */}
+          <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
 
-      {/* O Footer Gigante aparece no final de tudo */}
       <Footer />
       
     </div>

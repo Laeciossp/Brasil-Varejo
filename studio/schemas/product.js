@@ -1,60 +1,278 @@
+// studio/schemas/product.js
+
 export default {
   name: 'product',
-  title: 'Produtos',
+  title: 'Produtos (Varejo Geral)',
   type: 'document',
+  // Divisão visual em abas para organizar o cadastro
+  groups: [
+    { name: 'main', title: '📦 Principal', default: true },
+    { name: 'variants', title: '🎨 Variações & Preço' },
+    { name: 'specs', title: '📝 Ficha Técnica' },
+    { name: 'shipping', title: '🚚 Frete & Entrega' },
+    { name: 'seo', title: '🔍 SEO & Google' },
+  ],
   fields: [
+    // --- 1. IDENTIFICAÇÃO BÁSICA (ABA PRINCIPAL) ---
     {
       name: 'title',
       title: 'Nome do Produto',
       type: 'string',
-    },
-    {
-      name: 'ean',
-      title: 'Código de Barras (EAN/GTIN)',
-      type: 'string',
-      description: 'Digite o EAN para buscar dados automaticamente no futuro.'
+      group: 'main',
+      validation: Rule => Rule.required()
     },
     {
       name: 'slug',
-      title: 'Slug',
+      title: 'Link Amigável (Slug)',
       type: 'slug',
-      options: { source: 'title', maxLength: 96 }
-    },
-    {
-      name: 'price',
-      title: 'Preço (R$)',
-      type: 'number',
-    },
-    {
-      name: 'oldPrice',
-      title: 'Preço Antigo (De:)',
-      type: 'number',
-      description: 'Preencha para mostrar "De: R$ 100 Por: R$ 80"'
-    },
-    {
-      name: 'images',
-      title: 'Imagens',
-      type: 'array',
-      of: [{ type: 'image', options: { hotspot: true } }]
+      group: 'main',
+      options: { source: 'title', maxLength: 96 },
+      validation: Rule => Rule.required()
     },
     {
       name: 'categories',
-      title: 'Categorias',
+      title: 'Categorias / Departamentos',
       type: 'array',
+      group: 'main',
       of: [{type: 'reference', to: {type: 'category'}}]
     },
-{
-  name: 'freeShipping',
-  title: 'Frete Grátis?',
-  type: 'boolean',
-  description: 'Ative para zerar o frete deste produto no carrinho.',
-  initialValue: false,
-},
-    // --- Logística Obrigatória para Melhor Envio ---
+    {
+      name: 'brand',
+      title: 'Marca / Fabricante',
+      type: 'string',
+      group: 'main',
+    },
+    {
+      name: 'images',
+      title: 'Galeria de Imagens (Geral)',
+      type: 'array',
+      group: 'main',
+      of: [{ type: 'image', options: { hotspot: true } }]
+    },
+    {
+      name: 'description',
+      title: 'Descrição Completa',
+      type: 'array', 
+      group: 'main',
+      of: [{type: 'block'}]
+    },
+
+    // --- 2. O SELETOR MÁGICO (DEFINE A FICHA TÉCNICA) ---
+    {
+      name: 'productType',
+      title: 'Qual é o TIPO deste produto?',
+      description: 'Escolha a categoria para liberar os campos técnicos corretos abaixo.',
+      type: 'string',
+      group: 'specs',
+      initialValue: 'general',
+      options: {
+        list: [
+          { title: '📱 Tech (Celulares, PCs, Tablets)', value: 'tech' },
+          { title: '⚡ Energia & Solar (Placas, Inversores)', value: 'energy' },
+          { title: '👗 Moda (Roupas, Calçados)', value: 'fashion' },
+          { title: '🏠 Casa & Eletro (Móveis, Geladeiras)', value: 'home' },
+          { title: '💄 Beleza & Saúde (Cosméticos)', value: 'beauty' },
+          { title: '📦 Geral / Outros', value: 'general' }
+        ],
+        layout: 'radio'
+      }
+    },
+
+    // --- 3. VARIAÇÕES (PREÇO, ESTOQUE E ATRIBUTOS) ---
+    {
+      name: 'variants',
+      title: 'Variações (SKUs)',
+      type: 'array',
+      group: 'variants',
+      description: 'Cadastre aqui as versões do produto (Ex: Azul 110v, Vermelho 220v). Se o produto for único, crie apenas uma variação.',
+      of: [
+        {
+          type: 'object',
+          title: 'Variação',
+          fields: [
+            {
+              name: 'variantName',
+              title: 'Nome da Variação',
+              type: 'string',
+              description: 'Ex: Preto - 256GB - 220v'
+            },
+            {
+              name: 'ean',
+              title: 'Código de Barras (EAN/GTIN)',
+              type: 'string',
+            },
+            {
+              name: 'price',
+              title: 'Preço (R$)',
+              type: 'number',
+              validation: Rule => Rule.required()
+            },
+            {
+              name: 'oldPrice',
+              title: 'Preço Antigo (De:)',
+              type: 'number',
+              description: 'Para promoções.'
+            },
+            {
+              name: 'stock',
+              title: 'Estoque Disponível',
+              type: 'number',
+              initialValue: 0
+            },
+            {
+              name: 'variantImage',
+              title: 'Foto desta Variação',
+              type: 'image',
+              description: 'Se não colocar, o site usa a galeria principal.'
+            },
+            // --- ATRIBUTOS DINÂMICOS DA VARIAÇÃO ---
+            {
+              name: 'color',
+              title: 'Cor (Nome)',
+              type: 'string',
+            },
+            {
+              name: 'colorHex',
+              title: 'Cor (Hexadecimal)',
+              type: 'string',
+              description: 'Ex: #FF0000 para bolinha vermelha.'
+            },
+            {
+              name: 'voltage',
+              title: 'Voltagem',
+              type: 'string',
+              options: { list: ['Bivolt', '110V', '220V', '380V', '12V'] }
+            },
+            {
+              name: 'capacity',
+              title: 'Capacidade / Armazenamento',
+              type: 'string',
+              description: 'Ex: 256GB (Tech) ou 10kg (Eletro)'
+            },
+            {
+              name: 'ram',
+              title: 'Memória RAM (Tech)',
+              type: 'string',
+            },
+            {
+              name: 'size',
+              title: 'Tamanho (Moda)',
+              type: 'string',
+            }
+          ],
+          preview: {
+            select: {
+              title: 'variantName',
+              price: 'price',
+              media: 'variantImage'
+            },
+            prepare({ title, price, media }) {
+              return {
+                title: title || 'Variação Padrão',
+                subtitle: price ? `R$ ${price}` : 'Sem preço',
+                media: media
+              }
+            }
+          }
+        }
+      ]
+    },
+
+    // --- 4. FICHAS TÉCNICAS CONDICIONAIS ---
+
+    // 📱 TECH
+    {
+      name: 'techSpecs',
+      title: '📱 Ficha Técnica: Tecnologia',
+      type: 'object',
+      group: 'specs',
+      hidden: ({ document }) => document?.productType !== 'tech',
+      fields: [
+        { name: 'processor', title: 'Processador', type: 'string' },
+        { name: 'os', title: 'Sistema Operacional', type: 'string' },
+        { name: 'screen', title: 'Tela (Pol/Resolução)', type: 'string' },
+        { name: 'camera', title: 'Câmeras', type: 'string' },
+        { name: 'battery', title: 'Bateria', type: 'string' },
+      ]
+    },
+
+    // ⚡ ENERGIA SOLAR
+    {
+      name: 'energySpecs',
+      title: '⚡ Ficha Técnica: Energia Solar',
+      type: 'object',
+      group: 'specs',
+      hidden: ({ document }) => document?.productType !== 'energy',
+      fields: [
+        { name: 'power', title: 'Potência Nominal (W)', type: 'string' },
+        { name: 'efficiency', title: 'Eficiência (%)', type: 'string' },
+        { name: 'technology', title: 'Tecnologia (Mono/Poli)', type: 'string' },
+        { name: 'inverterType', title: 'Tipo de Inversor', type: 'string' },
+        { name: 'datasheet', title: 'PDF Técnico', type: 'file' },
+      ]
+    },
+
+    // 👗 MODA
+    {
+      name: 'fashionSpecs',
+      title: '👗 Ficha Técnica: Moda',
+      type: 'object',
+      group: 'specs',
+      hidden: ({ document }) => document?.productType !== 'fashion',
+      fields: [
+        { name: 'gender', title: 'Gênero', type: 'string', options: {list: ['Unissex', 'Masc', 'Fem']} },
+        { name: 'material', title: 'Material / Tecido', type: 'string' },
+        { name: 'model', title: 'Modelagem', type: 'string' },
+      ]
+    },
+
+    // 🏠 CASA
+    {
+      name: 'homeSpecs',
+      title: '🏠 Ficha Técnica: Casa & Eletro',
+      type: 'object',
+      group: 'specs',
+      hidden: ({ document }) => document?.productType !== 'home',
+      fields: [
+        { name: 'consumption', title: 'Consumo (kWh)', type: 'string' },
+        { name: 'powerW', title: 'Potência Elétrica (W)', type: 'string' },
+      ]
+    },
+
+    // 📋 GERAL / TABELA LIVRE (Mantendo sua lógica antiga de array)
+    {
+      name: 'customSpecs',
+      title: 'Outras Características (Tabela Livre)',
+      type: 'array',
+      group: 'specs',
+      description: 'Use para características que não estão nos campos acima.',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            {name: 'label', type: 'string', title: 'Característica (Ex: Material da Sola)'},
+            {name: 'value', type: 'string', title: 'Valor (Ex: Borracha)'}
+          ],
+          preview: { 
+            select: { title: 'label', subtitle: 'value' } 
+          }
+        }
+      ]
+    },
+
+    // --- 5. LOGÍSTICA & FRETE (ABA FRETE) ---
+    {
+      name: 'freeShipping',
+      title: 'Frete Grátis?',
+      type: 'boolean',
+      group: 'shipping',
+      initialValue: false,
+    },
     {
       name: 'logistics',
-      title: 'Dados Logísticos (Obrigatório p/ Frete)',
+      title: 'Dados Logísticos (Obrigatório Melhor Envio)',
       type: 'object',
+      group: 'shipping',
       options: { collapsible: true, collapsed: false },
       fields: [
         { name: 'weight', title: 'Peso (kg)', type: 'number', initialValue: 0.5 },
@@ -64,24 +282,34 @@ export default {
       ]
     },
     {
-      name: 'description',
-      title: 'Descrição Completa',
-      type: 'array', 
-      of: [{type: 'block'}]
-    },
-    {
-      name: 'specifications',
-      title: 'Especificações Técnicas (Tabela)',
-      type: 'array',
-      of: [
-        {
-          type: 'object',
-          fields: [
-            {name: 'label', type: 'string', title: 'Característica (Ex: Cor)'},
-            {name: 'value', type: 'string', title: 'Valor (Ex: Preto)'}
-          ]
-        }
-      ]
+      name: 'warranty',
+      title: 'Informações de Garantia',
+      type: 'string',
+      group: 'shipping',
     }
-  ]
+  ],
+
+  // --- VISUALIZAÇÃO NA LISTA ---
+  preview: {
+    select: {
+      title: 'title',
+      media: 'images.0',
+      type: 'productType'
+    },
+    prepare({ title, media, type }) {
+      const icons = {
+        tech: '📱',
+        energy: '⚡',
+        fashion: '👗',
+        home: '🏠',
+        beauty: '💄',
+        general: '📦'
+      };
+      return {
+        title: title,
+        subtitle: `Tipo: ${icons[type] || '📦'}`,
+        media: media
+      }
+    }
+  }
 }

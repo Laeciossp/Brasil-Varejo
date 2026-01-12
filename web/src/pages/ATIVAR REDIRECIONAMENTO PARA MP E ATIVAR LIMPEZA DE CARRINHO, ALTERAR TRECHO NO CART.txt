@@ -1,0 +1,36 @@
+O problema está exatamente no checkout.open(). Esse comando abre o Mercado Pago em um Modal (um pop-up por cima do seu site).
+
+Quando você usa o Modal, o Mercado Pago entende que o usuário nunca saiu da sua página. Por isso, as back_urls que configuramos no Worker (que servem para redirecionar páginas) muitas vezes não funcionam ou não recarregam o seu site, e o carrinho continua lá.
+
+A Solução: Use o Redirecionamento Total
+Para que o carrinho seja limpo e o usuário caia na página de sucesso com 100% de certeza, você deve abandonar o Modal e usar o redirecionamento de página.
+
+Substitua aquele trecho do seu Frontend por este aqui:
+
+JavaScript
+
+const data = await response.json();
+
+if (data.url) {
+  // Isso força o navegador a ir para o Mercado Pago
+  // Saindo do seu site, o 'auto_return' do Worker vai funcionar!
+  window.location.href = data.url; 
+} else {
+  console.error("Erro: URL de checkout não encontrada", data);
+  alert("Erro ao redirecionar para o pagamento.");
+}
+Por que isso resolve o seu problema?
+Ciclo Completo: O usuário sai do seu site -> Vai para o Mercado Pago -> O Mercado Pago detecta o pagamento -> O Mercado Pago devolve o usuário para seusite.com/success.
+
+Trigger de Limpeza: Quando o navegador "pousa" na URL /success, o React monta o componente do zero, dispara o useEffect e limpa o carrinho imediatamente.
+
+Confiabilidade: O Modal (checkout.open) é bonito, mas é instável para limpar estados globais (como o do Zustand/Cart) porque a página principal fica "congelada" por baixo dele.
+
+Verificações Finais Importantes:
+No Worker: Certifique-se de que o auto_return está como "all" (como conversamos antes).
+
+URL de Sucesso: Verifique se a URL no Worker é exatamente a do seu site publicado (ou localhost se estiver testando no PC).
+
+Limpeza de Cache: Após mudar o código do Frontend, dê um Ctrl + F5 para garantir que o navegador não esteja rodando a versão antiga com o checkout.open().
+
+Faça essa troca e tente um novo pagamento (pode ser boleto só para testar o redirecionamento). O site te jogou de volta para a tela de "Pedido Recebido"?

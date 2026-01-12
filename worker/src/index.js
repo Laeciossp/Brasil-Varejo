@@ -1,6 +1,6 @@
 var src_default = {
   async fetch(req, env) {
-    // --- CONFIGURAÇÃO DE CORS ---
+    // --- CONFIGURAÇÃO DE CORS (Essencial para não dar erro no navegador) ---
     const origin = req.headers.get("Origin") || "*";
     const headers = {
       "Content-Type": "application/json",
@@ -18,7 +18,7 @@ var src_default = {
       const url = new URL(req.url);
 
       // =================================================================
-      // 1. ROTA: LOGIN MELHOR ENVIO
+      // 1. ROTA: LOGIN MELHOR ENVIO (Mantida)
       // =================================================================
       if (url.pathname === "/login/melhorenvio") {
         const client_id = env.MELHORENVIO_CLIENT_ID;
@@ -29,7 +29,7 @@ var src_default = {
       }
 
       // =================================================================
-      // 2. ROTA: CALLBACK MELHOR ENVIO
+      // 2. ROTA: CALLBACK MELHOR ENVIO (Mantida - Salva o Token)
       // =================================================================
       if (url.pathname === "/callback/melhorenvio") {
         const code = url.searchParams.get("code");
@@ -56,69 +56,48 @@ var src_default = {
       }
 
       // =================================================================
-      // 3. ROTA: CÁLCULO DE FRETE
+      // 3. ROTA: CÁLCULO DE FRETE (Mantida)
       // =================================================================
       if (req.method === "POST" && url.pathname.includes("shipping")) {
         const body = await req.json();
         
-        // Verificação de Frete Grátis via Sanity
+        // --- A. Verifica Frete Grátis no Sanity ---
         const productId = body.products?.[0]?.id;
         let isFreeShipping = false;
-
+        
         if (productId && env.SANITY_PROJECT_ID) {
-            try {
-                const query = `*[_type == "product" && _id == "${productId}"][0].freeShipping`;
-                const sanityUrl = `https://${env.SANITY_PROJECT_ID}.api.sanity.io/v2021-10-21/data/query/${env.SANITY_DATASET || 'production'}?query=${encodeURIComponent(query)}`;
-                
-                const sanityResp = await fetch(sanityUrl, {
+             try {
+                 const query = encodeURIComponent(`*[_type == "product" && _id == "${productId}"][0].freeShipping`);
+                 const sanityUrl = `https://${env.SANITY_PROJECT_ID}.api.sanity.io/v2021-10-21/data/query/${env.SANITY_DATASET || 'production'}?query=${query}`;
+                 
+                 const sanityResp = await fetch(sanityUrl, { 
                     headers: { "Authorization": `Bearer ${env.SANITY_TOKEN}` }
-                });
-                const sanityData = await sanityResp.json();
-                
-                if (sanityData.result === true) {
-                    isFreeShipping = true;
-                }
-            } catch (e) {
-                console.log("Erro ao verificar Sanity:", e);
-            }
+                 });
+                 const sanityData = await sanityResp.json();
+                 if (sanityData.result === true) isFreeShipping = true;
+             } catch(e) { console.log("Erro Sanity Frete:", e); }
         }
 
-        // Configurações Gerais
+        // --- B. Configurações Gerais ---
         let handlingTime = 0;
-        let cepOrigem = "43805000";
+        let cepOrigem = "43805000"; 
         let token = await env.CARRINHO.get("MELHORENVIO_TOKEN");
 
-        try {
-            const sanityQueryConfig = encodeURIComponent('*[_type == "shippingSettings"][0]');
-            const configUrl = `https://${env.SANITY_PROJECT_ID}.api.sanity.io/v2021-06-07/data/query/${env.SANITY_DATASET || 'production'}?query=${sanityQueryConfig}`;
-            const sanityRespConfig = await fetch(configUrl, {
-                headers: { "Authorization": `Bearer ${env.SANITY_TOKEN}` }
-            });
-            const { result: settings } = await sanityRespConfig.json();
-            
-            if (settings) {
-                handlingTime = settings.handlingTime || 0;
-                if (settings.originCep) cepOrigem = settings.originCep.replace(/\D/g, "");
-                if (settings.apiToken) token = settings.apiToken;
-            }
-        } catch(e) { console.log("Erro config sanity", e); }
-
-        // Retorno Frete Grátis (FIXADO EM 12 DIAS)
+        // --- C. Retorno Rápido se for Frete Grátis ---
         if (isFreeShipping) {
-             const freeOption = [{
+             return new Response(JSON.stringify([{
                 name: "FRETE GRÁTIS",
                 price: 0,
                 delivery_time: 12, 
                 delivery_range: { min: 5, max: 12 },
                 company: { picture: null },
                 custom_msg: "Promoção Brasil Varejo"
-             }];
-             return new Response(JSON.stringify(freeOption), { headers });
+             }]), { headers });
         }
 
-        // Cálculo Melhor Envio
         if (!token) return new Response(JSON.stringify([]), { headers });
-        
+
+        // --- D. Payload para Melhor Envio ---
         const payload = {
           from: { postal_code: cepOrigem },
           to: { postal_code: (body.to?.postal_code || body.cepDestino || "").replace(/\D/g, "") },
@@ -160,18 +139,55 @@ var src_default = {
       }
 
       // =================================================================
-      // 4. ROTA: CHECKOUT MERCADO PAGO (CORRIGIDO PARA BOLETO)
+      // 4. ROTA: CHECKOUT (CORRIGIDA - CRIA PEDIDO NO SANITY AQUI)
       // =================================================================
       if (req.method === "POST" && url.pathname.includes("checkout")) {
-        const { items, email, orderId, shipping, tipoPagamento, shippingAddress, customerDocument } = await req.json();
+        // Recebemos os dados brutos, NÃO o orderId (pois o front não consegue criar)
+        const { items, email, shipping, tipoPagamento, shippingAddress, customerDocument, totalAmount } = await req.json();
+
+        // --- PASSO A: CRIAR PEDIDO NO SANITY (Via Worker Seguro) ---
+        const newOrder = {
+            _type: 'order',
+            orderNumber: `PALA-${Math.floor(Date.now() / 1000)}`,
+            status: 'pending',
+            totalAmount: totalAmount || 0,
+            customerEmail: email,
+            customerDocument: customerDocument,
+            shippingAddress: shippingAddress,
+            paymentMethod: tipoPagamento,
+            items: items.map(item => ({
+                _key: Math.random().toString(36).substr(7),
+                productName: item.name || item.title,
+                quantity: item.quantity,
+                price: item.price
+            }))
+        };
+
+        const mutationUrl = `https://${env.SANITY_PROJECT_ID}.api.sanity.io/v2021-06-07/data/mutate/${env.SANITY_DATASET || 'production'}`;
         
-        // Verifica se é pagamento à vista (Pix ou Boleto)
+        const sanityResponse = await fetch(mutationUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${env.SANITY_TOKEN}` // Token seguro do Worker
+            },
+            body: JSON.stringify({ mutations: [{ create: newOrder }] })
+        });
+
+        const sanityResult = await sanityResponse.json();
+        // Recupera o ID do pedido recém-criado
+        const orderId = sanityResult.results?.[0]?.id || sanityResult.results?.[0]?.document?._id;
+
+        if (!orderId) {
+             throw new Error("Falha crítica ao criar pedido no banco de dados.");
+        }
+
+        // --- PASSO B: GERAR PAGAMENTO NO MERCADO PAGO ---
         const isCashPayment = (tipoPagamento === 'pix' || tipoPagamento === 'boleto');
-        
         const fatorDesconto = isCashPayment ? 0.9 : 1.0;
 
         const mpItems = items.map((item) => ({
-          title: item.title || "Produto Brasil Varejo",
+          title: item.title || item.name || "Produto Palastore",
           quantity: Number(item.quantity || 1),
           unit_price: Number((Number(item.price) * fatorDesconto).toFixed(2)),
           currency_id: "BRL"
@@ -186,39 +202,41 @@ var src_default = {
           });
         }
 
+        const cleanCPF = customerDocument ? customerDocument.replace(/\D/g, '') : "";
+        
         const payerData = {
-            email: email || "cliente@brasilvarejo.com",
-            identification: { 
-                type: "CPF", 
-                number: customerDocument?.replace(/\D/g, '') || "00000000000" 
-            },
-            address: {
-                street_name: shippingAddress?.street || "Rua",
-                street_number: Number(shippingAddress?.number) || 0,
-                zip_code: shippingAddress?.zip || "00000000"
-            }
+            email: email,
+            first_name: shippingAddress?.alias || "Cliente",
+            identification: { type: "CPF", number: cleanCPF }
         };
+
+        // Exclusão de métodos conforme a escolha
+        let excludedMethods = [];
+        if (tipoPagamento === 'boleto') {
+            excludedMethods = [{ id: "credit_card" }, { id: "debit_card" }, { id: "bank_transfer" }];
+        } else if (tipoPagamento === 'pix') {
+            excludedMethods = [{ id: "credit_card" }, { id: "debit_card" }, { id: "ticket" }];
+        } else {
+            excludedMethods = [{ id: "ticket" }, { id: "bank_transfer" }];
+        }
 
         const preferenceData = {
           items: mpItems,
           payer: payerData,
           back_urls: {
-            success: "https://brasil-varejo.vercel.app/profile",
-            failure: "https://brasil-varejo.vercel.app/cart",
-            pending: "https://brasil-varejo.vercel.app/cart"
+            success: "https://palastore.com.br/sucesso", 
+            failure: "https://palastore.com.br/cart",
+            pending: "https://palastore.com.br/sucesso"
           },
           auto_return: "approved",
-          external_reference: orderId,
+          external_reference: orderId, // Link com o ID do Sanity que acabamos de criar
           notification_url: "https://brasil-varejo-api.laeciossp.workers.dev/webhook",
-          
           payment_methods: {
-            // AQUI ESTAVA O ERRO: AGORA VERIFICA SE É À VISTA (PIX OU BOLETO)
-            excluded_payment_types: isCashPayment
-              ? [{ id: "credit_card" }, { id: "debit_card" }]  // Se for à vista, TIRA cartões (Sobra Boleto/Ticket e Pix)
-              : [{ id: "ticket" }, { id: "bank_transfer" }],   // Se for cartão, TIRA boleto e pix
+            excluded_payment_types: excludedMethods,
             installments: 12
           },
-          binary_mode: true
+          expires: true,
+          date_of_expiration: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
         };
 
         const mpResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
@@ -232,6 +250,10 @@ var src_default = {
 
         const mpSession = await mpResponse.json();
         
+        if (!mpResponse.ok) {
+            return new Response(JSON.stringify({ error: "Erro MP", details: mpSession }), { status: 400, headers });
+        }
+
         return new Response(JSON.stringify({ 
           url: mpSession.init_point,
           id_preferencia: mpSession.id 
@@ -239,7 +261,7 @@ var src_default = {
       }
 
       // =================================================================
-      // 5. ROTA: WEBHOOK
+      // 5. ROTA: WEBHOOK (Mantida)
       // =================================================================
       if (url.pathname.includes("webhook")) {
         const urlParams = new URLSearchParams(url.search);
@@ -258,8 +280,7 @@ var src_default = {
               
               if (sanityId && env.SANITY_TOKEN && env.SANITY_PROJECT_ID) {
                 const mutation = {
-                  mutations: [
-                    {
+                  mutations: [{
                       patch: {
                         id: sanityId,
                         set: {
@@ -268,8 +289,7 @@ var src_default = {
                           paymentMethod: pagamento.payment_method_id
                         }
                       }
-                    }
-                  ]
+                  }]
                 };
 
                 await fetch(`https://${env.SANITY_PROJECT_ID}.api.sanity.io/v2021-06-07/data/mutate/${env.SANITY_DATASET || 'production'}`, {
@@ -280,32 +300,6 @@ var src_default = {
                   },
                   body: JSON.stringify(mutation)
                 });
-
-                if (env.RESEND_API_KEY && pagamento.payer.email) {
-                    try {
-                        await fetch("https://api.resend.com/emails", {
-                            method: "POST",
-                            headers: {
-                                "Authorization": `Bearer ${env.RESEND_API_KEY}`,
-                                "Content-Type": "application/json"
-                            },
-                            body: JSON.stringify({
-                                from: "Brasil Varejo <onboarding@resend.dev>",
-                                to: [pagamento.payer.email],
-                                subject: "Pagamento Aprovado! - Brasil Varejo",
-                                html: `
-                                    <h1>Obrigado pela sua compra!</h1>
-                                    <p>Seu pagamento para o pedido <strong>#${sanityId.slice(-6).toUpperCase()}</strong> foi aprovado.</p>
-                                    <p>Estamos preparando seu envio.</p>
-                                    <br/>
-                                    <p>Equipe Brasil Varejo</p>
-                                `
-                            })
-                        });
-                    } catch (emailErr) {
-                        console.log("Erro ao enviar email Resend:", emailErr);
-                    }
-                }
               }
             }
           }
@@ -313,7 +307,7 @@ var src_default = {
         return new Response("OK", { status: 200 });
       }
 
-      return new Response(JSON.stringify({ status: "API Online", projeto: "Brasil Varejo", versao: "1.2" }), { status: 200, headers });
+      return new Response(JSON.stringify({ status: "API Online", versao: "2.0-AutoOrder-Fix" }), { status: 200, headers });
 
     } catch (err) {
       return new Response(JSON.stringify({ erro: err.message, stack: err.stack }), { status: 500, headers });

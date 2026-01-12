@@ -1,20 +1,23 @@
 import { createClient } from '@sanity/client'
 import imageUrlBuilder from '@sanity/image-url'
 
-// Configuração da conexão
+// Configuração da conexão para o Brasil Varejo (Palastore)
 export const client = createClient({
   projectId: 'o4upb251', 
   dataset: 'production',
-  // IMPORTANTE: useCdn 'false' garante que as mensagens do chat apareçam na hora (sem cache)
-  useCdn: false, 
+  // useCdn: true ajuda a evitar erros de carregamento e avisos de segurança no navegador
+  useCdn: true, 
   apiVersion: '2024-01-01',
-  // AQUI ENTRA O TOKEN (Isso permite gravar dados no banco)
-  token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY'
+  /* SEGURANÇA: Removi o token daqui para uso no Frontend. 
+     Para criar pedidos e salvar dados, use o seu Worker (Cloudflare) como ponte. 
+     Isso remove o erro "You have configured Sanity client to use a token in the browser".
+  */
 })
 
 // Configurador de imagens
 const builder = imageUrlBuilder(client)
 
 export function urlFor(source) {
+  if (!source) return { url: () => '' };
   return builder.image(source)
 }

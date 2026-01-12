@@ -1,195 +1,182 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { client, urlFor } from '../lib/sanity';
-import { Smartphone, Monitor, Armchair, Hammer, ShoppingBag, Watch, ChevronRight, Truck } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { createClient } from "@sanity/client";
+import imageUrlBuilder from '@sanity/image-url';
 
+// --- CONFIGURAÇÃO DO SANITY ---
+const client = createClient({
+  projectId: 'o4upb251',
+  dataset: 'production',
+  useCdn: true, 
+  apiVersion: '2024-01-01',
+});
+
+const builder = imageUrlBuilder(client);
+function urlFor(source) {
+  return source ? builder.image(source).url() : '';
+}
+
+// ==========================================
+// 1. COMPONENTES VISUAIS (BLOCOS)
+// ==========================================
+
+// --- Bloco A: Hero (Banner Principal) ---
+const HeroBlock = ({ data }) => {
+  const [current, setCurrent] = useState(0);
+  const slides = data.slides || [];
+
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrent(c => (c === slides.length - 1 ? 0 : c + 1));
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [slides.length]);
+
+  if (!slides.length) return null;
+
+  return (
+    <div className="relative w-full h-[300px] md:h-[500px] overflow-hidden group rounded-xl shadow-lg mb-8">
+      <div className="flex transition-transform duration-700 ease-out h-full" style={{ transform: `translateX(-${current * 100}%)` }}>
+        {slides.map((slide, idx) => (
+          <div key={idx} className="min-w-full h-full relative">
+            {slide.mediaType === 'video' && slide.videoUrl ? (
+              <video src={slide.videoUrl} className="w-full h-full object-cover" autoPlay muted loop playsInline />
+            ) : (
+              <img src={urlFor(slide.image)} alt={slide.title} className="w-full h-full object-cover" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// --- Bloco B: Departamentos ---
+const DepartmentsBlock = ({ data }) => {
+  return (
+    <div className="my-10 px-4">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6 border-l-4 border-yellow-500 pl-2">{data.title}</h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+        {data.items?.map((dept, idx) => (
+          <a key={idx} href={dept.link} className="group flex flex-col items-center hover:-translate-y-1 transition-transform">
+            <div className="w-24 h-24 rounded-full overflow-hidden shadow-md border-2 border-white group-hover:border-yellow-400 transition-colors">
+              <img src={urlFor(dept.image)} alt={dept.name} className="w-full h-full object-cover" />
+            </div>
+            <span className="mt-3 text-sm font-medium text-gray-700 group-hover:text-yellow-600 text-center">{dept.name}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// --- Bloco C: Banners de Destaque ---
+const FeaturedBannersBlock = ({ data }) => {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-8 px-4">
+      {data.banners?.map((banner, idx) => (
+        <a key={idx} href={banner.link} className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+          <img src={urlFor(banner.image)} alt={banner.title} className="w-full h-auto object-cover" />
+        </a>
+      ))}
+    </div>
+  );
+};
+
+// --- Bloco D: Carrossel de Produtos ---
+const ProductCarouselBlock = ({ data }) => {
+  const products = data.manualProducts || []; 
+
+  if (!products.length) return null;
+
+  return (
+    <div className="my-10 px-4">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-800">{data.title}</h2>
+        <a href="#" className="text-blue-600 text-sm hover:underline">Ver todos</a>
+      </div>
+      
+      <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+        {products.map((prod) => (
+          <div key={prod._id} className="min-w-[180px] md:min-w-[220px] bg-white rounded-lg shadow border p-4 hover:shadow-lg transition-all flex flex-col">
+            <div className="h-40 w-full mb-3 bg-gray-100 rounded flex items-center justify-center overflow-hidden relative">
+               {prod.imageUrl ? (
+                 <img src={prod.imageUrl} alt={prod.title} className="h-full object-contain mix-blend-multiply" />
+               ) : (
+                 <span className="text-gray-400 text-xs">Sem Imagem</span>
+               )}
+            </div>
+            <h3 className="text-sm font-medium text-gray-700 line-clamp-2 mb-2 flex-grow">{prod.title}</h3>
+            
+            <div className="mt-auto">
+              <p className="text-lg font-bold text-gray-900">
+                {prod.price ? `R$ ${prod.price.toFixed(2).replace('.', ',')}` : 'Sob Consulta'}
+              </p>
+              <button className="w-full mt-3 bg-blue-600 text-white py-2 rounded text-sm font-semibold hover:bg-blue-700 transition-colors">
+                Comprar
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const COMPONENTS_MAP = {
+  hero: HeroBlock,
+  featuredBanners: FeaturedBannersBlock,
+  departmentsSection: DepartmentsBlock,
+  productCarousel: ProductCarouselBlock,
+};
+
+// ==========================================
+// 3. PÁGINA PRINCIPAL
+// ==========================================
 export default function Home() {
-  const [products, setProducts] = useState([]);
+  const [pageData, setPageData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // CORREÇÃO 1: Adicionado o campo 'freeShipping' na consulta
-    const query = `*[_type == "product"][0..7] {
-      title,
-      slug,
-      price,
-      oldPrice,
-      freeShipping,
-      "image": images[0]
+    // Busca APENAS UMA VEZ ao montar o componente
+    const query = `*[_type == "homePage"][0]{
+      pageBuilder[]{
+        _type, _key,
+        _type == "hero" => { slides[]{ title, mediaType, image, "videoUrl": videoFile.asset->url, link } },
+        _type == "departmentsSection" => { title, items[]{ name, image, link } },
+        _type == "featuredBanners" => { banners[]{ title, image, link } },
+        _type == "productCarousel" => { title, manualProducts[]->{ _id, title, "price": price, "imageUrl": images[0].asset->url } }
+      }
     }`;
 
     client.fetch(query)
       .then((data) => {
-        setProducts(data);
+        setPageData(data);
         setLoading(false);
       })
-      .catch(console.error);
-  }, []);
+      .catch((err) => {
+        console.error("Erro Sanity:", err);
+        setLoading(false);
+      });
+  }, []); // <--- IMPORTANTE: ARRAY VAZIO PARA EVITAR LOOP
 
-  const departments = [
-    { name: 'Celulares', icon: <Smartphone size={24}/>, color: 'bg-crocus-light/30 text-crocus-deep hover:bg-crocus-light/50', link: '/category/celulares' },
-    { name: 'Informática', icon: <Monitor size={24}/>, color: 'bg-blue-50 text-blue-600 hover:bg-blue-100', link: '/category/informatica' },
-    { name: 'Móveis', icon: <Armchair size={24}/>, color: 'bg-orange-50 text-stamen-orange hover:bg-orange-100', link: '/category/moveis' },
-    { name: 'Ferramentas', icon: <Hammer size={24}/>, color: 'bg-gray-100 text-gray-600 hover:bg-gray-200', link: '/category/ferramentas' },
-    { name: 'Moda', icon: <ShoppingBag size={24}/>, color: 'bg-pink-50 text-pink-500 hover:bg-pink-100', link: '/category/moda' },
-    { name: 'Relógios', icon: <Watch size={24}/>, color: 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100', link: '/category/relogios' },
-  ];
+  if (loading) return <div className="p-10 text-center flex justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
+  
+  if (!pageData?.pageBuilder) return (
+    <div className="p-10 text-center max-w-lg mx-auto mt-10 border-2 border-dashed border-gray-300 rounded-xl">
+      <h2 className="text-xl font-bold text-gray-700 mb-2">Ops! A Home está vazia.</h2>
+      <p className="text-gray-500">Vá no painel Sanity Studio, publique a "Configuração da Home" para ver o conteúdo aqui.</p>
+    </div>
+  );
 
   return (
-    <div className="pb-10 bg-surface-primary">
-      
-      {/* 1. BANNER PRINCIPAL (Fundo Sólido Roxo para Contraste) */}
-      <div className="bg-crocus-deep text-white relative overflow-hidden">
-        
-        {/* Efeito de fundo sutil (apenas textura, sem clarear) */}
-        <div className="absolute top-0 right-0 w-1/2 h-full bg-white/5 skew-x-12 transform origin-bottom-right pointer-events-none"></div>
-
-        <div className="container mx-auto px-4 py-8 md:py-16 flex flex-col md:flex-row items-center justify-between relative z-10">
-          <div className="md:w-1/2 mb-8 md:mb-0 space-y-6">
-            <span className="bg-stamen-orange text-white font-black px-3 py-1 text-xs rounded uppercase tracking-wider shadow-sm">
-              Ofertas da Semana
-            </span>
-            <h1 className="text-4xl md:text-6xl font-black leading-tight drop-shadow-md text-white">
-              A Tecnologia que <br/>você procura.
-            </h1>
-            <p className="text-lg opacity-90 max-w-md font-medium text-gray-100">
-              Frete grátis para milhares de produtos e entrega super rápida em todo o Brasil.
-            </p>
-            
-            {/* BOTÃO LARANJA VIBRANTE */}
-            <button className="bg-stamen-orange text-white font-bold py-4 px-10 rounded-full hover:bg-white hover:text-stamen-orange transition-all shadow-lg hover:shadow-orange-500/50 transform hover:scale-105 border-2 border-transparent hover:border-stamen-orange">
-              Ver Ofertas
-            </button>
-          </div>
-          
-          <div className="md:w-1/2 flex justify-center">
-            <img 
-              src="https://cdn.sanity.io/images/o4upb251/production/banner-hero-placeholder.png" 
-              onError={(e) => e.target.style.display='none'} 
-              alt="" 
-              className="max-h-[350px] object-contain drop-shadow-2xl animate-fade-in-up hover:scale-105 transition-transform duration-500"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="container mx-auto px-4 -mt-10 relative z-20">
-        
-        {/* 2. DEPARTAMENTOS */}
-        <div className="bg-white rounded-2xl shadow-crocus p-8 mb-12 overflow-x-auto border border-white">
-          <h3 className="font-bold text-brand-dark mb-6 text-sm uppercase tracking-wide flex items-center gap-2">
-              Tem no Brasil Varejo <span className="w-10 h-[2px] bg-crocus-vivid block"></span>
-          </h3>
-          <div className="flex gap-8 min-w-max pb-2">
-            {departments.map((dept, idx) => (
-              <Link key={idx} to={dept.link} className="flex flex-col items-center gap-3 group cursor-pointer min-w-[80px]">
-                <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-300 ${dept.color}`}>
-                  {dept.icon}
-                </div>
-                <span className="text-xs font-bold text-gray-500 group-hover:text-crocus-deep transition-colors text-center">
-                  {dept.name}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* 3. VITRINE DE OFERTAS */}
-        <div className="mb-8 flex items-end justify-between">
-           <div>
-             <h2 className="text-2xl font-black text-brand-dark flex items-center gap-2">
-                Ofertas do Dia <span className="text-stamen-orange text-4xl">.</span>
-             </h2>
-             <p className="text-sm text-gray-500 mt-1">Preços que valem a pena aproveitar</p>
-           </div>
-           <Link to="/category/todas" className="text-crocus-vivid font-bold text-sm hover:underline flex items-center gap-1 group">
-             Ver tudo <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform"/>
-           </Link>
-        </div>
-
-        {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[1,2,3,4].map(i => <div key={i} className="h-80 bg-gray-200 rounded-xl animate-pulse"></div>)}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-            {products.map((product) => (
-              <Link 
-                key={product.slug.current} 
-                to={`/product/${product.slug.current}`}
-                className="bg-white p-4 rounded-2xl border border-gray-100 hover:border-crocus-light hover:shadow-crocus transition-all group flex flex-col h-full relative"
-              >
-                {product.oldPrice && (
-                   <span className="absolute top-3 left-3 bg-crocus-deep text-white text-[10px] font-black px-2 py-1 rounded shadow-sm z-10">
-                      -{Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)}%
-                   </span>
-                )}
-
-                <div className="aspect-square flex items-center justify-center mb-4 overflow-hidden rounded-lg bg-surface-primary/50">
-                  {product.image ? (
-                    <img 
-                      src={urlFor(product.image).width(400).url()} 
-                      alt={product.title} 
-                      className="object-contain h-full w-full mix-blend-multiply group-hover:scale-110 transition-transform duration-500 ease-out"
-                    />
-                  ) : (
-                    <div className="text-gray-300 text-xs">Sem foto</div>
-                  )}
-                </div>
-
-                <div className="mt-auto">
-                  <h3 className="font-bold text-brand-dark text-sm line-clamp-2 mb-2 group-hover:text-crocus-vivid transition-colors">
-                    {product.title}
-                  </h3>
-                  
-                  {product.oldPrice > product.price && (
-                    <span className="text-xs text-gray-400 line-through block">
-                      de R$ {product.oldPrice.toFixed(2)} por
-                    </span>
-                  )}
-                  
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-xs font-bold text-gray-400">R$</span>
-                    <span className="text-2xl font-black text-crocus-deep">
-                      {product.price?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  
-                  <p className="text-[10px] text-gray-500 mb-3">
-                    à vista no Pix ou em até 10x sem juros
-                  </p>
-
-                  {/* CORREÇÃO 2: Só exibe se product.freeShipping for VERDADEIRO */}
-                  {product.freeShipping && (
-                    <div className="w-full bg-surface-primary text-crocus-deep text-[10px] font-bold py-2 px-2 rounded-lg flex items-center justify-center gap-1 group-hover:bg-crocus-light/20 transition-colors">
-                      <Truck size={14}/> Frete Grátis
-                    </div>
-                  )}
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-        
-        {/* 4. BANNER APP (Faixa Final - Roxo Sólido) */}
-        <div className="mt-16 bg-crocus-deep rounded-3xl p-8 md:p-16 flex flex-col md:flex-row items-center justify-between text-white overflow-hidden relative shadow-2xl">
-           <div className="relative z-10 max-w-lg">
-             <h2 className="text-3xl font-black mb-4">Baixe o SuperApp Brasil Varejo</h2>
-             <p className="opacity-80 mb-8 text-lg">Ofertas exclusivas, rastreio de pedidos em tempo real e cupons de desconto que só tem no app.</p>
-             <div className="flex gap-4">
-               <button className="bg-white text-brand-dark px-6 py-3 rounded-xl font-bold text-sm hover:bg-gray-100 transition-colors flex items-center gap-2">
-                 Google Play
-               </button>
-               <button className="bg-transparent border border-white/30 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-white/10 transition-colors flex items-center gap-2">
-                 App Store
-               </button>
-             </div>
-           </div>
-           {/* Círculo decorativo */}
-           <div className="absolute right-0 top-0 w-96 h-96 bg-brand-blue rounded-full blur-[100px] opacity-20 -mr-20 -mt-20 pointer-events-none"></div>
-        </div>
-
-      </div>
+    <div className="max-w-7xl mx-auto bg-gray-50 min-h-screen pb-20">
+      {pageData.pageBuilder.map((section) => {
+        const Component = COMPONENTS_MAP[section._type];
+        if (!Component) return null;
+        return <Component key={section._key} data={section} />;
+      })}
     </div>
   );
 }

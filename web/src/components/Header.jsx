@@ -1,146 +1,182 @@
-import React, { useState } from 'react';
+import React, { useState } from 'react'; 
 import { Link } from 'react-router-dom';
 import { 
   Search, MapPin, ShoppingCart, Heart, User, Menu, 
-  ChevronDown, Phone, ShieldCheck, Download 
+  Phone, ShieldCheck, X, ArrowRight 
 } from 'lucide-react';
-// Importações da Store e Utilidades
+import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/clerk-react";
+import { motion, AnimatePresence } from 'framer-motion';
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
+// IMPORTANTE: Importe seus menus aqui
+import CategoryMenu from "./layout/CategoryMenu";
+import FeaturedMenu from "./layout/FeaturedMenu"; // <--- NOVO IMPORT
+
 export default function Header() {
+  const [isCepModalOpen, setIsCepModalOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  
+  const [tempCep, setTempCep] = useState('');
   const [cep, setCep] = useState('Informe seu CEP');
   
-  // PEGANDO DADOS EM TEMPO REAL DA STORE
-  const { getTotalPrice, items } = useCartStore();
+  const { user } = useUser();
+  const { getTotalPrice, items, favorites } = useCartStore();
   
-  // Cálculo da quantidade total de itens (soma das quantidades de cada produto)
   const cartCount = items.reduce((acc, item) => acc + item.quantity, 0);
+  const favCount = favorites?.length || 0;
+
+  const handleSaveCep = (e) => {
+    e.preventDefault();
+    if (tempCep.length === 8) {
+      setCep(tempCep);
+      setIsCepModalOpen(false);
+    } else {
+      alert("Por favor, digite um CEP válido com 8 números.");
+    }
+  };
 
   return (
     <header className="w-full bg-crocus-deep font-sans text-white sticky top-0 z-50 shadow-xl border-b border-white/10">
       
-      {/* 1. BARRA DE TOPO (Institucional) */}
-      <div className="hidden lg:flex justify-between items-center container mx-auto px-4 py-2 text-xs font-medium border-b border-white/20">
-        <div className="flex gap-4">
-          <a href="#" className="hover:underline opacity-90 hover:opacity-100 transition-opacity">Nossas lojas</a>
-          <a href="#" className="hover:underline opacity-90 hover:opacity-100 transition-opacity">Tenha sua loja</a>
-          <a href="#" className="hover:underline opacity-90 hover:opacity-100 transition-opacity">Regulamentos</a>
-          <a href="#" className="hover:underline opacity-90 hover:opacity-100 transition-opacity">Acessibilidade</a>
-        </div>
+      {/* 1. BARRA DE TOPO */}
+      <div className="hidden lg:flex justify-end items-center container mx-auto px-4 py-2 text-xs font-medium border-b border-white/20">
         <div className="flex gap-4 items-center">
-          <a href="#" className="flex items-center gap-1 hover:underline opacity-90 hover:opacity-100 transition-opacity">
-             <Download size={12}/> Baixe o SuperApp
-          </a>
-          <a href="#" className="flex items-center gap-1 hover:underline opacity-90 hover:opacity-100 transition-opacity">
-             <Phone size={12}/> Compre pelo Tel: 0800 773 3838
+          <a href="https://wa.me/5571983774301" target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:underline opacity-90 transition-opacity">
+             <Phone size={12}/> Vendas: (71) 98377-4301
           </a>
         </div>
       </div>
 
-      {/* 2. BARRA PRINCIPAL (Busca e Ações) */}
+      {/* 2. BARRA PRINCIPAL */}
       <div className="container mx-auto px-4 py-4 flex flex-col lg:flex-row gap-4 items-center justify-between">
-        
-        {/* Logo */}
         <Link to="/" className="flex items-center gap-2 group">
-          <div className="bg-white text-crocus-deep p-1 rounded font-black text-2xl tracking-tighter group-hover:scale-105 transition-transform shadow-md">
-              BV
-          </div>
+          <div className="bg-white text-crocus-deep px-3 py-1 rounded-lg font-black text-2xl tracking-tighter group-hover:rotate-3 transition-transform shadow-md uppercase">P</div>
           <div className="leading-none drop-shadow-md">
-            <span className="block font-black text-xl tracking-tight text-white">BRASIL</span>
-            <span className="block font-medium text-xs tracking-widest opacity-90 text-white">VAREJO</span>
+            <span className="block font-black text-2xl tracking-tight text-white uppercase italic">Palastore</span>
+            <span className="block font-medium text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Oficial</span>
           </div>
         </Link>
 
-        {/* Busca Inteligente */}
         <div className="flex-1 w-full max-w-3xl relative mx-4">
           <input 
             type="text" 
-            placeholder="O que você procura hoje?" 
-            className="w-full h-12 pl-4 pr-12 rounded-lg text-brand-dark focus:outline-none focus:ring-2 focus:ring-stamen-orange shadow-inner bg-white placeholder-gray-400"
+            placeholder="O que você procura hoje na Palastore?" 
+            className="w-full h-12 pl-4 pr-12 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-inner bg-white placeholder-gray-400 font-medium"
           />
-          <Search className="absolute right-3 top-3 text-crocus-deep cursor-pointer hover:text-stamen-orange transition-colors" />
+          <Search className="absolute right-3 top-3 text-crocus-deep cursor-pointer hover:text-orange-500 transition-colors" />
         </div>
 
-        {/* Ações do Usuário */}
         <div className="flex items-center gap-6 text-sm font-medium w-full lg:w-auto justify-between lg:justify-end">
-            
-           {/* CEP / Localização */}
-           <div className="hidden xl:flex items-center gap-2 cursor-pointer hover:bg-white/10 p-2 rounded transition-colors">
-              <MapPin size={24} className="text-white"/>
-              <div className="leading-tight text-white">
-                <span className="block text-[10px] opacity-80">Enviar para</span>
-                <span className="font-bold block truncate max-w-[100px]">{cep}</span>
+           <div onClick={() => setIsCepModalOpen(true)} className="hidden xl:flex items-center gap-2 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors border border-transparent hover:border-white/20">
+              <MapPin size={24} className="text-white animate-pulse"/>
+              <div className="leading-tight text-white text-left">
+                <span className="block text-[10px] opacity-70">Enviar para</span>
+                <span className="font-black block truncate max-w-[100px] text-xs uppercase tracking-tighter">{cep}</span>
               </div>
            </div>
 
-           {/* Favoritos */}
-           <Link to="/favoritos" className="flex flex-col items-center gap-1 text-white hover:text-stamen-orange transition-colors relative group">
-              <Heart size={24}/>
-              <span className="text-[10px] hidden lg:block">Favoritos</span>
-           </Link>
-
-           {/* Conta */}
-           <Link to="/profile" className="flex items-center gap-2 hover:bg-white/10 p-2 rounded transition-colors text-white">
-              <User size={24}/>
-              <div className="hidden lg:block leading-tight text-left">
-                <span className="block text-[10px] opacity-80">Bem-vindo :)</span>
-                <span className="block font-bold">Entre ou cadastre-se</span>
+           <Link to="/favoritos" className="flex flex-col items-center gap-1 text-white hover:text-orange-500 transition-colors relative group">
+              <div className="relative">
+                <Heart size={24}/>
+                {favCount > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-black animate-in zoom-in">{favCount}</span>}
               </div>
+              <span className="text-[10px] hidden lg:block uppercase font-bold tracking-tighter">Favoritos</span>
            </Link>
 
-           {/* Carrinho Atualizado com Valor Real */}
-           <Link to="/cart" className="flex items-center gap-2 bg-crocus-stamen text-white hover:brightness-110 transition-all shadow-lg hover:shadow-orange-500/50 px-4 py-2 rounded-full group border-2 border-transparent relative">
+           <div className="flex items-center gap-2 min-w-[150px]">
+              <SignedOut>
+                <SignInButton mode="modal">
+                  <button className="flex items-center gap-2 hover:bg-white/10 p-2 rounded-xl transition-colors text-white text-left w-full group">
+                    <User size={24} className="group-hover:scale-110 transition-transform"/>
+                    <div className="hidden lg:block leading-tight">
+                      <span className="block text-[10px] opacity-70">Minha Conta</span>
+                      <span className="block font-black text-xs uppercase tracking-tighter italic">Entrar / Criar</span>
+                    </div>
+                  </button>
+                </SignInButton>
+              </SignedOut>
+              <SignedIn>
+                <div className="flex items-center gap-3 bg-white/10 p-2 rounded-2xl border border-white/10 shadow-inner">
+                  <UserButton afterSignOutUrl="/" />
+                  <Link to="/profile" className="hidden lg:block leading-tight text-white text-left">
+                    <span className="block text-[10px] opacity-70 uppercase tracking-tighter font-black">Portal Cliente</span>
+                    <span className="block font-black text-xs truncate max-w-[80px] italic">Olá, {user?.firstName}</span>
+                  </Link>
+                </div>
+              </SignedIn>
+           </div>
+
+           <Link to="/cart" className="flex items-center gap-2 bg-orange-500 text-white hover:bg-orange-600 transition-all shadow-lg px-5 py-2.5 rounded-2xl group relative border border-orange-400">
               <div className="relative">
                 <ShoppingCart size={20} className="fill-current"/>
-                {/* Contador de Itens Flutuante */}
-                {cartCount > 0 && (
-                  <span className="absolute -top-3 -right-3 bg-white text-crocus-deep text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-black shadow-md border border-orange-500 animate-in zoom-in">
-                    {cartCount}
-                  </span>
-                )}
+                {cartCount > 0 && <span className="absolute -top-4 -right-4 bg-white text-orange-600 text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-black shadow-xl border-2 border-orange-500 animate-bounce">{cartCount}</span>}
               </div>
-              <span className="font-black hidden lg:block ml-1">
-                {formatCurrency(getTotalPrice())}
-              </span>
+              <span className="font-black hidden lg:block ml-1 text-sm">{formatCurrency(getTotalPrice())}</span>
            </Link>
         </div>
       </div>
 
-      {/* 3. MEGA MENU DE DEPARTAMENTOS */}
-      <div className="bg-white text-gray-700 shadow-sm border-b border-gray-100 hidden lg:block">
+      {/* 3. MENU DE DEPARTAMENTOS */}
+      <div className="bg-white text-gray-800 shadow-sm border-b border-gray-100 hidden lg:block relative">
         <div className="container mx-auto px-4">
-          <ul className="flex items-center justify-between text-xs font-bold uppercase tracking-wide">
+          <ul className="flex items-center justify-between text-[11px] font-black uppercase tracking-tight">
             
-            <li className="group relative">
-               <button className="flex items-center gap-2 py-3 px-4 hover:bg-crocus-light/20 text-crocus-deep transition-colors">
-                 <Menu size={18}/> Todos os Departamentos
+            {/* BOTÃO E DROPDOWN */}
+            <li className="relative group">
+               <button 
+                 onClick={() => setIsMenuOpen(!isMenuOpen)}
+                 className={`flex items-center gap-2 py-3 px-4 transition-colors border-r border-gray-100 ${isMenuOpen ? 'bg-crocus-deep text-white' : 'hover:bg-gray-50 text-crocus-deep'}`}
+               >
+                 {isMenuOpen ? <X size={18}/> : <Menu size={18}/>} 
+                 Departamentos
                </button>
-               <div className="absolute top-full left-0 w-[250px] bg-white shadow-xl border border-gray-100 rounded-b-lg hidden group-hover:block z-50 animate-fade-in">
-                 <a href="#" className="block px-4 py-3 hover:bg-crocus-light/10 border-b border-gray-50 text-brand-dark hover:text-crocus-vivid transition-colors">Celulares</a>
-                 <a href="#" className="block px-4 py-3 hover:bg-crocus-light/10 border-b border-gray-50 text-brand-dark hover:text-crocus-vivid transition-colors">Móveis</a>
-                 <a href="#" className="block px-4 py-3 hover:bg-crocus-light/10 border-b border-gray-50 text-brand-dark hover:text-crocus-vivid transition-colors">Eletrodomésticos</a>
-                 <a href="#" className="block px-4 py-3 hover:bg-crocus-light/10 border-b border-gray-50 text-brand-dark hover:text-crocus-vivid transition-colors">TV e Vídeo</a>
-                 <a href="#" className="block px-4 py-3 hover:bg-crocus-light/10 text-crocus-deep font-bold transition-colors">Ver tudo ›</a>
-               </div>
+
+               <AnimatePresence>
+                 {isMenuOpen && (
+                   <motion.div 
+                     initial={{ opacity: 0, y: 10 }}
+                     animate={{ opacity: 1, y: 0 }}
+                     exit={{ opacity: 0, y: 10 }}
+                     className="absolute top-full left-0 w-80 bg-white shadow-xl border border-gray-100 rounded-b-2xl z-50 overflow-hidden py-2"
+                   >
+                     {/* MENU ÁRVORE */}
+                     <CategoryMenu onItemClick={() => setIsMenuOpen(false)} />
+                   </motion.div>
+                 )}
+               </AnimatePresence>
             </li>
 
-            <li><a href="#" className="block py-3 px-2 hover:text-crocus-vivid transition-colors">Ofertas do Dia</a></li>
-            <li><a href="#" className="block py-3 px-2 hover:text-crocus-vivid transition-colors">Celulares</a></li>
-            <li><a href="#" className="block py-3 px-2 hover:text-crocus-vivid transition-colors">Móveis</a></li>
-            <li><a href="#" className="block py-3 px-2 hover:text-crocus-vivid transition-colors">Eletrodomésticos</a></li>
-            <li><a href="#" className="block py-3 px-2 hover:text-crocus-vivid transition-colors">TV e Vídeo</a></li>
-            <li><a href="#" className="block py-3 px-2 hover:text-crocus-vivid transition-colors">Informática</a></li>
-            <li><a href="#" className="block py-3 px-2 hover:text-crocus-vivid transition-colors text-crocus-deep font-bold">Baixe o App</a></li>
-            
-            <li className="ml-auto">
-               <a href="#" className="flex items-center gap-1 py-3 px-2 text-gray-400 hover:text-green-600 transition-colors">
-                 <ShieldCheck size={14}/> Compra Segura
-               </a>
-            </li>
+            {/* --- MENU DESTAQUES DINÂMICO --- */}
+            {/* Aqui entram as categorias que você marcou como "Destaque" no Sanity */}
+            <FeaturedMenu />
+
+            {/* Link de Segurança */}
+            <li className="ml-auto"><span className="flex items-center gap-1 py-3 px-2 text-gray-400 select-none"><ShieldCheck size={14} className="text-green-500"/> Site 100% Seguro</span></li>
           </ul>
         </div>
       </div>
+
+      {/* Modal CEP */}
+      <AnimatePresence>
+        {isCepModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsCepModalOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+             <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} className="relative bg-white rounded-[32px] p-8 max-w-sm w-full shadow-2xl text-gray-900 border border-gray-100">
+              <button onClick={() => setIsCepModalOpen(false)} className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"><X size={20}/></button>
+              <div className="flex flex-col items-center text-center">
+                <div className="bg-orange-100 p-4 rounded-full text-orange-600 mb-6"><MapPin size={32} /></div>
+                <h3 className="text-2xl font-black uppercase tracking-tighter italic mb-2">Onde você está?</h3>
+                <p className="text-gray-500 text-sm font-medium mb-8">Informe seu CEP para calcularmos frete e prazos de entrega exclusivos.</p>
+                <form onSubmit={handleSaveCep} className="w-full space-y-4">
+                  <input autoFocus type="text" maxLength={8} placeholder="00000000" className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-center text-xl font-black tracking-widest focus:border-orange-500 outline-none transition-all placeholder:text-gray-300" value={tempCep} onChange={(e) => setTempCep(e.target.value.replace(/\D/g, ''))} />
+                  <button type="submit" className="w-full bg-crocus-deep text-white py-5 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-crocus-vivid transition-all shadow-xl shadow-crocus-deep/20">Confirmar Localização <ArrowRight size={16}/></button>
+                </form>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </header>
   );
 }
