@@ -455,7 +455,7 @@ export default function ProductDetails() {
                     <div className="mt-auto">
                         <span className="block text-xs text-gray-400 font-bold uppercase mb-1">A partir de</span>
                         <span className="text-2xl font-black text-gray-900">{formatCurrency(relPrice)}</span>
-                        <span className="text-xs text-green-600 font-bold block mt-1">12x sem juros</span>
+                        <span className="text-xs text-gray-500 font-bold block mt-1 bg-gray-100 px-2 py-0.5 rounded w-fit">Em até 12x</span>
                     </div>
                   </Link>
                 )
