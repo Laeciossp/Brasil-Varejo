@@ -50,8 +50,9 @@ export default function Cart() {
 
       setRecalculatingShipping(true);
       try {
-        const workerUrl = 'https://brasil-varejo-api.laeciossp.workers.dev/shipping';
-        const response = await fetch(workerUrl, { 
+        // 🔥 IMPORTANTE: Usa a variável de ambiente se existir, ou fallback
+        const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
+        const response = await fetch(`${baseUrl}/shipping`, { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -83,7 +84,6 @@ export default function Cart() {
     recalculate();
   }, [customer.activeAddressId, items.length, globalCep]);
 
-  // --- SALVAR ENDEREÇO ---
   const handleSaveAddress = () => {
     if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
     addAddress({ ...newAddr, id: Math.random().toString(36).substr(2, 9) });
@@ -91,15 +91,17 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
   };
 
-  // --- CHECKOUT ---
+  // --- CHECKOUT (CORRIGIDO PARA NÃO QUEBRAR) ---
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login para continuar.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
-    if (!customer.document) return alert("CPF/CNPJ obrigatório.");
+    if (!customer.document) return alert("CPF/CNPJ obrigatório para a Nota Fiscal.");
 
     setLoading(true);
     try {
-      const response = await fetch('https://brasil-varejo-api.laeciossp.workers.dev/checkout', {
+      const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
+      
+      const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -114,16 +116,29 @@ export default function Cart() {
       });
 
       const data = await response.json();
+
+      // 🚨 BLINDAGEM DE ERRO: Se o Worker devolver erro, paramos aqui
+      if (data.error || !data.url) {
+        console.error("Erro no Worker:", data);
+        alert(`Erro ao criar pagamento: ${JSON.stringify(data.details || data.error)}`);
+        setLoading(false);
+        return; 
+      }
+
+      // Se tudo estiver certo, abre o Mercado Pago
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
         mp.checkout({ preference: { id: data.id_preferencia } }).open(); 
       } else {
+        // Redirecionamento tradicional
         window.location.href = data.url; 
       }
     } catch (error) {
-      console.error(error);
-      alert("Erro ao processar. Tente novamente.");
-    } finally { setLoading(false); }
+      console.error("Erro Front:", error);
+      alert("Erro de conexão. Verifique sua internet ou tente novamente.");
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   if (items.length === 0) return (
@@ -151,7 +166,7 @@ export default function Cart() {
           {/* --- COLUNA PRINCIPAL (ESQUERDA) --- */}
           <div className="flex-1 space-y-8">
             
-            {/* LISTA DE ITENS (Clean) */}
+            {/* LISTA DE ITENS */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="p-6 space-y-6">
                 {items.map((item) => (
@@ -238,7 +253,7 @@ export default function Cart() {
             </div>
           </div>
 
-          {/* --- RESUMO DO PEDIDO (STICKY) --- */}
+          {/* --- RESUMO DO PEDIDO --- */}
           <div className="lg:w-[380px] h-fit sticky top-6">
             <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
                 <h3 className="text-lg font-bold text-gray-900 mb-6">Resumo</h3>
@@ -289,7 +304,7 @@ export default function Cart() {
                     onClick={handleCheckout} 
                     disabled={loading || !selectedShipping || !activeAddress || !customer.document} 
                     className={`w-full py-4 rounded-xl font-bold uppercase tracking-wide text-sm flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-[0.98] ${
-                        !selectedShipping || !activeAddress 
+                        !selectedShipping || !activeAddress || !customer.document
                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
                         : 'bg-orange-600 hover:bg-orange-700 text-white shadow-orange-500/30'
                     }`}
