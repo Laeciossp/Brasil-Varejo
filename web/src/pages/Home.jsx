@@ -6,7 +6,7 @@ import imageUrlBuilder from '@sanity/image-url';
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  useCdn: true, 
+  useCdn: false, // Mantém false para garantir dados frescos
   apiVersion: '2024-01-01',
 });
 
@@ -84,9 +84,17 @@ const FeaturedBannersBlock = ({ data }) => {
   );
 };
 
-// --- Bloco D: Carrossel de Produtos ---
+// --- Bloco D: Carrossel de Produtos (MODIFICADO) ---
 const ProductCarouselBlock = ({ data }) => {
-  const products = data.manualProducts || []; 
+  const rawProducts = data.manualProducts || [];
+
+  // 👇 FILTRAGEM VIA JAVASCRIPT (INFALÍVEL)
+  // Se isActive for explicitamente false, o produto é removido da lista aqui.
+  const products = rawProducts.filter(prod => {
+     if (!prod) return false; // Remove nulos
+     if (prod.isActive === false) return false; // Remove desativados
+     return true; // Mantém o resto (ativos ou antigos sem o campo)
+  });
 
   if (!products.length) return null;
 
@@ -146,7 +154,17 @@ export default function Home() {
         _type == "hero" => { slides[]{ title, mediaType, image, "videoUrl": videoFile.asset->url, link } },
         _type == "departmentsSection" => { title, items[]{ name, image, link } },
         _type == "featuredBanners" => { banners[]{ title, image, link } },
-        _type == "productCarousel" => { title, manualProducts[]->{ _id, title, "price": price, "imageUrl": images[0].asset->url } }
+        _type == "productCarousel" => { 
+          title, 
+          // 👇 Removemos o filtro complexo daqui e trazemos o campo isActive para filtrar no JS
+          manualProducts[]->{ 
+            _id, 
+            title,
+            isActive, 
+            "price": price, 
+            "imageUrl": images[0].asset->url 
+          } 
+        }
       }
     }`;
 
@@ -159,10 +177,10 @@ export default function Home() {
         console.error("Erro Sanity:", err);
         setLoading(false);
       });
-  }, []); // <--- IMPORTANTE: ARRAY VAZIO PARA EVITAR LOOP
+  }, []); 
 
   if (loading) return <div className="p-10 text-center flex justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
-  
+   
   if (!pageData?.pageBuilder) return (
     <div className="p-10 text-center max-w-lg mx-auto mt-10 border-2 border-dashed border-gray-300 rounded-xl">
       <h2 className="text-xl font-bold text-gray-700 mb-2">Ops! A Home está vazia.</h2>

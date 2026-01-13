@@ -25,6 +25,14 @@ export default {
       initialValue: true, // Já nasce ativado por padrão
       validation: Rule => Rule.required()
     },
+    // --- NOVO CAMPO: LOTE DE IMPORTAÇÃO (PARA ORGANIZAÇÃO) ---
+    {
+      name: 'lote',
+      title: 'Lote de Importação',
+      type: 'string',
+      group: 'main',
+      description: 'Ex: "Super Lote 12", "Lote 40". Ajuda a filtrar e identificar a origem do produto.',
+    },
     {
       name: 'title',
       title: 'Nome do Produto',
@@ -330,14 +338,18 @@ export default {
     }
   ],
 
-  // --- VISUALIZAÇÃO NA LISTA ---
+  // --- VISUALIZAÇÃO PODEROSA NA LISTA (O SEGREDO PARA NÃO SE PERDER) ---
   preview: {
     select: {
       title: 'title',
       media: 'images.0',
-      type: 'productType'
+      type: 'productType',
+      active: 'isActive', // Pega se está ativo
+      lote: 'lote',       // Pega o nome do Lote
+      price: 'price'      // Pega o preço
     },
-    prepare({ title, media, type }) {
+    prepare({ title, media, type, active, lote, price }) {
+      // Ícones por categoria
       const icons = {
         tech: '📱',
         energy: '⚡',
@@ -346,9 +358,16 @@ export default {
         beauty: '💄',
         general: '📦'
       };
+      
+      // Lógica Visual
+      const statusSymbol = active ? '🟢' : '🔴'; // Verde = Ativo, Vermelho = Oculto
+      const loteTag = lote ? `[${lote}]` : '[S/ LOTE]'; // Mostra o lote ou avisa que está sem
+      const priceTag = price ? ` | R$ ${price.toFixed(2)}` : ''; // Mostra preço formatado
+
       return {
         title: title,
-        subtitle: `Tipo: ${icons[type] || '📦'}`,
+        // Ex: "🟢 [Super Lote 12] | 📱 Tech | R$ 1500.00"
+        subtitle: `${statusSymbol} ${loteTag} | ${icons[type] || '📦'}${priceTag}`,
         media: media
       }
     }

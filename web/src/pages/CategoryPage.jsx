@@ -14,7 +14,7 @@ const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency
 
 export default function CategoryPage() {
   const { slug } = useParams();
-  
+   
   const [data, setData] = useState({ category: null, products: [] });
   const [loading, setLoading] = useState(true);
   const [selectedBrands, setSelectedBrands] = useState([]);
@@ -25,10 +25,6 @@ export default function CategoryPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // --- QUERY BLINDADA (SPLIT QUERY) ---
-        // 1. Pega a categoria atual
-        // 2. Busca produtos que referenciam ELA ou qualquer filha DELA (baseado no slug)
-        // Isso resolve o problema de "0 produtos encontrados"
         const query = `{
           "category": *[_type == "category" && slug.current == $slug][0] {
             _id, title, description
@@ -47,7 +43,6 @@ export default function CategoryPage() {
 
         const result = await client.fetch(query, { slug });
         
-        // O Sanity retorna um objeto { category: ..., products: ... }
         if (result && result.category) {
             setData({ category: result.category, products: result.products || [] });
         } else {
@@ -164,16 +159,36 @@ export default function CategoryPage() {
                               to={productLink} 
                               className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-xl hover:border-orange-200 transition-all duration-300 group flex flex-col h-full"
                           >
-                              {oldPrice > price && <span className="self-start bg-green-600 text-white text-[10px] font-black px-2 py-0.5 rounded mb-2 uppercase tracking-wide">Oferta</span>}
                               <div className="h-40 w-full bg-white rounded-lg mb-4 flex items-center justify-center overflow-hidden relative p-2">
                                   {product.imageUrl ? <img src={`${product.imageUrl}?w=300`} alt={product.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" /> : <Package size={32} className="text-gray-200"/>}
                               </div>
                               <div className="mt-auto">
                                   <h3 className="font-medium text-gray-600 text-xs leading-4 line-clamp-3 h-[3rem] mb-2 group-hover:text-blue-600 transition-colors" title={product.title}>{product.title}</h3>
+                                  
                                   <div className="border-t border-gray-50 pt-2">
-                                      {oldPrice > price && <p className="text-[10px] text-gray-400 line-through">{formatPrice(oldPrice)}</p>}
-                                      <p className="text-lg font-black text-green-700 tracking-tight leading-none">{price ? formatPrice(price) : 'Consulte'}</p>
-                                      {price > 0 && <p className="text-[10px] text-gray-400 mt-1 font-medium">Em até 12x</p>}
+                                      {/* Preço Antigo (De:) */}
+                                      {oldPrice > price && (
+                                        <p className="text-[10px] text-gray-400 line-through block mb-0.5">
+                                          de {formatPrice(oldPrice)}
+                                        </p>
+                                      )}
+                                      
+                                      {/* Preço Atual (Por:) */}
+                                      <p className="text-lg font-black text-green-700 block tracking-tight leading-none">
+                                        {price ? formatPrice(price) : 'Consulte'}
+                                      </p>
+
+                                      {/* Tags de condição (Igual ao Carrossel) */}
+                                      {price > 0 && (
+                                        <div className="mt-1 flex flex-col gap-0.5">
+                                          <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">
+                                            -10% à vista
+                                          </span>
+                                          <span className="text-[10px] text-gray-400 font-medium">
+                                            Em até 12x
+                                          </span>
+                                        </div>
+                                      )}
                                   </div>
                               </div>
                           </Link>
