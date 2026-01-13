@@ -1,3 +1,4 @@
+// ARQUIVO: src/components/Header.jsx
 import React, { useState } from 'react'; 
 import { Link, useNavigate } from 'react-router-dom';
 import { 
@@ -8,6 +9,8 @@ import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/c
 import { motion, AnimatePresence } from 'framer-motion';
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
+// 👇 Importando o contexto
+import { useZipCode } from '../context/ZipCodeContext';
 
 // IMPORTANTE: Importe seus menus aqui
 import CategoryMenu from "./layout/CategoryMenu";
@@ -17,21 +20,21 @@ export default function Header() {
   const [isCepModalOpen, setIsCepModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
-  // --- LÓGICA DE BUSCA ADICIONADA ---
+  // --- LÓGICA DE BUSCA ---
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
 
+  // 👇 Pegando o CEP Global
+  const { globalCep, setGlobalCep } = useZipCode();
+  const [tempCep, setTempCep] = useState(''); // Estado temporário do modal
+
   const handleSearch = (e) => {
-    e.preventDefault(); // Evita recarregar a página
+    e.preventDefault();
     if (searchTerm.trim()) {
       navigate(`/busca?q=${encodeURIComponent(searchTerm)}`);
-      setSearchTerm(''); // Limpa o campo opcionalmente
+      setSearchTerm('');
     }
   };
-  // ----------------------------------
-
-  const [tempCep, setTempCep] = useState('');
-  const [cep, setCep] = useState('Informe seu CEP');
   
   const { user } = useUser();
   const { getTotalPrice, items, favorites } = useCartStore();
@@ -42,7 +45,7 @@ export default function Header() {
   const handleSaveCep = (e) => {
     e.preventDefault();
     if (tempCep.length === 8) {
-      setCep(tempCep);
+      setGlobalCep(tempCep); // 🔥 Atualiza o Global!
       setIsCepModalOpen(false);
     } else {
       alert("Por favor, digite um CEP válido com 8 números.");
@@ -71,7 +74,7 @@ export default function Header() {
           </div>
         </Link>
 
-        {/* --- CAMPO DE BUSCA (AGORA FUNCIONAL) --- */}
+        {/* --- CAMPO DE BUSCA --- */}
         <form onSubmit={handleSearch} className="flex-1 w-full max-w-3xl relative mx-4">
           <input 
             type="text" 
@@ -90,7 +93,10 @@ export default function Header() {
               <MapPin size={24} className="text-white animate-pulse"/>
               <div className="leading-tight text-white text-left">
                 <span className="block text-[10px] opacity-70">Enviar para</span>
-                <span className="font-black block truncate max-w-[100px] text-xs uppercase tracking-tighter">{cep}</span>
+                {/* 👇 MOSTRA O CEP GLOBAL AQUI */}
+                <span className="font-black block truncate max-w-[100px] text-xs uppercase tracking-tighter">
+                  {globalCep || 'Informe seu CEP'}
+                </span>
               </div>
            </div>
 
@@ -140,7 +146,6 @@ export default function Header() {
         <div className="container mx-auto px-4">
           <ul className="flex items-center justify-between text-[11px] font-black uppercase tracking-tight">
             
-            {/* BOTÃO E DROPDOWN */}
             <li className="relative group">
                <button 
                  onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -158,17 +163,14 @@ export default function Header() {
                      exit={{ opacity: 0, y: 10 }}
                      className="absolute top-full left-0 w-80 bg-white shadow-xl border border-gray-100 rounded-b-2xl z-50 overflow-hidden py-2"
                    >
-                     {/* MENU ÁRVORE */}
                      <CategoryMenu onItemClick={() => setIsMenuOpen(false)} />
                    </motion.div>
                  )}
                </AnimatePresence>
             </li>
 
-            {/* --- MENU DESTAQUES DINÂMICO --- */}
             <FeaturedMenu />
 
-            {/* Link de Segurança */}
             <li className="ml-auto"><span className="flex items-center gap-1 py-3 px-2 text-gray-400 select-none"><ShieldCheck size={14} className="text-green-500"/> Site 100% Seguro</span></li>
           </ul>
         </div>

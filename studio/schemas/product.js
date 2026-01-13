@@ -14,6 +14,17 @@ export default {
   ],
   fields: [
     // --- 1. IDENTIFICAÇÃO BÁSICA (ABA PRINCIPAL) ---
+    
+     // --- 0. CONTROLE DE EXIBIÇÃO ---
+    {
+      name: 'isActive',
+      title: 'Produto Ativo no Site?',
+      type: 'boolean',
+      group: 'main',
+      description: 'Se desligado, o produto fica oculto na loja (mesmo se estiver publicado).',
+      initialValue: true, // Já nasce ativado por padrão
+      validation: Rule => Rule.required()
+    },
     {
       name: 'title',
       title: 'Nome do Produto',

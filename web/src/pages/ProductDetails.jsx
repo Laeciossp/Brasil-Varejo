@@ -9,7 +9,10 @@ import {
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
 
-// --- COMPONENTE DE ZOOM NATIVO (Garantia de funcionamento) ---
+// 👇 1. IMPORTANTE: Importando o contexto que conecta com o Header
+import { useZipCode } from '../context/ZipCodeContext';
+
+// --- COMPONENTE DE ZOOM NATIVO ---
 const ZoomImage = ({ src, alt }) => {
   const [zoomParams, setZoomParams] = useState({ show: false, x: 0, y: 0 });
   const imgRef = useRef(null);
@@ -37,7 +40,6 @@ const ZoomImage = ({ src, alt }) => {
           transform: zoomParams.show ? "scale(2.5)" : "scale(1)", 
         }}
       />
-      {/* Dica Visual */}
       <div className={`absolute bottom-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-gray-400 border border-gray-200 pointer-events-none transition-opacity duration-300 ${zoomParams.show ? 'opacity-0' : 'opacity-100'}`}>
         Passe o mouse para ampliar
       </div>
@@ -76,7 +78,12 @@ const myPortableTextComponents = {
 
 export default function ProductDetails() {
   const { slug } = useParams();
-  const { addItem, setShipping, selectedShipping, toggleFavorite, favorites, globalCep } = useCartStore();
+  
+  // 👇 2. MUDANÇA: Removemos 'globalCep' daqui do Store...
+  const { addItem, setShipping, selectedShipping, toggleFavorite, favorites } = useCartStore();
+  
+  // 👇 ...e pegamos do Contexto novo (Sincronizado com o Header)
+  const { globalCep } = useZipCode(); 
 
   const [product, setProduct] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
@@ -163,12 +170,16 @@ export default function ProductDetails() {
     }
   };
 
+  // 👇 ESSA PARTE AGORA VAI FUNCIONAR (Escuta o globalCep do Contexto)
   useEffect(() => {
-    if (product && globalCep && globalCep !== 'Informe seu CEP') {
+    if (product && globalCep) {
+        // Remove traços e espaços para verificar
         const cleanGlobal = globalCep.replace(/\D/g, '');
+        
+        // Só dispara se tiver 8 dígitos e não for o texto placeholder
         if (cleanGlobal.length === 8) {
-            setCep(cleanGlobal);
-            handleCalculateShipping(cleanGlobal);
+            setCep(cleanGlobal); // Atualiza o input visual
+            handleCalculateShipping(cleanGlobal); // Chama o cálculo
         }
     }
   }, [product, globalCep]);
@@ -180,7 +191,10 @@ export default function ProductDetails() {
     
     setCalculating(true);
     try {
-      const workerUrl = 'https://brasil-varejo-api.laeciossp.workers.dev/shipping'; 
+      // 👇 3. BÔNUS: Usando a variável de ambiente correta (Vite)
+      const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
+      const workerUrl = `${baseUrl}/shipping`;
+
       const response = await fetch(workerUrl, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -256,14 +270,13 @@ export default function ProductDetails() {
         {/* BLOCO PRINCIPAL */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col lg:flex-row mb-10">
           
-          {/* FOTOS (Com Zoom Nativo) */}
+          {/* FOTOS */}
           <div className="lg:w-3/5 p-6 border-r border-gray-50 bg-white">
             <div className="aspect-square w-full flex items-center justify-center mb-4 relative overflow-hidden rounded-lg border border-gray-50">
                 {activeMedia && (
                 isVideo ? (
                     <video src={activeMedia.asset.url} controls className="w-full h-full object-contain" />
                 ) : (
-                    // ZOOM NATIVO: Simples e Eficaz
                     <ZoomImage
                         src={urlFor(activeMedia.asset).width(1200).quality(100).fit('max').bg('ffffff').url()}
                         alt={product.title}
@@ -352,7 +365,11 @@ export default function ProductDetails() {
             <div className="mb-6">
                 <div className="flex gap-2 mb-3">
                   <input 
-                    type="text" placeholder="Seu CEP" maxLength={9} value={cep} onChange={(e) => setCep(e.target.value)}
+                    type="text" 
+                    placeholder="Seu CEP" 
+                    maxLength={9} 
+                    value={cep} 
+                    onChange={(e) => setCep(e.target.value)}
                     className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-gray-900 focus:border-orange-500 outline-none"
                   />
                   <button onClick={() => handleCalculateShipping()} disabled={calculating} className="bg-gray-900 text-white px-4 rounded-lg font-bold text-xs uppercase">
@@ -402,8 +419,8 @@ export default function ProductDetails() {
                )}
            </div>
 
-          {/* --- CARROSSEL FUJIOKA (Compacto & Responsivo - Ajustado) --- */}
-        {relatedProducts.length > 0 && (
+          {/* CARROSSEL */}
+          {relatedProducts.length > 0 && (
           <div className="mt-8">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-black text-gray-900 px-1">Quem viu, viu também</h3>
@@ -422,7 +439,6 @@ export default function ProductDetails() {
                   <Link 
                     to={`/product/${rel.slug.current}`} 
                     key={rel._id} 
-                    // CARD ESTREITO (145px mobile / 180px Desktop)
                     className="min-w-[145px] md:min-w-[180px] w-[145px] md:w-[180px] snap-start bg-white p-3 rounded-lg border border-gray-100 hover:shadow-xl hover:border-gray-300 transition-all group flex flex-col"
                   >
                     <div className="h-32 w-full mb-3 flex items-center justify-center bg-white p-2 rounded relative">
@@ -431,11 +447,7 @@ export default function ProductDetails() {
                       ) : <Package className="text-gray-200"/>}
                     </div>
                     
-                    {/* TÍTULO COMPACTO (3 LINHAS) */}
-                    <h4 
-                        className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" 
-                        title={rel.title}
-                    >
+                    <h4 className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" title={rel.title}>
                       {rel.title}
                     </h4>
                     
@@ -445,20 +457,12 @@ export default function ProductDetails() {
                                de {formatCurrency(relOldPrice)}
                              </span>
                         )}
-                        
-                        {/* PREÇO VERDE */}
                         <span className="text-base font-black text-green-700 block tracking-tight leading-none">
                           {formatCurrency(relPrice)}
                         </span>
-
-                        {/* DESCONTO E PARCELAMENTO (SEM VALOR DE PARCELA) */}
                         <div className="mt-1 flex flex-col gap-0.5">
-                            <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">
-                                -10% à vista
-                            </span>
-                            <span className="text-[10px] text-gray-400 font-medium">
-                                Em até 12x
-                            </span>
+                            <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span>
+                            <span className="text-[10px] text-gray-400 font-medium">Em até 12x</span>
                         </div>
                     </div>
                   </Link>

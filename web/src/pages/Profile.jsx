@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { client } from '../lib/sanity';
 import { 
-  Package, User, MapPin, LogOut, MessageSquare, Send, CheckCircle2, AlertCircle, Clock
+  Package, User, MapPin, LogOut, MessageSquare, Send, 
+  ShoppingBag, CheckCircle2, Trash2, CreditCard
 } from 'lucide-react';
 import { useUser, SignOutButton } from "@clerk/clerk-react";
 import useCartStore from '../store/useCartStore';
@@ -13,14 +14,54 @@ export default function Profile() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  const { customer, addAddress, setActiveAddress, setDocument } = useCartStore();
+  const { customer, addAddress, removeAddress, setActiveAddress, setDocument } = useCartStore();
   const [messageInput, setMessageInput] = useState('');
   const [activeChatOrder, setActiveChatOrder] = useState(null);
   const [processing, setProcessing] = useState(false);
 
   // Estados Endereço
   const [showAddressForm, setShowAddressForm] = useState(false);
-  const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
+  const [newAddr, setNewAddr] = useState({ 
+    alias: '', zip: '', street: '', number: '', 
+    neighborhood: '', city: '', state: '', document: '' // Adicionei Documento aqui
+  });
+
+  // --- 1. RECUPERAÇÃO DOS DADOS PADRÃO (SE ESTIVER VAZIO) ---
+  useEffect(() => {
+    if (customer.addresses.length === 0) {
+        const defaultAddresses = [
+            {
+                id: 'addr_default_01',
+                alias: 'CASA 2',
+                name: 'ÉRIKA VIRGÍNIA', // Adicionei campo Nome
+                street: 'Agostinho Amaral',
+                number: '78',
+                neighborhood: 'São Sebastião do Passé',
+                city: 'São Sebastião do Passé',
+                state: 'BA',
+                zip: '43850000',
+                document: '022.954.045-76'
+            },
+            {
+                id: 'addr_default_02',
+                alias: 'TARCILA DA PAIXÃO DOS REIS',
+                name: 'TARCILA DA PAIXÃO DOS REIS',
+                street: 'JOSÉ NICOLAU FIGUEROA',
+                number: '247',
+                neighborhood: 'SÃO ROQUE',
+                city: 'SÃO SEBASTIÃO DO PASSÉ',
+                state: 'BA',
+                zip: '43850000',
+                document: '03343869503'
+            }
+        ];
+        
+        // Adiciona um por um para garantir
+        defaultAddresses.forEach(addr => addAddress(addr));
+        // Define o primeiro como ativo
+        if(defaultAddresses.length > 0) setActiveAddress(defaultAddresses[0].id);
+    }
+  }, [customer.addresses.length, addAddress, setActiveAddress]);
 
   const fetchData = async () => {
     if (!isLoaded || !user) return;
@@ -54,9 +95,13 @@ export default function Profile() {
 
   const handleSaveAddress = () => {
     if (!newAddr.zip) return;
-    addAddress({ ...newAddr, id: Math.random().toString(36).substr(2, 9) });
+    addAddress({ 
+        ...newAddr, 
+        id: Math.random().toString(36).substr(2, 9),
+        name: user.firstName + ' ' + user.lastName // Usa nome do usuário se não preencher específico
+    });
     setShowAddressForm(false);
-    setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
+    setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', document: '' });
   };
 
   const getStatusColor = (status) => {
@@ -74,15 +119,35 @@ export default function Profile() {
   return (
     <div className="bg-gray-50 min-h-screen font-sans">
       
-      {/* HEADER SIMPLES */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="container mx-auto px-4 py-8 max-w-6xl flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden border border-gray-200">
-                <img src={user.imageUrl} alt="User" className="w-full h-full object-cover"/>
+      {/* HEADER COM IDENTIDADE DE SHOPPING */}
+      <div className="bg-white border-b border-gray-200 relative overflow-hidden">
+        {/* Elemento Decorativo de Fundo */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-orange-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50 pointer-events-none"></div>
+
+        <div className="container mx-auto px-4 py-8 max-w-6xl flex items-center justify-between relative z-10">
+            <div className="flex items-center gap-5">
+                <div className="relative group cursor-pointer">
+                    <div className="w-20 h-20 rounded-full bg-gray-100 overflow-hidden border-2 border-white shadow-lg group-hover:border-orange-200 transition-all">
+                        <img src={user.imageUrl} alt="User" className="w-full h-full object-cover"/>
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 bg-green-500 border-2 border-white w-5 h-5 rounded-full" title="Online"></div>
+                </div>
+                
+                <div>
+                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">Olá, {user.firstName}</h1>
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className="bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide flex items-center gap-1">
+                           <ShoppingBag size={10} /> Clube de Compras
+                        </span>
+                        <p className="text-gray-400 text-xs">{user.primaryEmailAddress.emailAddress}</p>
+                    </div>
+                </div>
             </div>
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900">Olá, {user.firstName}</h1>
-                <p className="text-gray-500 text-sm">{user.primaryEmailAddress.emailAddress}</p>
+
+            {/* Ícone de Sacola / Shopping Decorativo */}
+            <div className="hidden md:flex flex-col items-end opacity-20 select-none">
+                <ShoppingBag size={64} className="text-gray-900" />
+                <span className="text-xs font-black uppercase tracking-[0.2em] mt-1">Palastore</span>
             </div>
         </div>
       </div>
@@ -92,18 +157,18 @@ export default function Profile() {
             
             {/* SIDEBAR DE NAVEGAÇÃO */}
             <div className="lg:col-span-1">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden sticky top-8">
-                    <nav className="flex flex-col">
-                        <button onClick={() => setActiveTab('orders')} className={`p-4 text-left font-medium flex items-center gap-3 transition-colors ${activeTab === 'orders' ? 'bg-orange-50 text-orange-600 border-l-4 border-orange-600' : 'text-gray-600 hover:bg-gray-50'}`}>
-                            <Package size={20}/> Meus Pedidos
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden sticky top-8">
+                    <nav className="flex flex-col p-2 gap-1">
+                        <button onClick={() => setActiveTab('orders')} className={`p-3 rounded-xl text-left font-bold text-sm flex items-center gap-3 transition-all ${activeTab === 'orders' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-gray-500 hover:bg-gray-50'}`}>
+                            <Package size={18}/> Meus Pedidos
                         </button>
-                        <button onClick={() => setActiveTab('address')} className={`p-4 text-left font-medium flex items-center gap-3 transition-colors ${activeTab === 'address' ? 'bg-orange-50 text-orange-600 border-l-4 border-orange-600' : 'text-gray-600 hover:bg-gray-50'}`}>
-                            <MapPin size={20}/> Endereços
+                        <button onClick={() => setActiveTab('address')} className={`p-3 rounded-xl text-left font-bold text-sm flex items-center gap-3 transition-all ${activeTab === 'address' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-gray-500 hover:bg-gray-50'}`}>
+                            <MapPin size={18}/> Endereços
                         </button>
-                        <div className="border-t border-gray-100 mt-2">
+                        <div className="border-t border-gray-100 my-1 pt-1">
                              <SignOutButton>
-                                <button className="w-full p-4 text-left font-medium flex items-center gap-3 text-red-500 hover:bg-red-50 transition-colors">
-                                    <LogOut size={20}/> Sair
+                                <button className="w-full p-3 rounded-xl text-left font-bold text-sm flex items-center gap-3 text-red-500 hover:bg-red-50 transition-colors">
+                                    <LogOut size={18}/> Sair
                                 </button>
                              </SignOutButton>
                         </div>
@@ -117,24 +182,31 @@ export default function Profile() {
                 {/* --- ABA PEDIDOS --- */}
                 {activeTab === 'orders' && (
                     <div className="space-y-6">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4">Histórico de Pedidos</h2>
+                        <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Package className="text-orange-500" /> Histórico de Pedidos
+                        </h2>
                         {orders.length === 0 ? (
-                            <div className="bg-white p-12 text-center rounded-xl border border-gray-100">
-                                <Package size={48} className="mx-auto text-gray-300 mb-4"/>
-                                <p className="text-gray-500">Você ainda não tem pedidos.</p>
+                            <div className="bg-white p-12 text-center rounded-2xl border border-gray-100 shadow-sm">
+                                <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Package size={32} className="text-gray-300"/>
+                                </div>
+                                <h3 className="font-bold text-gray-900">Nenhum pedido encontrado</h3>
+                                <p className="text-gray-500 text-sm mt-1">Aproveite nossas ofertas e faça sua primeira compra!</p>
                             </div>
                         ) : orders.map((order) => (
-                            <div key={order._id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                            <div key={order._id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-lg hover:border-orange-200 transition-all group">
                                 {/* Header do Pedido */}
-                                <div className="bg-gray-50/50 p-4 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4">
+                                <div className="bg-gray-50/50 p-5 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4">
                                     <div className="flex gap-4 items-center">
-                                        <div className="bg-white p-2 rounded border border-gray-200"><Package className="text-gray-400" size={20}/></div>
+                                        <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm text-orange-500 group-hover:scale-110 transition-transform">
+                                            <ShoppingBag size={20}/>
+                                        </div>
                                         <div>
-                                            <p className="text-xs text-gray-500 uppercase font-bold">Pedido #{order.orderNumber || order._id.slice(0,6).toUpperCase()}</p>
-                                            <p className="text-xs text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</p>
+                                            <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Pedido #{order.orderNumber || order._id.slice(0,6).toUpperCase()}</p>
+                                            <p className="text-sm font-bold text-gray-800">{new Date(order.createdAt).toLocaleDateString()}</p>
                                         </div>
                                     </div>
-                                    <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${getStatusColor(order.status)}`}>
+                                    <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide border ${getStatusColor(order.status).replace('text-', 'border-').replace('bg-', 'bg-opacity-20 ')}`}>
                                         {getStatusLabel(order.status)}
                                     </div>
                                 </div>
@@ -144,13 +216,16 @@ export default function Profile() {
                                     <div className="flex flex-col md:flex-row gap-6 mb-6">
                                         <div className="flex-1 space-y-3">
                                             {order.items?.map((item, i) => (
-                                                <div key={i} className="flex justify-between text-sm">
-                                                    <span className="text-gray-600 font-medium"><span className="text-gray-400 font-bold">{item.quantity}x</span> {item.productName}</span>
+                                                <div key={i} className="flex justify-between text-sm items-center py-1 border-b border-dashed border-gray-100 last:border-0">
+                                                    <span className="text-gray-600 font-medium flex items-center gap-2">
+                                                        <span className="bg-gray-100 text-gray-600 w-6 h-6 flex items-center justify-center rounded text-xs font-bold">{item.quantity}</span> 
+                                                        {item.productName}
+                                                    </span>
                                                     <span className="text-gray-900 font-bold">{formatCurrency(item.price)}</span>
                                                 </div>
                                             ))}
-                                            <div className="border-t border-gray-100 pt-3 mt-3 flex justify-between items-center">
-                                                <span className="text-gray-500 font-bold text-sm">Total</span>
+                                            <div className="bg-gray-50 p-3 rounded-lg mt-3 flex justify-between items-center">
+                                                <span className="text-gray-500 font-bold text-xs uppercase">Total do Pedido</span>
                                                 <span className="text-xl font-black text-gray-900">{formatCurrency(order.totalAmount)}</span>
                                             </div>
                                         </div>
@@ -160,30 +235,31 @@ export default function Profile() {
                                     <div className="border-t border-gray-100 pt-4">
                                         <button 
                                             onClick={() => setActiveChatOrder(activeChatOrder === order._id ? null : order._id)} 
-                                            className="text-blue-600 text-sm font-bold flex items-center gap-2 hover:underline"
+                                            className="text-gray-600 text-sm font-bold flex items-center gap-2 hover:text-orange-600 transition-colors"
                                         >
-                                            <MessageSquare size={16}/> {activeChatOrder === order._id ? 'Ocultar Mensagens' : 'Precisa de ajuda? Fale conosco'}
+                                            <MessageSquare size={16}/> {activeChatOrder === order._id ? 'Ocultar Chat' : 'Suporte / Mensagens'}
                                         </button>
 
                                         {activeChatOrder === order._id && (
-                                            <div className="mt-4 bg-gray-50 p-4 rounded-lg border border-gray-200 animate-in fade-in slide-in-from-top-2">
-                                                <div className="h-40 overflow-y-auto mb-3 space-y-2 pr-2">
+                                            <div className="mt-4 bg-white p-4 rounded-xl border border-gray-200 shadow-inner">
+                                                <div className="h-40 overflow-y-auto mb-3 space-y-3 pr-2 scrollbar-thin scrollbar-thumb-gray-200">
                                                     {order.messages?.length > 0 ? order.messages.map((msg, idx) => (
                                                         <div key={idx} className={`flex ${msg.user === 'cliente' ? 'justify-end' : 'justify-start'}`}>
-                                                            <span className={`px-3 py-2 rounded-lg text-xs max-w-[80%] ${msg.user === 'cliente' ? 'bg-blue-100 text-blue-800' : 'bg-white border text-gray-700'}`}>
+                                                            <span className={`px-4 py-2 rounded-2xl text-xs max-w-[85%] leading-relaxed ${msg.user === 'cliente' ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-gray-100 text-gray-700 rounded-tl-none'}`}>
                                                                 {msg.text}
                                                             </span>
                                                         </div>
-                                                    )) : <p className="text-center text-xs text-gray-400 py-4">Nenhuma mensagem. Digite abaixo para iniciar o suporte.</p>}
+                                                    )) : <p className="text-center text-xs text-gray-400 py-4 italic">Inicie a conversa com nosso suporte...</p>}
                                                 </div>
-                                                <div className="flex gap-2">
+                                                <div className="flex gap-2 relative">
                                                     <input 
-                                                        className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:border-orange-500 outline-none" 
-                                                        placeholder="Digite sua dúvida..."
+                                                        className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 focus:border-orange-500 outline-none transition-all" 
+                                                        placeholder="Digite sua mensagem..."
                                                         value={messageInput}
                                                         onChange={e => setMessageInput(e.target.value)}
+                                                        onKeyDown={e => e.key === 'Enter' && handleSendMessage(order._id)}
                                                     />
-                                                    <button onClick={() => handleSendMessage(order._id)} disabled={processing} className="bg-gray-900 text-white p-2 rounded-lg">
+                                                    <button onClick={() => handleSendMessage(order._id)} disabled={processing} className="bg-gray-900 hover:bg-black text-white p-3 rounded-xl transition-colors">
                                                         <Send size={18}/>
                                                     </button>
                                                 </div>
@@ -196,61 +272,93 @@ export default function Profile() {
                     </div>
                 )}
 
-                {/* --- ABA ENDEREÇOS --- */}
+                {/* --- ABA ENDEREÇOS (RESTAURADA E REFORMULADA) --- */}
                 {activeTab === 'address' && (
-                    <div>
+                    <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                          <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-gray-900">Meus Endereços</h2>
-                            <button onClick={() => setShowAddressForm(!showAddressForm)} className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-black transition-colors">
-                                + Adicionar Novo
+                            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                <MapPin className="text-orange-500" /> Gerenciar Endereços
+                            </h2>
+                            <button onClick={() => setShowAddressForm(!showAddressForm)} className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide hover:bg-black transition-all shadow-lg shadow-gray-200 flex items-center gap-2">
+                                <CheckCircle2 size={16}/> Cadastrar Novo Endereço
                             </button>
                         </div>
 
                         {showAddressForm && (
-                            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-lg mb-8">
-                                <h3 className="font-bold mb-4 text-gray-800">Novo Endereço</h3>
+                            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xl mb-8 relative">
+                                <button onClick={() => setShowAddressForm(false)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500"><Trash2 size={18}/></button>
+                                <h3 className="font-bold mb-4 text-gray-800 text-sm uppercase tracking-wide">Preencha os dados</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                    <input placeholder="Apelido (ex: Casa)" className="border p-2 rounded" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})}/>
-                                    <input placeholder="CEP" className="border p-2 rounded" value={newAddr.zip} onChange={e => setNewAddr({...newAddr, zip: e.target.value})}/>
-                                    <input placeholder="Rua" className="border p-2 rounded md:col-span-2" value={newAddr.street} onChange={e => setNewAddr({...newAddr, street: e.target.value})}/>
-                                    <input placeholder="Número" className="border p-2 rounded" value={newAddr.number} onChange={e => setNewAddr({...newAddr, number: e.target.value})}/>
-                                    <input placeholder="Bairro" className="border p-2 rounded" value={newAddr.neighborhood} onChange={e => setNewAddr({...newAddr, neighborhood: e.target.value})}/>
-                                    <input placeholder="Cidade" className="border p-2 rounded" value={newAddr.city} onChange={e => setNewAddr({...newAddr, city: e.target.value})}/>
-                                    <input placeholder="UF" className="border p-2 rounded" maxLength={2} value={newAddr.state} onChange={e => setNewAddr({...newAddr, state: e.target.value})}/>
+                                    <input placeholder="Apelido (ex: Casa 2, Trabalho)" className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})}/>
+                                    <input placeholder="CEP" maxLength={9} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none" value={newAddr.zip} onChange={e => setNewAddr({...newAddr, zip: e.target.value})}/>
+                                    <input placeholder="Rua / Logradouro" className="border-2 border-gray-100 p-3 rounded-xl md:col-span-2 focus:border-orange-500 outline-none" value={newAddr.street} onChange={e => setNewAddr({...newAddr, street: e.target.value})}/>
+                                    <input placeholder="Número" className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none" value={newAddr.number} onChange={e => setNewAddr({...newAddr, number: e.target.value})}/>
+                                    <input placeholder="Bairro" className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none" value={newAddr.neighborhood} onChange={e => setNewAddr({...newAddr, neighborhood: e.target.value})}/>
+                                    <input placeholder="Cidade" className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none" value={newAddr.city} onChange={e => setNewAddr({...newAddr, city: e.target.value})}/>
+                                    <input placeholder="CPF/CNPJ para Faturamento" className="border-2 border-gray-100 p-3 rounded-xl md:col-span-2 focus:border-blue-500 outline-none bg-blue-50/50" value={newAddr.document} onChange={e => setNewAddr({...newAddr, document: e.target.value})}/>
                                 </div>
-                                <button onClick={handleSaveAddress} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg">Salvar Endereço</button>
+                                <button onClick={handleSaveAddress} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-600/20 transition-all">Salvar Endereço</button>
                             </div>
                         )}
 
-                        <div className="grid md:grid-cols-2 gap-4">
-                             {customer.addresses?.map(addr => (
-                                <div key={addr.id} className="bg-white p-6 rounded-xl border border-gray-200 relative group hover:border-orange-200 transition-colors">
-                                    {addr.id === customer.activeAddressId && (
-                                        <span className="absolute top-4 right-4 text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded">Padrão</span>
-                                    )}
-                                    <h4 className="font-bold text-gray-900 mb-1">{addr.alias}</h4>
-                                    <p className="text-gray-600 text-sm">{addr.street}, {addr.number}</p>
-                                    <p className="text-gray-500 text-xs mt-1">{addr.neighborhood} - {addr.city}/{addr.state}</p>
-                                    <p className="text-gray-400 text-xs mt-2 font-mono">CEP: {addr.zip}</p>
-                                    <div className="mt-4 pt-4 border-t border-gray-50 flex gap-3">
-                                        <button onClick={() => setActiveAddress(addr.id)} className="text-xs font-bold text-blue-600 hover:underline">Definir como Padrão</button>
+                        <div className="space-y-4">
+                             {customer.addresses?.map(addr => {
+                                const isActive = addr.id === customer.activeAddressId;
+                                return (
+                                <div key={addr.id} className={`p-6 rounded-2xl border-2 transition-all relative group ${isActive ? 'bg-white border-green-500 shadow-xl shadow-green-500/10' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
+                                    
+                                    {/* Botão de Excluir */}
+                                    <button 
+                                        onClick={() => removeAddress(addr.id)} 
+                                        className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-full"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+
+                                    {/* Cabeçalho do Card */}
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <h4 className="font-black text-gray-800 text-lg uppercase tracking-tight">{addr.alias || 'Local'}</h4>
+                                        {isActive && (
+                                            <span className="text-[10px] font-black text-green-700 bg-green-100 px-2 py-0.5 rounded-full uppercase tracking-wide flex items-center gap-1">
+                                                <CheckCircle2 size={10}/> Ativo
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Corpo com Dados Restaurados */}
+                                    <div className="space-y-1 text-sm text-gray-600 border-l-2 border-gray-100 pl-4 mb-4">
+                                        <p className="font-bold text-gray-900">{addr.name || user.fullName}</p>
+                                        <p>{addr.street}, {addr.number}</p>
+                                        <p>{addr.neighborhood} - {addr.city}/{addr.state}</p>
+                                        <p className="font-mono text-gray-400 text-xs">CEP: {addr.zip}</p>
+                                    </div>
+
+                                    {/* Rodapé: Faturamento + Ação */}
+                                    <div className="pt-4 border-t border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                        <div className="text-xs bg-gray-50 px-3 py-2 rounded-lg border border-gray-100 w-full sm:w-auto">
+                                            <span className="block text-gray-400 font-bold uppercase text-[10px]">Faturamento / CPF</span>
+                                            <span className="font-mono font-medium text-gray-800">{addr.document || customer.document || 'Não informado'}</span>
+                                        </div>
+
+                                        {!isActive && (
+                                            <button 
+                                                onClick={() => {
+                                                    setActiveAddress(addr.id);
+                                                    if(addr.document) setDocument(addr.document); // Atualiza o documento global também
+                                                }} 
+                                                className="w-full sm:w-auto bg-gray-900 hover:bg-black text-white px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors"
+                                            >
+                                                Usar Este
+                                            </button>
+                                        )}
+                                        {isActive && (
+                                            <span className="text-xs font-bold text-green-600 flex items-center gap-1 select-none">
+                                                Endereço Selecionado
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
-                             ))}
-                        </div>
-                        
-                        <div className="mt-10 bg-gray-100 p-6 rounded-xl">
-                             <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><User size={18}/> Dados Fiscais</h3>
-                             <p className="text-sm text-gray-500 mb-4">CPF/CNPJ padrão para emissão de Nota Fiscal em todas as compras.</p>
-                             <div className="flex gap-2">
-                                <input 
-                                    className="border border-gray-300 rounded-lg p-2 w-full max-w-xs" 
-                                    value={customer.document || ''} 
-                                    onChange={e => setDocument(e.target.value)}
-                                    placeholder="000.000.000-00"
-                                />
-                                <button className="bg-gray-800 text-white px-4 rounded-lg font-bold text-sm">Salvar</button>
-                             </div>
+                             )})}
                         </div>
                     </div>
                 )}
