@@ -54,7 +54,37 @@ export default {
       title: 'Descrição Completa',
       type: 'array', 
       group: 'main',
-      of: [{type: 'block'}]
+      of: [
+        {type: 'block'}, // Mantém o editor de texto rico padrão
+        {
+          type: 'object',
+          name: 'htmlBlock',
+          title: 'Bloco HTML (Layout Customizado)',
+          fields: [
+            {
+              name: 'html',
+              title: 'Código HTML',
+              type: 'text',
+              description: 'Cole aqui o código HTML técnico com classes do Tailwind para renderizar layouts específicos.'
+            }
+          ]
+        }
+      ]
+    },
+    // --- NOVOS CAMPOS: PREÇO NA RAIZ (PARA PRODUTOS SEM VARIAÇÃO) ---
+    {
+      name: 'price',
+      title: 'Preço Base (R$)',
+      type: 'number',
+      group: 'main',
+      description: 'Preço principal se o produto não tiver variações.'
+    },
+    {
+      name: 'oldPrice',
+      title: 'Preço Antigo (De:)',
+      type: 'number',
+      group: 'main',
+      description: 'Para promoções (Preço riscado).'
     },
 
     // --- 2. O SELETOR MÁGICO (DEFINE A FICHA TÉCNICA) ---
@@ -239,7 +269,7 @@ export default {
       ]
     },
 
-    // 📋 GERAL / TABELA LIVRE (Mantendo sua lógica antiga de array)
+    // 📋 GERAL / TABELA LIVRE
     {
       name: 'customSpecs',
       title: 'Outras Características (Tabela Livre)',

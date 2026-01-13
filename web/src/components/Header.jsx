@@ -1,5 +1,5 @@
 import React, { useState } from 'react'; 
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Search, MapPin, ShoppingCart, Heart, User, Menu, 
   Phone, ShieldCheck, X, ArrowRight 
@@ -11,12 +11,25 @@ import { formatCurrency } from '../lib/utils';
 
 // IMPORTANTE: Importe seus menus aqui
 import CategoryMenu from "./layout/CategoryMenu";
-import FeaturedMenu from "./layout/FeaturedMenu"; // <--- NOVO IMPORT
+import FeaturedMenu from "./layout/FeaturedMenu"; 
 
 export default function Header() {
   const [isCepModalOpen, setIsCepModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
+  // --- LÓGICA DE BUSCA ADICIONADA ---
+  const [searchTerm, setSearchTerm] = useState('');
+  const navigate = useNavigate();
+
+  const handleSearch = (e) => {
+    e.preventDefault(); // Evita recarregar a página
+    if (searchTerm.trim()) {
+      navigate(`/busca?q=${encodeURIComponent(searchTerm)}`);
+      setSearchTerm(''); // Limpa o campo opcionalmente
+    }
+  };
+  // ----------------------------------
+
   const [tempCep, setTempCep] = useState('');
   const [cep, setCep] = useState('Informe seu CEP');
   
@@ -58,14 +71,19 @@ export default function Header() {
           </div>
         </Link>
 
-        <div className="flex-1 w-full max-w-3xl relative mx-4">
+        {/* --- CAMPO DE BUSCA (AGORA FUNCIONAL) --- */}
+        <form onSubmit={handleSearch} className="flex-1 w-full max-w-3xl relative mx-4">
           <input 
             type="text" 
             placeholder="O que você procura hoje na Palastore?" 
             className="w-full h-12 pl-4 pr-12 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-inner bg-white placeholder-gray-400 font-medium"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <Search className="absolute right-3 top-3 text-crocus-deep cursor-pointer hover:text-orange-500 transition-colors" />
-        </div>
+          <button type="submit" className="absolute right-3 top-3 text-crocus-deep cursor-pointer hover:text-orange-500 transition-colors bg-transparent border-none">
+            <Search />
+          </button>
+        </form>
 
         <div className="flex items-center gap-6 text-sm font-medium w-full lg:w-auto justify-between lg:justify-end">
            <div onClick={() => setIsCepModalOpen(true)} className="hidden xl:flex items-center gap-2 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors border border-transparent hover:border-white/20">
@@ -148,7 +166,6 @@ export default function Header() {
             </li>
 
             {/* --- MENU DESTAQUES DINÂMICO --- */}
-            {/* Aqui entram as categorias que você marcou como "Destaque" no Sanity */}
             <FeaturedMenu />
 
             {/* Link de Segurança */}

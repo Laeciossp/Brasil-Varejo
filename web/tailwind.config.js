@@ -9,24 +9,17 @@ export default {
       colors: {
         // A Base Profissional (Confiança e Contraste)
         brand: {
-           blue: '#0086ff',     // Azul original (para detalhes menores)
-           dark: '#1e293b',     // Texto Escuro (quase preto, mais elegante)
+           blue: '#0086ff',     // Azul original
+           dark: '#1e293b',     // Texto Escuro
         },
         // A Inspiração Crocus (Originalidade e Sofisticação)
         crocus: {
-           // O VIOLETA QUE VAI RESSAIR NO BRANCO (Fundo do Header e Banners)
-           deep: '#4C1D95',     
-           
-           // Roxo vibrante para ícones e hovers
-           vivid: '#7C3AED',    
-           
-           // Lilás bem suave para fundos de seção alternativos
-           light: '#DDD6FE',
-           
-           // O LARANJA DO MIOLO (Exclusivo para botões de COMPRAR/AÇÃO)
-           stamen: '#FF8C00',   
+           deep: '#4C1D95',     // Violeta para Headers e Banners
+           vivid: '#7C3AED',    // Roxo vibrante para ícones e hovers
+           light: '#DDD6FE',    // Lilás suave para fundos
+           stamen: '#FF8C00',   // Laranja para botões de COMPRAR/AÇÃO
         },
-        // Fundo do Site (Não é branco puro, é um off-white de luxo)
+        // Fundo do Site (Off-white de luxo)
         surface: {
            primary: '#f8fafc',  // Slate 50
            secondary: '#f1f5f9' // Slate 100
@@ -57,5 +50,8 @@ export default {
       }
     },
   },
-  plugins: [],
+  plugins: [
+    // Plugin necessário para estilizar o conteúdo HTML das descrições
+    require('@tailwindcss/typography'),
+  ],
 }

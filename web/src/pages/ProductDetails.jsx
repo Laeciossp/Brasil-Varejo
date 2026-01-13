@@ -3,15 +3,55 @@ import { useParams, Link } from 'react-router-dom';
 import { client, urlFor } from '../lib/sanity';
 import { PortableText } from '@portabletext/react'; 
 import { 
-  ShoppingCart, Truck, ShieldCheck, PlayCircle, Star, ArrowRight, 
-  Heart, Share2, ChevronLeft, ChevronRight, AlertCircle 
+  Truck, ShieldCheck, ArrowRight, Heart, 
+  ChevronRight, ChevronLeft, Package, CheckCircle
 } from 'lucide-react'; 
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
 
-// --- CONFIGURAÇÃO DO TEXTO RICO (Mantida) ---
+// --- COMPONENTE DE ZOOM NATIVO (Garantia de funcionamento) ---
+const ZoomImage = ({ src, alt }) => {
+  const [zoomParams, setZoomParams] = useState({ show: false, x: 0, y: 0 });
+  const imgRef = useRef(null);
+
+  const handleMouseMove = (e) => {
+    const { left, top, width, height } = e.target.getBoundingClientRect();
+    const x = ((e.pageX - left) / width) * 100;
+    const y = ((e.pageY - top) / height) * 100;
+    setZoomParams({ show: true, x, y });
+  };
+
+  return (
+    <div 
+      className="relative w-full h-full overflow-hidden rounded-lg bg-white cursor-crosshair group"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setZoomParams({ ...zoomParams, show: false })}
+    >
+      <img
+        ref={imgRef}
+        src={src}
+        alt={alt}
+        className="w-full h-full object-contain transition-transform duration-200 ease-out origin-center"
+        style={{
+          transformOrigin: `${zoomParams.x}% ${zoomParams.y}%`,
+          transform: zoomParams.show ? "scale(2.5)" : "scale(1)", 
+        }}
+      />
+      {/* Dica Visual */}
+      <div className={`absolute bottom-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-gray-400 border border-gray-200 pointer-events-none transition-opacity duration-300 ${zoomParams.show ? 'opacity-0' : 'opacity-100'}`}>
+        Passe o mouse para ampliar
+      </div>
+    </div>
+  );
+};
+
+// --- CONFIGURAÇÃO DO TEXTO RICO ---
 const myPortableTextComponents = {
   types: {
+    htmlBlock: ({ value }) => {
+      if (!value?.html) return null;
+      return <div className="my-4" dangerouslySetInnerHTML={{ __html: value.html }} />;
+    },
     image: ({ value }) => {
       if (!value?.asset?._ref) return null;
       return (
@@ -36,62 +76,37 @@ const myPortableTextComponents = {
 
 export default function ProductDetails() {
   const { slug } = useParams();
-  
-  // Store Global
   const { addItem, setShipping, selectedShipping, toggleFavorite, favorites, globalCep } = useCartStore();
 
-  // Estados do Produto Principal
   const [product, setProduct] = useState(null);
-  const [relatedProducts, setRelatedProducts] = useState([]); // Novo: Produtos Relacionados
+  const [relatedProducts, setRelatedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Estados de Variação (Novo)
-  const [selectedVariant, setSelectedVariant] = useState(null); // Qual variação está escolhida?
+  const [selectedVariant, setSelectedVariant] = useState(null);
   const [currentPrice, setCurrentPrice] = useState(0);
   const [currentOldPrice, setCurrentOldPrice] = useState(0);
 
-  // Estados de Mídia
   const [activeMedia, setActiveMedia] = useState(null); 
-
-  // Estados de Frete
   const [cep, setCep] = useState('');
   const [calculating, setCalculating] = useState(false);
   const [shippingOptions, setShippingOptions] = useState(null);
 
-  // Ref para o Carrossel
   const carouselRef = useRef(null);
 
-  // --- 1. BUSCA DADOS DO PRODUTO + RELACIONADOS ---
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Query Principal Atualizada para pegar VARIAÇÕES
         const query = `*[_type == "product" && slug.current == $slug][0]{
-          _id,
-          title,
-          description,
-          specifications,
-          "slug": slug,
+          _id, title, description, specifications, "slug": slug,
           categories[]->{_id, title},
-          
-          // Dados Legados (Raiz)
-          price, 
-          oldPrice,
-          
-          // Imagens Gerais
-          "images": images[]{
-            _key, _type, 
-            asset->{_id, url, mimeType}
-          },
-
-          // Novas Variações
+          price, oldPrice,
+          "images": images[]{ _key, _type, asset->{_id, url, mimeType} },
           variants[] {
             _key, variantName, price, oldPrice, stock,
             colorHex, voltage, capacity, ram,
             "variantImage": variantImage.asset->{_id, url, mimeType}
           },
-
           freeShipping,
           logistics { width, height, length, weight }
         }`;
@@ -100,37 +115,30 @@ export default function ProductDetails() {
         
         if (data) {
           setProduct(data);
-
-          // Lógica de Inicialização de Preço e Variação
+          
           if (data.variants && data.variants.length > 0) {
-            // Se tem variações, seleciona a primeira por padrão
             const firstVar = data.variants[0];
             setSelectedVariant(firstVar);
             setCurrentPrice(firstVar.price);
             setCurrentOldPrice(firstVar.oldPrice || 0);
-            
-            // Se a variação tem foto específica, usa ela. Se não, usa a primeira da galeria
             if (firstVar.variantImage) {
               setActiveMedia({ _key: 'varImg', asset: firstVar.variantImage });
             } else if (data.images?.length > 0) {
               setActiveMedia(data.images[0]);
             }
-
           } else {
-            // Produto Simples (Sem variação)
             setCurrentPrice(data.price);
             setCurrentOldPrice(data.oldPrice || 0);
             if (data.images?.length > 0) setActiveMedia(data.images[0]);
           }
 
-          // BUSCA PRODUTOS RELACIONADOS (Quem viu, viu também)
           if (data.categories && data.categories.length > 0) {
             const catId = data.categories[0]._id;
             const relatedQuery = `
-              *[_type == "product" && references($catId) && _id != $id][0...8] {
-                _id, title, slug, price,
+              *[_type == "product" && references($catId) && _id != $id][0...10] {
+                _id, title, slug, price, oldPrice,
                 "imageUrl": images[0].asset->url,
-                variants[0] { price } // Tenta pegar preço da variação se existir
+                variants[0] { price, oldPrice }
               }
             `;
             const related = await client.fetch(relatedQuery, { catId, id: data._id });
@@ -139,27 +147,22 @@ export default function ProductDetails() {
         }
         setLoading(false);
       } catch (err) {
-        console.error("Erro ao carregar:", err);
+        console.error("Erro:", err);
         setLoading(false);
       }
     };
-
     fetchData();
   }, [slug]);
 
-  // --- 2. AO TROCAR DE VARIAÇÃO ---
   const handleVariantChange = (variant) => {
     setSelectedVariant(variant);
     setCurrentPrice(variant.price);
     setCurrentOldPrice(variant.oldPrice || 0);
-    
-    // Se a variação tiver foto, muda a foto principal
     if (variant.variantImage) {
       setActiveMedia({ _key: `var-${variant._key}`, asset: variant.variantImage });
     }
   };
 
-  // --- 3. SINCRONIZAÇÃO CEP (Mantida) ---
   useEffect(() => {
     if (product && globalCep && globalCep !== 'Informe seu CEP') {
         const cleanGlobal = globalCep.replace(/\D/g, '');
@@ -170,12 +173,10 @@ export default function ProductDetails() {
     }
   }, [product, globalCep]);
 
-  // --- 4. CÁLCULO DE FRETE (Mantido) ---
   const handleCalculateShipping = async (cepOverride) => {
     const targetCep = typeof cepOverride === 'string' ? cepOverride : cep;
     const cleanCep = targetCep.replace(/\D/g, '');
-    
-    if (cleanCep.length !== 8) return; // Validação silenciosa
+    if (cleanCep.length !== 8) return;
     
     setCalculating(true);
     try {
@@ -192,15 +193,13 @@ export default function ProductDetails() {
             height: product.logistics?.height || 15,
             length: product.logistics?.length || 15,
             weight: product.logistics?.weight || 0.5, 
-            insurance_value: currentPrice, // Usa o preço ATUAL (da variação)
+            insurance_value: currentPrice, 
             quantity: 1 
           }]
         })
       });
       const data = await response.json();
-      const options = Array.isArray(data) ? data : [];
-      setShippingOptions(options);
-      if (options.length > 0 && !selectedShipping) setShipping(options[0]);
+      setShippingOptions(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
       setShippingOptions([]); 
@@ -209,51 +208,31 @@ export default function ProductDetails() {
     }
   };
 
-  // --- 5. COMPRAR AGORA (Atualizado para Variações) ---
   const handleBuyNow = () => {
     if (!product) return;
     if (!selectedShipping) return alert("Por favor, calcule o frete para continuar.");
-
     const cartItem = {
       _id: product._id,
       title: product.title,
       slug: product.slug,
-      // Usa dados da variação se existir, senão usa do produto raiz
       price: currentPrice,
       image: activeMedia ? urlFor(activeMedia.asset).url() : '',
       variantName: selectedVariant ? selectedVariant.variantName : null,
       sku: selectedVariant ? selectedVariant._key : product._id
     };
-
     addItem(cartItem);
     window.location.href = '/cart'; 
   };
 
-  // --- 6. LÓGICA DO CARROSSEL HÍBRIDO ---
   const scrollCarousel = (direction) => {
     if (carouselRef.current) {
-      const scrollAmount = 300; // Largura do card + gap
-      const newPos = direction === 'left' 
-        ? carouselRef.current.scrollLeft - scrollAmount 
-        : carouselRef.current.scrollLeft + scrollAmount;
-      
-      carouselRef.current.scrollTo({
-        left: newPos,
-        behavior: 'smooth'
-      });
+      const scrollAmount = 300;
+      const newPos = direction === 'left' ? carouselRef.current.scrollLeft - scrollAmount : carouselRef.current.scrollLeft + scrollAmount;
+      carouselRef.current.scrollTo({ left: newPos, behavior: 'smooth' });
     }
   };
 
-  // --- RENDERIZAÇÃO ---
-  if (loading) return (
-    <div className="flex h-screen items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-4 animate-pulse">
-            <div className="w-16 h-16 bg-gray-200 rounded-full"></div>
-            <div className="h-4 w-32 bg-gray-200 rounded"></div>
-        </div>
-    </div>
-  );
-
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-orange-500 rounded-full animate-spin"></div></div>;
   if (!product) return <div className="p-10 text-center">Produto não encontrado.</div>;
 
   const isFreeShipping = product.freeShipping === true;
@@ -261,53 +240,72 @@ export default function ProductDetails() {
   const isVideo = activeMedia?.asset?.mimeType?.includes('video');
 
   return (
-    <div className="bg-gray-50 min-h-screen py-10 font-sans selection:bg-blue-100">
+    <div className="bg-gray-50 min-h-screen py-8 font-sans">
+      
+      {/* HEADER SIMPLIFICADO */}
+      <div className="container mx-auto px-4 max-w-6xl mb-6">
+         <div className="flex items-center text-xs text-gray-400 gap-1">
+            <Link to="/" className="hover:text-orange-600 hover:underline">Home</Link>
+            <ChevronRight size={12} />
+            <span className="text-gray-800 font-medium truncate max-w-[200px]">{product.title}</span>
+         </div>
+      </div>
+
       <div className="container mx-auto px-4 max-w-6xl">
         
-        {/* --- BLOCO PRINCIPAL DO PRODUTO --- */}
+        {/* BLOCO PRINCIPAL */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col lg:flex-row mb-10">
           
-          {/* ESQUERDA: FOTOS E VÍDEOS */}
-          <div className="lg:w-3/5 p-8 border-r border-gray-50">
-            <div className="aspect-square w-full bg-white rounded-xl flex items-center justify-center mb-6 relative overflow-hidden shadow-inner border border-gray-50">
-              {activeMedia && (
+          {/* FOTOS (Com Zoom Nativo) */}
+          <div className="lg:w-3/5 p-6 border-r border-gray-50 bg-white">
+            <div className="aspect-square w-full flex items-center justify-center mb-4 relative overflow-hidden rounded-lg border border-gray-50">
+                {activeMedia && (
                 isVideo ? (
                     <video src={activeMedia.asset.url} controls className="w-full h-full object-contain" />
                 ) : (
-                    <img src={urlFor(activeMedia.asset).width(1200).url()} alt={product.title} className="w-full h-full object-contain mix-blend-multiply" />
+                    // ZOOM NATIVO: Simples e Eficaz
+                    <ZoomImage
+                        src={urlFor(activeMedia.asset).width(1200).quality(100).fit('max').bg('ffffff').url()}
+                        alt={product.title}
+                    />
                 )
-              )}
+                )}
             </div>
 
-            {/* Thumbnails */}
-            <div className="flex gap-3 overflow-x-auto justify-center pb-2 px-2 scrollbar-hide">
-              {product.images?.map((media) => (
-                <button
-                  key={media._key}
-                  onClick={() => setActiveMedia(media)}
-                  className={`w-20 h-20 flex-shrink-0 border rounded-xl overflow-hidden ${activeMedia?._key === media._key ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-200 opacity-70'}`}
+            <div className="flex gap-2 overflow-x-auto justify-center pb-2">
+                {product.images?.map((media) => (
+                <button 
+                    key={media._key} 
+                    onClick={() => setActiveMedia(media)} 
+                    className={`w-16 h-16 border rounded-lg overflow-hidden transition-all ${
+                    activeMedia?._key === media._key 
+                        ? 'border-orange-500 ring-2 ring-orange-100' 
+                        : 'border-gray-100 opacity-60 hover:opacity-100'
+                    }`}
                 >
-                  <img src={urlFor(media.asset).width(150).url()} className="w-full h-full object-cover" />
+                    <img src={urlFor(media.asset).width(150).bg('ffffff').url()} className="w-full h-full object-contain" />
                 </button>
-              ))}
+                ))}
             </div>
           </div>
 
-          {/* DIREITA: INFORMAÇÕES E COMPRA */}
-          <div className="lg:w-2/5 p-8 lg:p-12 flex flex-col justify-center bg-white relative">
-            <div className="flex justify-between items-start mb-4">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{product.categories?.[0]?.title || 'Oferta'}</span>
-                <button onClick={() => toggleFavorite(product)} className="text-gray-400 hover:text-red-500 transition-colors">
-                    <Heart size={24} className={isFavorite ? "fill-red-500 text-red-500" : ""} />
+          {/* INFO */}
+          <div className="lg:w-2/5 p-6 lg:p-10 flex flex-col bg-white">
+            <div className="flex justify-between items-start mb-2">
+                <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide">
+                    {product.categories?.[0]?.title || 'Oferta'}
+                </span>
+                <button onClick={() => toggleFavorite(product)} className="text-gray-300 hover:text-red-500 transition-colors">
+                    <Heart size={22} className={isFavorite ? "fill-red-500 text-red-500" : ""} />
                 </button>
             </div>
 
-            <h1 className="text-3xl font-black text-gray-900 leading-tight mb-4">{product.title}</h1>
+            <h1 className="text-2xl font-black text-gray-900 leading-tight mb-4">{product.title}</h1>
 
-            {/* SELETOR DE VARIAÇÕES (Importante para o novo Schema) */}
+            {/* VARIAÇÕES */}
             {product.variants && product.variants.length > 0 && (
               <div className="mb-6">
-                <span className="text-xs font-bold text-gray-900 uppercase tracking-widest block mb-2">Escolha uma opção:</span>
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Opção Selecionada:</span>
                 <div className="flex flex-wrap gap-2">
                   {product.variants.map((variant) => {
                     const isSelected = selectedVariant?._key === variant._key;
@@ -315,13 +313,14 @@ export default function ProductDetails() {
                       <button
                         key={variant._key}
                         onClick={() => handleVariantChange(variant)}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold border transition-all ${
+                        className={`relative px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
                           isSelected 
-                            ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600' 
-                            : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                            ? 'border-blue-600 bg-blue-50 text-blue-700' 
+                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                         }`}
                       >
-                        {variant.variantName || variant.color || variant.voltage || 'Padrão'}
+                        {variant.variantName}
+                        {isSelected && <div className="absolute -top-1 -right-1 text-blue-600 bg-white rounded-full"><CheckCircle size={12} fill="white"/></div>}
                       </button>
                     )
                   })}
@@ -329,133 +328,138 @@ export default function ProductDetails() {
               </div>
             )}
 
-            {/* PREÇO DINÂMICO */}
-<div className="mb-8 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-    {isFreeShipping && (
-    <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-black uppercase mb-3">
-        <Truck size={12} /> Frete Grátis
-    </div>
-    )}
-    
-    {currentOldPrice > currentPrice && (
-        <span className="text-gray-400 line-through text-sm block mb-1">De: {formatCurrency(currentOldPrice)}</span>
-    )}
-    
-    <span className="text-5xl font-black text-gray-900 tracking-tighter block">{formatCurrency(currentPrice)}</span>
-    
-    {/* AQUI ESTÁ A CORREÇÃO: REMOVIDA A FÓRMULA MATEMÁTICA */}
-    <p className="text-sm text-gray-500 mt-2 font-bold bg-gray-100 inline-block px-3 py-1 rounded-lg">
-        Em até 12x
-    </p>
-</div>
+            {/* PREÇO */}
+            <div className="mb-6 p-5 bg-slate-50 rounded-xl border border-slate-100">
+                {currentOldPrice > currentPrice && (
+                    <span className="text-gray-400 line-through text-xs block mb-1">De: {formatCurrency(currentOldPrice)}</span>
+                )}
+                
+                <span className="text-4xl font-black text-gray-900 tracking-tighter block">{formatCurrency(currentPrice)}</span>
+                
+                <p className="text-xs text-green-700 mt-2 font-bold flex items-center gap-2">
+                    <span className="bg-green-100 px-2 py-0.5 rounded">10% OFF no Pix</span>
+                    <span className="text-gray-400 font-normal">ou em até 12x</span>
+                </p>
 
-            {/* CÁLCULO DE FRETE */}
-            <div className="mb-6">
-                <div className="flex gap-2 mb-4">
-                  <input 
-                    type="text" placeholder="CEP" maxLength={9} value={cep} onChange={(e) => setCep(e.target.value)}
-                    className="flex-1 border-2 border-gray-100 rounded-xl px-4 py-3 font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
-                  />
-                  <button onClick={() => handleCalculateShipping()} disabled={calculating} className="bg-gray-900 text-white px-6 rounded-xl font-bold uppercase text-xs">
-                    {calculating ? '...' : 'OK'}
-                  </button>
-                </div>
-                {/* Lista Opções Frete */}
-                {shippingOptions && (
-                    <div className="space-y-2">
-                        {shippingOptions.length > 0 ? shippingOptions.filter(o => !o.error).map((opt, idx) => (
-                            <div key={idx} onClick={() => setShipping(opt)} className={`flex justify-between p-3 border-2 rounded-xl cursor-pointer ${selectedShipping?.name === opt.name ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}>
-                                <div className="flex items-center gap-3">
-                                    <Truck size={16} className="text-gray-400"/>
-                                    <div>
-                                        <span className="text-xs font-black block text-gray-700">{opt.name}</span>
-                                        <span className="text-[10px] text-gray-400 font-bold">{opt.delivery_time} dias</span>
-                                    </div>
-                                </div>
-                                <span className="text-sm font-black text-gray-800">{parseFloat(opt.price) === 0 ? 'GRÁTIS' : formatCurrency(opt.price)}</span>
-                            </div>
-                        )) : (
-                            <div className="text-red-500 text-xs font-bold bg-red-50 p-2 rounded-lg text-center">CEP Inválido</div>
-                        )}
+                {isFreeShipping && (
+                    <div className="mt-3 flex items-center gap-2 text-xs font-bold text-purple-700">
+                        <Truck size={14} /> Frete Grátis disponível
                     </div>
                 )}
             </div>
 
-            <button onClick={handleBuyNow} className="w-full bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-orange-500/30 transition-all active:scale-95 flex items-center justify-center gap-2">
-                Comprar Agora <ArrowRight />
+            {/* FRETE */}
+            <div className="mb-6">
+                <div className="flex gap-2 mb-3">
+                  <input 
+                    type="text" placeholder="Seu CEP" maxLength={9} value={cep} onChange={(e) => setCep(e.target.value)}
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-gray-900 focus:border-orange-500 outline-none"
+                  />
+                  <button onClick={() => handleCalculateShipping()} disabled={calculating} className="bg-gray-900 text-white px-4 rounded-lg font-bold text-xs uppercase">
+                    OK
+                  </button>
+                </div>
+                {shippingOptions && shippingOptions.length > 0 && (
+                    <div className="space-y-1">
+                        {shippingOptions.filter(o => !o.error).map((opt, idx) => (
+                            <div key={idx} onClick={() => setShipping(opt)} className={`flex justify-between p-2 px-3 border rounded-lg cursor-pointer text-xs ${selectedShipping?.name === opt.name ? 'border-blue-500 bg-blue-50/50' : 'border-gray-100'}`}>
+                                <span className="font-bold text-gray-700">{opt.name} <span className="text-gray-400 font-normal">({opt.delivery_time} dias)</span></span>
+                                <span className="font-black text-gray-900">{parseFloat(opt.price) === 0 ? 'Grátis' : formatCurrency(opt.price)}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <button onClick={handleBuyNow} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2">
+                Comprar Agora <ArrowRight size={18} />
             </button>
           </div>
         </div>
 
-        {/* --- DESCRIÇÃO --- */}
-        <div className="bg-white p-8 lg:p-12 rounded-[32px] shadow-sm border border-gray-100 mb-10">
-           <h3 className="text-2xl font-black text-gray-900 mb-8 border-b pb-4">Detalhes do Produto</h3>
-           <div className="prose prose-lg max-w-none text-gray-600">
-             {product.description ? <PortableText value={product.description} components={myPortableTextComponents} /> : <p>Sem descrição.</p>}
-           </div>
+        {/* DESCRIÇÃO E CARROSSEL */}
+        <div className="grid grid-cols-1 gap-10">
            
-           {/* Especificações Técnicas */}
-           {product.specifications && (
-             <div className="mt-10 pt-10 border-t">
-               <h4 className="text-sm font-black uppercase tracking-widest mb-6">Ficha Técnica</h4>
-               <div className="grid md:grid-cols-2 gap-4">
-                 {product.specifications.map((spec, i) => (
-                   <div key={i} className="flex justify-between p-4 bg-gray-50 rounded-xl text-sm border hover:border-gray-200">
-                     <span className="font-bold text-gray-500">{spec.label}</span>
-                     <span className="font-black text-gray-900">{spec.value}</span>
-                   </div>
-                 ))}
+           {/* Descrição */}
+           <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+               <h3 className="text-xl font-black text-gray-900 mb-6 border-b pb-2">Sobre o Produto</h3>
+               <div className="prose prose-sm max-w-none text-gray-600">
+                 {product.description ? <PortableText value={product.description} components={myPortableTextComponents} /> : <p>Sem descrição.</p>}
                </div>
-             </div>
-           )}
-        </div>
+               
+               {product.specifications && (
+                 <div className="mt-8 pt-6 border-t border-gray-100">
+                   <h4 className="text-xs font-black uppercase text-gray-400 mb-4">Especificações</h4>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                     {product.specifications.map((spec, i) => (
+                       <div key={i} className="flex justify-between py-2 border-b border-gray-50 text-sm">
+                         <span className="font-medium text-gray-500">{spec.label}</span>
+                         <span className="font-bold text-gray-900">{spec.value}</span>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+               )}
+           </div>
 
-        {/* --- NOVO: CARROSSEL "QUEM VIU TAMBÉM VIU" (HÍBRIDO) --- */}
+          {/* --- CARROSSEL FUJIOKA (Compacto & Responsivo - Ajustado) --- */}
         {relatedProducts.length > 0 && (
-          <div className="mt-16">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-black text-gray-900">Quem viu este produto, também viu</h3>
-              
-              {/* Setas de Navegação (Apenas Desktop) */}
-              <div className="hidden md:flex gap-2">
-                <button onClick={() => scrollCarousel('left')} className="p-2 rounded-full border border-gray-200 hover:bg-white hover:shadow-md transition-all">
-                  <ChevronLeft size={20} />
-                </button>
-                <button onClick={() => scrollCarousel('right')} className="p-2 rounded-full border border-gray-200 hover:bg-white hover:shadow-md transition-all">
-                  <ChevronRight size={20} />
-                </button>
-              </div>
+          <div className="mt-8">
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-black text-gray-900 px-1">Quem viu, viu também</h3>
+                <div className="hidden md:flex gap-2">
+                    <button onClick={() => scrollCarousel('left')} className="p-2 rounded-full border hover:bg-gray-100"><ChevronLeft size={16}/></button>
+                    <button onClick={() => scrollCarousel('right')} className="p-2 rounded-full border hover:bg-gray-100"><ChevronRight size={16}/></button>
+                </div>
             </div>
-
-            {/* Container do Carrossel */}
-            <div 
-              ref={carouselRef}
-              className="flex gap-6 overflow-x-auto pb-8 snap-x scrollbar-hide scroll-smooth"
-            >
+            
+            <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-6 snap-x scrollbar-hide scroll-smooth px-1">
               {relatedProducts.map((rel) => {
-                // Tenta pegar o preço da variação ou do produto raiz
                 const relPrice = rel.variants && rel.variants[0] ? rel.variants[0].price : rel.price;
-                
+                const relOldPrice = rel.variants && rel.variants[0] ? rel.variants[0].oldPrice : rel.oldPrice;
+
                 return (
                   <Link 
                     to={`/product/${rel.slug.current}`} 
                     key={rel._id} 
-                    className="min-w-[280px] md:min-w-[300px] snap-start bg-white p-4 rounded-2xl border border-gray-100 hover:border-blue-200 hover:shadow-lg transition-all group flex flex-col"
+                    // CARD ESTREITO (145px mobile / 180px Desktop)
+                    className="min-w-[145px] md:min-w-[180px] w-[145px] md:w-[180px] snap-start bg-white p-3 rounded-lg border border-gray-100 hover:shadow-xl hover:border-gray-300 transition-all group flex flex-col"
                   >
-                    <div className="h-48 w-full bg-gray-50 rounded-xl mb-4 overflow-hidden flex items-center justify-center relative">
+                    <div className="h-32 w-full mb-3 flex items-center justify-center bg-white p-2 rounded relative">
                       {rel.imageUrl ? (
-                        <img src={rel.imageUrl} alt={rel.title} className="h-full object-contain group-hover:scale-105 transition-transform duration-500 mix-blend-multiply" />
-                      ) : (
-                        <div className="text-gray-300"><ShoppingCart size={32} /></div>
-                      )}
+                        <img src={`${rel.imageUrl}?w=300`} alt={rel.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-300" />
+                      ) : <Package className="text-gray-200"/>}
                     </div>
                     
-                    <h4 className="font-bold text-gray-800 mb-2 line-clamp-2 h-12 text-sm">{rel.title}</h4>
+                    {/* TÍTULO COMPACTO (3 LINHAS) */}
+                    <h4 
+                        className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" 
+                        title={rel.title}
+                    >
+                      {rel.title}
+                    </h4>
                     
-                    <div className="mt-auto">
-                        <span className="block text-xs text-gray-400 font-bold uppercase mb-1">A partir de</span>
-                        <span className="text-2xl font-black text-gray-900">{formatCurrency(relPrice)}</span>
-                        <span className="text-xs text-gray-500 font-bold block mt-1 bg-gray-100 px-2 py-0.5 rounded w-fit">Em até 12x</span>
+                    <div className="mt-auto pt-2 border-t border-gray-50">
+                        {relOldPrice > relPrice && (
+                             <span className="text-[10px] text-gray-400 line-through block mb-0.5">
+                               de {formatCurrency(relOldPrice)}
+                             </span>
+                        )}
+                        
+                        {/* PREÇO VERDE */}
+                        <span className="text-base font-black text-green-700 block tracking-tight leading-none">
+                          {formatCurrency(relPrice)}
+                        </span>
+
+                        {/* DESCONTO E PARCELAMENTO (SEM VALOR DE PARCELA) */}
+                        <div className="mt-1 flex flex-col gap-0.5">
+                            <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">
+                                -10% à vista
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-medium">
+                                Em até 12x
+                            </span>
+                        </div>
                     </div>
                   </Link>
                 )
@@ -463,8 +467,8 @@ export default function ProductDetails() {
             </div>
           </div>
         )}
-
       </div>
     </div>
+  </div>
   );
 }
