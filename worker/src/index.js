@@ -1,6 +1,6 @@
 var src_default = {
   async fetch(req, env) {
-    // --- CONFIGURAÇÃO DE CORS (Essencial para não dar erro no navegador) ---
+    // --- CONFIGURAÇÃO DE CORS (Essencial para o navegador aceitar a resposta) ---
     const origin = req.headers.get("Origin") || "*";
     const headers = {
       "Content-Type": "application/json",
@@ -10,6 +10,7 @@ var src_default = {
       "Access-Control-Allow-Credentials": "true",
     };
 
+    // Responde requisições de "pre-flight" do navegador
     if (req.method === "OPTIONS") {
       return new Response(null, { headers });
     }
@@ -18,7 +19,7 @@ var src_default = {
       const url = new URL(req.url);
 
       // =================================================================
-      // 1. ROTA: LOGIN MELHOR ENVIO (Mantida)
+      // 1. ROTA: LOGIN MELHOR ENVIO
       // =================================================================
       if (url.pathname === "/login/melhorenvio") {
         const client_id = env.MELHORENVIO_CLIENT_ID;
@@ -29,7 +30,7 @@ var src_default = {
       }
 
       // =================================================================
-      // 2. ROTA: CALLBACK MELHOR ENVIO (Mantida - Salva o Token)
+      // 2. ROTA: CALLBACK MELHOR ENVIO
       // =================================================================
       if (url.pathname === "/callback/melhorenvio") {
         const code = url.searchParams.get("code");
@@ -49,6 +50,7 @@ var src_default = {
         const data = await response.json();
 
         if (data.access_token) {
+          // Salva o token no KV (CARRINHO)
           await env.CARRINHO.put("MELHORENVIO_TOKEN", data.access_token);
           return new Response("Autorizado com Sucesso no Brasil Varejo! Pode fechar esta aba.", { headers });
         }
@@ -56,7 +58,7 @@ var src_default = {
       }
 
       // =================================================================
-      // 3. ROTA: CÁLCULO DE FRETE (Mantida)
+      // 3. ROTA: CÁLCULO DE FRETE
       // =================================================================
       if (req.method === "POST" && url.pathname.includes("shipping")) {
         const body = await req.json();
@@ -79,7 +81,7 @@ var src_default = {
         }
 
         // --- B. Configurações Gerais ---
-        let handlingTime = 0;
+        let handlingTime = 0; // Dias de manuseio
         let cepOrigem = "43805000"; 
         let token = await env.CARRINHO.get("MELHORENVIO_TOKEN");
 
@@ -139,24 +141,34 @@ var src_default = {
       }
 
       // =================================================================
-      // 4. ROTA: CHECKOUT (CORRIGIDA - CRIA PEDIDO NO SANITY AQUI)
+      // 4. ROTA: CHECKOUT (CORRIGIDA - ID GERADO MANUALMENTE)
       // =================================================================
       if (req.method === "POST" && url.pathname.includes("checkout")) {
-        // Recebemos os dados brutos, NÃO o orderId (pois o front não consegue criar)
-        const { items, email, shipping, tipoPagamento, shippingAddress, customerDocument, totalAmount } = await req.json();
+        const reqData = await req.json();
+        const { items, email, shipping, tipoPagamento, shippingAddress, customerDocument, totalAmount } = reqData;
 
-        // --- PASSO A: CRIAR PEDIDO NO SANITY (Via Worker Seguro) ---
+        // Validação de segurança básica para o documento
+        const finalDocument = customerDocument || shippingAddress?.cpf || shippingAddress?.cnpj || "";
+
+        // [CORREÇÃO] Gera o ID manualmente para não depender da resposta do Sanity
+        const generatedId = `order-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+
+        // --- PASSO A: PREPARAR O PEDIDO PARA O SANITY ---
         const newOrder = {
             _type: 'order',
+            _id: generatedId, // ID forçado
             orderNumber: `PALA-${Math.floor(Date.now() / 1000)}`,
             status: 'pending',
             totalAmount: totalAmount || 0,
             customerEmail: email,
-            customerDocument: customerDocument,
-            shippingAddress: shippingAddress,
+            customerDocument: finalDocument,
+            shippingAddress: {
+                ...shippingAddress,
+                cpf: shippingAddress?.cpf || finalDocument // Garante CPF no endereço
+            },
             paymentMethod: tipoPagamento,
             items: items.map(item => ({
-                _key: Math.random().toString(36).substr(7),
+                _key: Math.random().toString(36).substr(2, 9),
                 productName: item.name || item.title,
                 quantity: item.quantity,
                 price: item.price
@@ -165,21 +177,20 @@ var src_default = {
 
         const mutationUrl = `https://${env.SANITY_PROJECT_ID}.api.sanity.io/v2021-06-07/data/mutate/${env.SANITY_DATASET || 'production'}`;
         
+        // Envia para o Sanity usando 'create' ou 'createIfNotExists' com nosso ID
         const sanityResponse = await fetch(mutationUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${env.SANITY_TOKEN}` // Token seguro do Worker
+                'Authorization': `Bearer ${env.SANITY_TOKEN}`
             },
-            body: JSON.stringify({ mutations: [{ create: newOrder }] })
+            body: JSON.stringify({ mutations: [{ createIfNotExists: newOrder }] })
         });
 
+        // Verificação de erro do Sanity (apenas para log, não trava se o ID já estiver definido)
         const sanityResult = await sanityResponse.json();
-        // Recupera o ID do pedido recém-criado
-        const orderId = sanityResult.results?.[0]?.id || sanityResult.results?.[0]?.document?._id;
-
-        if (!orderId) {
-             throw new Error("Falha crítica ao criar pedido no banco de dados.");
+        if (sanityResult.error) {
+             throw new Error(`Erro Sanity: ${JSON.stringify(sanityResult.error)}`);
         }
 
         // --- PASSO B: GERAR PAGAMENTO NO MERCADO PAGO ---
@@ -202,7 +213,7 @@ var src_default = {
           });
         }
 
-        const cleanCPF = customerDocument ? customerDocument.replace(/\D/g, '') : "";
+        const cleanCPF = finalDocument.replace(/\D/g, '');
         
         const payerData = {
             email: email,
@@ -210,7 +221,7 @@ var src_default = {
             identification: { type: "CPF", number: cleanCPF }
         };
 
-        // Exclusão de métodos conforme a escolha
+        // Regras de exclusão de pagamento
         let excludedMethods = [];
         if (tipoPagamento === 'boleto') {
             excludedMethods = [{ id: "credit_card" }, { id: "debit_card" }, { id: "bank_transfer" }];
@@ -229,7 +240,7 @@ var src_default = {
             pending: "https://palastore.com.br/sucesso"
           },
           auto_return: "approved",
-          external_reference: orderId, // Link com o ID do Sanity que acabamos de criar
+          external_reference: generatedId, // Link correto com o ID que geramos
           notification_url: "https://brasil-varejo-api.laeciossp.workers.dev/webhook",
           payment_methods: {
             excluded_payment_types: excludedMethods,
@@ -251,7 +262,7 @@ var src_default = {
         const mpSession = await mpResponse.json();
         
         if (!mpResponse.ok) {
-            return new Response(JSON.stringify({ error: "Erro MP", details: mpSession }), { status: 400, headers });
+            return new Response(JSON.stringify({ error: "Erro MercadoPago", details: mpSession }), { status: 400, headers });
         }
 
         return new Response(JSON.stringify({ 
@@ -261,7 +272,7 @@ var src_default = {
       }
 
       // =================================================================
-      // 5. ROTA: WEBHOOK (Mantida)
+      // 5. ROTA: WEBHOOK
       // =================================================================
       if (url.pathname.includes("webhook")) {
         const urlParams = new URLSearchParams(url.search);
@@ -307,10 +318,15 @@ var src_default = {
         return new Response("OK", { status: 200 });
       }
 
-      return new Response(JSON.stringify({ status: "API Online", versao: "2.0-AutoOrder-Fix" }), { status: 200, headers });
+      return new Response(JSON.stringify({ status: "API Online", versao: "3.0-AutoID-Fix" }), { status: 200, headers });
 
     } catch (err) {
-      return new Response(JSON.stringify({ erro: err.message, stack: err.stack }), { status: 500, headers });
+      // Retorno de erro amigável para debug
+      return new Response(JSON.stringify({ 
+          erro: err.message, 
+          stack: err.stack,
+          dica: "Se for erro do Sanity, verifique se o Schema suporta os campos enviados."
+      }), { status: 500, headers });
     }
   }
 };

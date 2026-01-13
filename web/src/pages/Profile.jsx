@@ -23,17 +23,31 @@ export default function Profile() {
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [newAddr, setNewAddr] = useState({ 
     alias: '', zip: '', street: '', number: '', 
-    neighborhood: '', city: '', state: '', document: '' // Adicionei Documento aqui
+    neighborhood: '', city: '', state: '', document: ''
   });
 
-  // --- 1. RECUPERAÇÃO DOS DADOS PADRÃO (SE ESTIVER VAZIO) ---
+  // --- FUNÇÃO PARA CORRIGIR A DATA (Fuso Horário Brasil) ---
+  const formatarData = (dataString) => {
+    if (!dataString) return '-';
+    const date = new Date(dataString);
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'America/Sao_Paulo' // Força o horário de Brasília
+    }).format(date);
+  };
+
+  // --- 1. RECUPERAÇÃO DOS DADOS PADRÃO ---
   useEffect(() => {
     if (customer.addresses.length === 0) {
         const defaultAddresses = [
             {
                 id: 'addr_default_01',
                 alias: 'CASA 2',
-                name: 'ÉRIKA VIRGÍNIA', // Adicionei campo Nome
+                name: 'ÉRIKA VIRGÍNIA', 
                 street: 'Agostinho Amaral',
                 number: '78',
                 neighborhood: 'São Sebastião do Passé',
@@ -56,9 +70,7 @@ export default function Profile() {
             }
         ];
         
-        // Adiciona um por um para garantir
         defaultAddresses.forEach(addr => addAddress(addr));
-        // Define o primeiro como ativo
         if(defaultAddresses.length > 0) setActiveAddress(defaultAddresses[0].id);
     }
   }, [customer.addresses.length, addAddress, setActiveAddress]);
@@ -66,11 +78,21 @@ export default function Profile() {
   const fetchData = async () => {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
-    const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(createdAt desc) {
-      _id, orderNumber, createdAt, status, totalAmount, cancellationReason,
+    
+    // [CORREÇÃO AQUI]:
+    // 1. "order(_createdAt desc)" -> Garante que o MAIS NOVO fique no topo.
+    // 2. Trazemos "_createdAt" explicitamente para não dar data vazia.
+    const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
+      _id, 
+      orderNumber, 
+      _createdAt, 
+      status, 
+      totalAmount, 
+      cancellationReason,
       "items": items[]{ productName, quantity, price },
       messages
     }`;
+
     try {
       const ordersResult = await client.fetch(ordersQuery, { email });
       setOrders(ordersResult);
@@ -98,7 +120,7 @@ export default function Profile() {
     addAddress({ 
         ...newAddr, 
         id: Math.random().toString(36).substr(2, 9),
-        name: user.firstName + ' ' + user.lastName // Usa nome do usuário se não preencher específico
+        name: user.firstName + ' ' + user.lastName 
     });
     setShowAddressForm(false);
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', document: '' });
@@ -121,7 +143,6 @@ export default function Profile() {
       
       {/* HEADER COM IDENTIDADE DE SHOPPING */}
       <div className="bg-white border-b border-gray-200 relative overflow-hidden">
-        {/* Elemento Decorativo de Fundo */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-orange-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50 pointer-events-none"></div>
 
         <div className="container mx-auto px-4 py-8 max-w-6xl flex items-center justify-between relative z-10">
@@ -144,7 +165,6 @@ export default function Profile() {
                 </div>
             </div>
 
-            {/* Ícone de Sacola / Shopping Decorativo */}
             <div className="hidden md:flex flex-col items-end opacity-20 select-none">
                 <ShoppingBag size={64} className="text-gray-900" />
                 <span className="text-xs font-black uppercase tracking-[0.2em] mt-1">Palastore</span>
@@ -203,7 +223,10 @@ export default function Profile() {
                                         </div>
                                         <div>
                                             <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Pedido #{order.orderNumber || order._id.slice(0,6).toUpperCase()}</p>
-                                            <p className="text-sm font-bold text-gray-800">{new Date(order.createdAt).toLocaleDateString()}</p>
+                                            
+                                            {/* USANDO _createdAt PARA A DATA DO SISTEMA */}
+                                            <p className="text-sm font-bold text-gray-800">{formatarData(order._createdAt)}</p>
+                                            
                                         </div>
                                     </div>
                                     <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide border ${getStatusColor(order.status).replace('text-', 'border-').replace('bg-', 'bg-opacity-20 ')}`}>
@@ -272,7 +295,7 @@ export default function Profile() {
                     </div>
                 )}
 
-                {/* --- ABA ENDEREÇOS (RESTAURADA E REFORMULADA) --- */}
+                {/* --- ABA ENDEREÇOS (MANTIDA IGUAL) --- */}
                 {activeTab === 'address' && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                          <div className="flex justify-between items-center mb-6">
@@ -306,8 +329,6 @@ export default function Profile() {
                                 const isActive = addr.id === customer.activeAddressId;
                                 return (
                                 <div key={addr.id} className={`p-6 rounded-2xl border-2 transition-all relative group ${isActive ? 'bg-white border-green-500 shadow-xl shadow-green-500/10' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
-                                    
-                                    {/* Botão de Excluir */}
                                     <button 
                                         onClick={() => removeAddress(addr.id)} 
                                         className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-full"
@@ -315,7 +336,6 @@ export default function Profile() {
                                         <Trash2 size={16} />
                                     </button>
 
-                                    {/* Cabeçalho do Card */}
                                     <div className="flex items-center gap-3 mb-3">
                                         <h4 className="font-black text-gray-800 text-lg uppercase tracking-tight">{addr.alias || 'Local'}</h4>
                                         {isActive && (
@@ -325,7 +345,6 @@ export default function Profile() {
                                         )}
                                     </div>
 
-                                    {/* Corpo com Dados Restaurados */}
                                     <div className="space-y-1 text-sm text-gray-600 border-l-2 border-gray-100 pl-4 mb-4">
                                         <p className="font-bold text-gray-900">{addr.name || user.fullName}</p>
                                         <p>{addr.street}, {addr.number}</p>
@@ -333,7 +352,6 @@ export default function Profile() {
                                         <p className="font-mono text-gray-400 text-xs">CEP: {addr.zip}</p>
                                     </div>
 
-                                    {/* Rodapé: Faturamento + Ação */}
                                     <div className="pt-4 border-t border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                                         <div className="text-xs bg-gray-50 px-3 py-2 rounded-lg border border-gray-100 w-full sm:w-auto">
                                             <span className="block text-gray-400 font-bold uppercase text-[10px]">Faturamento / CPF</span>
@@ -344,7 +362,7 @@ export default function Profile() {
                                             <button 
                                                 onClick={() => {
                                                     setActiveAddress(addr.id);
-                                                    if(addr.document) setDocument(addr.document); // Atualiza o documento global também
+                                                    if(addr.document) setDocument(addr.document); 
                                                 }} 
                                                 className="w-full sm:w-auto bg-gray-900 hover:bg-black text-white px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors"
                                             >
