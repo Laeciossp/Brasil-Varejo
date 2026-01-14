@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Search, MapPin, ShoppingCart, Heart, User, Menu, 
-  Phone, ShieldCheck, X, ArrowRight 
+  Phone, ShieldCheck, X, ArrowRight, LogIn
 } from 'lucide-react';
 import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/clerk-react";
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,7 +17,6 @@ export default function Header() {
   const [isCepModalOpen, setIsCepModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
-  // --- LÓGICA DE BUSCA ---
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
 
@@ -29,7 +28,7 @@ export default function Header() {
     if (searchTerm.trim()) {
       navigate(`/busca?q=${encodeURIComponent(searchTerm)}`);
       setSearchTerm('');
-      setIsMenuOpen(false); // Fecha o menu ao buscar no mobile
+      setIsMenuOpen(false);
     }
   };
   
@@ -52,7 +51,7 @@ export default function Header() {
   return (
     <header className="w-full bg-crocus-deep font-sans text-white sticky top-0 z-50 shadow-xl border-b border-white/10">
       
-      {/* 1. BARRA DE TOPO */}
+      {/* 1. BARRA DE TOPO (Apenas Desktop) */}
       <div className="hidden lg:flex justify-end items-center container mx-auto px-4 py-2 text-xs font-medium border-b border-white/20">
         <div className="flex gap-4 items-center">
           <a href="https://wa.me/5571983774301" target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:underline opacity-90 transition-opacity">
@@ -66,15 +65,15 @@ export default function Header() {
         
         {/* LOGO + BOTÃO MOBILE */}
         <div className="flex items-center justify-between w-full lg:w-auto">
-            {/* 🔥 NOVO: Botão Menu Mobile */}
+            {/* Botão Menu Mobile */}
             <button 
                 onClick={() => setIsMenuOpen(!isMenuOpen)} 
-                className="lg:hidden text-white p-2 hover:bg-white/10 rounded-lg mr-2"
+                className="lg:hidden text-white p-2 hover:bg-white/10 rounded-lg mr-2 transition-colors"
             >
                 {isMenuOpen ? <X size={28}/> : <Menu size={28}/>}
             </button>
 
-            <Link to="/" className="flex items-center gap-2 group mr-auto lg:mr-0">
+            <Link to="/" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 group mr-auto lg:mr-0">
             <div className="bg-white text-crocus-deep px-3 py-1 rounded-lg font-black text-2xl tracking-tighter group-hover:rotate-3 transition-transform shadow-md uppercase">P</div>
             <div className="leading-none drop-shadow-md">
                 <span className="block font-black text-2xl tracking-tight text-white uppercase italic">Palastore</span>
@@ -82,14 +81,14 @@ export default function Header() {
             </div>
             </Link>
 
-            {/* Carrinho Mobile (Aparece no topo) */}
-            <Link to="/cart" className="lg:hidden relative text-white">
+            {/* Carrinho Mobile */}
+            <Link to="/cart" onClick={() => setIsMenuOpen(false)} className="lg:hidden relative text-white p-2">
                 <ShoppingCart size={24}/>
-                {cartCount > 0 && <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{cartCount}</span>}
+                {cartCount > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{cartCount}</span>}
             </Link>
         </div>
 
-        {/* --- CAMPO DE BUSCA --- */}
+        {/* BUSCA */}
         <form onSubmit={handleSearch} className="flex-1 w-full max-w-3xl relative mx-0 lg:mx-4">
           <input 
             type="text" 
@@ -103,7 +102,7 @@ export default function Header() {
           </button>
         </form>
 
-        {/* ÍCONES DESKTOP (Escondidos no Mobile para economizar espaço) */}
+        {/* ÍCONES DESKTOP (Escondidos no Mobile) */}
         <div className="hidden lg:flex items-center gap-6 text-sm font-medium justify-end">
            <div onClick={() => setIsCepModalOpen(true)} className="hidden xl:flex items-center gap-2 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors border border-transparent hover:border-white/20">
               <MapPin size={24} className="text-white animate-pulse"/>
@@ -156,23 +155,52 @@ export default function Header() {
         </div>
       </div>
 
-      {/* 3. MENU DE DEPARTAMENTOS (RESPONSIVO AGORA) */}
-      {/* 🔥 MUDANÇA: Tirei o "hidden" e coloquei lógica condicional */}
+      {/* 3. MENU / BARRA DE DEPARTAMENTOS */}
       <div className={`bg-white text-gray-800 shadow-sm border-b border-gray-100 relative ${isMenuOpen ? 'block' : 'hidden'} lg:block`}>
         <div className="container mx-auto px-4">
           
-          {/* 🔥 MUDANÇA: "flex-col" no mobile para os itens ficarem um embaixo do outro */}
           <ul className="flex flex-col lg:flex-row lg:items-center justify-between text-[11px] font-black uppercase tracking-tight py-2 lg:py-0 gap-4 lg:gap-0">
             
+            {/* 🔥 PERFIL DO USUÁRIO MOBILE (SÓ APARECE NO CELULAR DENTRO DO MENU) */}
+            <li className="lg:hidden border-b border-gray-100 pb-4 mb-2">
+                <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-bold text-crocus-deep">Minha Conta</span>
+                    <Link to="/favoritos" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-1 text-gray-500">
+                        <Heart size={16}/> Favoritos ({favCount})
+                    </Link>
+                </div>
+                
+                <SignedOut>
+                    <SignInButton mode="modal">
+                        <button className="w-full bg-crocus-deep text-white py-3 rounded-xl flex items-center justify-center gap-2 font-bold shadow-md active:scale-95 transition-transform">
+                            <LogIn size={18}/> Entrar / Cadastrar
+                        </button>
+                    </SignInButton>
+                </SignedOut>
+
+                <SignedIn>
+                    <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                        <UserButton afterSignOutUrl="/" />
+                        <div className="flex flex-col">
+                            <span className="text-xs text-gray-500 font-normal normal-case">Bem-vindo de volta,</span>
+                            <span className="text-sm font-black text-gray-800">{user?.firstName}</span>
+                        </div>
+                        <Link to="/profile" onClick={() => setIsMenuOpen(false)} className="ml-auto text-xs text-blue-600 underline">
+                            Meus Pedidos
+                        </Link>
+                    </div>
+                </SignedIn>
+            </li>
+            
+            {/* MENU DEPARTAMENTOS */}
             <li className="relative group w-full lg:w-auto">
                <button 
-                 onClick={() => setIsMenuOpen(!isMenuOpen)} // No desktop pode manter a lógica de toggle
-                 className={`flex items-center gap-2 py-3 px-4 transition-colors border-r border-gray-100 w-full lg:w-auto ${isMenuOpen ? 'bg-crocus-deep text-white' : 'hover:bg-gray-50 text-crocus-deep'}`}
+                 onClick={() => setIsMenuOpen(!isMenuOpen)} 
+                 className={`flex items-center gap-2 py-3 px-4 transition-colors border-r border-gray-100 w-full lg:w-auto rounded-lg lg:rounded-none ${isMenuOpen ? 'bg-crocus-deep text-white lg:bg-transparent lg:text-crocus-deep' : 'hover:bg-gray-50 text-crocus-deep'}`}
                >
-                 {/* No mobile, escondemos este ícone X/Menu pois já tem lá em cima, deixamos só o texto ou ícone fixo */}
-                 <Menu size={18} className="lg:hidden" /> 
+                 <Menu size={18} className="lg:hidden text-white" /> 
                  <span className="hidden lg:inline">{isMenuOpen ? <X size={18}/> : <Menu size={18}/>}</span>
-                 Departamentos
+                 Todas as Categorias
                </button>
 
                <AnimatePresence>
@@ -181,16 +209,23 @@ export default function Header() {
                      initial={{ opacity: 0, y: 10 }}
                      animate={{ opacity: 1, y: 0 }}
                      exit={{ opacity: 0, y: 10 }}
-                     className="static lg:absolute top-full left-0 w-full lg:w-80 bg-white shadow-none lg:shadow-xl border-t border-gray-100 lg:border rounded-b-2xl z-50 overflow-hidden py-2"
+                     className="static lg:absolute top-full left-0 w-full lg:w-80 bg-white shadow-none lg:shadow-xl border-t border-gray-100 lg:border rounded-b-2xl z-50 overflow-hidden py-2 pl-4 lg:pl-0"
                    >
-                     {/* Passamos setIsMenuOpen para fechar ao clicar num item */}
-                     <CategoryMenu onItemClick={() => setIsMenuOpen(false)} />
+                     {/* 🔥 CORREÇÃO: Adicionei onClick na div pai para fechar o menu ao clicar em qualquer categoria */}
+                     <div onClick={() => setIsMenuOpen(false)}>
+                        <CategoryMenu onItemClick={() => setIsMenuOpen(false)} />
+                     </div>
                    </motion.div>
                  )}
                </AnimatePresence>
             </li>
 
-            <div className="flex flex-col lg:flex-row gap-4 lg:gap-0 w-full lg:w-auto">
+            {/* 🔥 DESTAQUES / LINKS RÁPIDOS */}
+            {/* Adicionei 'overflow-x-auto' para permitir rolagem horizontal no mobile se tiver muitos itens, parecendo a barra do PC */}
+            <div 
+                className="flex flex-row lg:flex-row gap-4 lg:gap-0 w-full lg:w-auto overflow-x-auto pb-2 lg:pb-0 scrollbar-hide"
+                onClick={() => setIsMenuOpen(false)} // Fecha ao clicar num destaque
+            >
                 <FeaturedMenu />
             </div>
 
