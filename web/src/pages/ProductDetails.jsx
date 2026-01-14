@@ -8,11 +8,9 @@ import {
 } from 'lucide-react'; 
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
-
-// 👇 1. IMPORTANTE: Importando o contexto que conecta com o Header
 import { useZipCode } from '../context/ZipCodeContext';
 
-// --- COMPONENTE DE ZOOM NATIVO ---
+// --- COMPONENTE DE ZOOM NATIVO (Mantido igual) ---
 const ZoomImage = ({ src, alt }) => {
   const [zoomParams, setZoomParams] = useState({ show: false, x: 0, y: 0 });
   const imgRef = useRef(null);
@@ -26,7 +24,7 @@ const ZoomImage = ({ src, alt }) => {
 
   return (
     <div 
-      className="relative w-full h-full overflow-hidden rounded-lg bg-white cursor-crosshair group"
+      className="relative w-full h-full overflow-hidden rounded-lg bg-white cursor-crosshair group touch-pan-y"
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setZoomParams({ ...zoomParams, show: false })}
     >
@@ -34,20 +32,21 @@ const ZoomImage = ({ src, alt }) => {
         ref={imgRef}
         src={src}
         alt={alt}
-        className="w-full h-full object-contain transition-transform duration-200 ease-out origin-center"
+        className="w-full h-full object-contain transition-transform duration-200 ease-out origin-center select-none"
         style={{
           transformOrigin: `${zoomParams.x}% ${zoomParams.y}%`,
           transform: zoomParams.show ? "scale(2.5)" : "scale(1)", 
         }}
+        draggable="false" 
       />
-      <div className={`absolute bottom-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-gray-400 border border-gray-200 pointer-events-none transition-opacity duration-300 ${zoomParams.show ? 'opacity-0' : 'opacity-100'}`}>
+      <div className={`hidden lg:block absolute bottom-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-gray-400 border border-gray-200 pointer-events-none transition-opacity duration-300 ${zoomParams.show ? 'opacity-0' : 'opacity-100'}`}>
         Passe o mouse para ampliar
       </div>
     </div>
   );
 };
 
-// --- CONFIGURAÇÃO DO TEXTO RICO ---
+// --- CONFIGURAÇÃO DO TEXTO RICO (Mantido igual) ---
 const myPortableTextComponents = {
   types: {
     htmlBlock: ({ value }) => {
@@ -79,10 +78,7 @@ const myPortableTextComponents = {
 export default function ProductDetails() {
   const { slug } = useParams();
   
-  // 👇 2. MUDANÇA: Removemos 'globalCep' daqui do Store...
   const { addItem, setShipping, selectedShipping, toggleFavorite, favorites } = useCartStore();
-  
-  // 👇 ...e pegamos do Contexto novo (Sincronizado com o Header)
   const { globalCep } = useZipCode(); 
 
   const [product, setProduct] = useState(null);
@@ -99,6 +95,11 @@ export default function ProductDetails() {
   const [shippingOptions, setShippingOptions] = useState(null);
 
   const carouselRef = useRef(null);
+
+  // 👇 NOVOS ESTADOS PARA O SWIPE (ARRASTAR)
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const minSwipeDistance = 50; // Mínimo de pixels para considerar um swipe
 
   useEffect(() => {
     const fetchData = async () => {
@@ -170,16 +171,12 @@ export default function ProductDetails() {
     }
   };
 
-  // 👇 ESSA PARTE AGORA VAI FUNCIONAR (Escuta o globalCep do Contexto)
   useEffect(() => {
     if (product && globalCep) {
-        // Remove traços e espaços para verificar
         const cleanGlobal = globalCep.replace(/\D/g, '');
-        
-        // Só dispara se tiver 8 dígitos e não for o texto placeholder
         if (cleanGlobal.length === 8) {
-            setCep(cleanGlobal); // Atualiza o input visual
-            handleCalculateShipping(cleanGlobal); // Chama o cálculo
+            setCep(cleanGlobal);
+            handleCalculateShipping(cleanGlobal);
         }
     }
   }, [product, globalCep]);
@@ -191,7 +188,6 @@ export default function ProductDetails() {
     
     setCalculating(true);
     try {
-      // 👇 3. BÔNUS: Usando a variável de ambiente correta (Vite)
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const workerUrl = `${baseUrl}/shipping`;
 
@@ -246,6 +242,40 @@ export default function ProductDetails() {
     }
   };
 
+  // 👇 LÓGICA DE SWIPE (ARRASTAR)
+  const onTouchStart = (e) => {
+    setTouchEnd(null); // Reseta o fim para garantir um novo swipe
+    setTouchStart(e.targetTouches[0].clientX);
+  }
+
+  const onTouchMove = (e) => setTouchEnd(e.targetTouches[0].clientX);
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    
+    // Pegar todas as imagens possíveis para navegar
+    const allImages = product?.images || [];
+    if (allImages.length <= 1) return;
+
+    // Achar o índice atual
+    const currentIndex = allImages.findIndex(img => img._key === activeMedia?._key);
+    
+    if (isLeftSwipe) {
+        // Próxima imagem
+        const nextIndex = (currentIndex + 1) % allImages.length;
+        setActiveMedia(allImages[nextIndex]);
+    } 
+    
+    if (isRightSwipe) {
+        // Imagem anterior
+        const prevIndex = (currentIndex - 1 + allImages.length) % allImages.length;
+        setActiveMedia(allImages[prevIndex]);
+    }
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-orange-500 rounded-full animate-spin"></div></div>;
   if (!product) return <div className="p-10 text-center">Produto não encontrado.</div>;
 
@@ -272,7 +302,14 @@ export default function ProductDetails() {
           
           {/* FOTOS */}
           <div className="lg:w-3/5 p-6 border-r border-gray-50 bg-white">
-            <div className="aspect-square w-full flex items-center justify-center mb-4 relative overflow-hidden rounded-lg border border-gray-50">
+            
+            {/* 👇 ADICIONEI OS EVENTOS DE TOQUE AQUI NESSE DIV PAI */}
+            <div 
+                className="aspect-square w-full flex items-center justify-center mb-4 relative overflow-hidden rounded-lg border border-gray-50 select-none"
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+            >
                 {activeMedia && (
                 isVideo ? (
                     <video src={activeMedia.asset.url} controls className="w-full h-full object-contain" />
@@ -283,6 +320,13 @@ export default function ProductDetails() {
                     />
                 )
                 )}
+
+                {/* Dica visual para swipe no mobile */}
+                <div className="lg:hidden absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                     {product.images?.map((_, idx) => (
+                         <div key={idx} className={`h-1.5 rounded-full transition-all ${activeMedia?._key === product.images[idx]._key ? 'w-4 bg-orange-500' : 'w-1.5 bg-gray-300'}`}></div>
+                     ))}
+                </div>
             </div>
 
             <div className="flex gap-2 overflow-x-auto justify-center pb-2">
@@ -290,7 +334,7 @@ export default function ProductDetails() {
                 <button 
                     key={media._key} 
                     onClick={() => setActiveMedia(media)} 
-                    className={`w-16 h-16 border rounded-lg overflow-hidden transition-all ${
+                    className={`w-16 h-16 border rounded-lg overflow-hidden transition-all flex-shrink-0 ${
                     activeMedia?._key === media._key 
                         ? 'border-orange-500 ring-2 ring-orange-100' 
                         : 'border-gray-100 opacity-60 hover:opacity-100'

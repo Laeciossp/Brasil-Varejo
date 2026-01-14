@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { createClient } from "@sanity/client";
-import { Loader, Frown, Filter, X, Package } from 'lucide-react';
+// 👇 ADICIONEI O ÍCONE TRUCK AQUI
+import { Loader, Frown, Filter, X, Package, Truck } from 'lucide-react';
 
 const client = createClient({
   projectId: 'o4upb251',
@@ -37,7 +38,8 @@ export default function CategoryPage() {
             "imageUrl": images[0].asset->url,
             slug,
             "brandName": brand,
-            variants[0] { price, oldPrice }
+            variants[0] { price, oldPrice },
+            freeShipping // 👈 1. ADICIONEI O CAMPO AQUI PARA O SANITY TRAZER
           }
         }`;
 
@@ -107,6 +109,7 @@ export default function CategoryPage() {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8">
+          {/* ASIDE FILTROS (Mantido igual) */}
           <aside className={`lg:w-64 flex-shrink-0 ${showMobileFilters ? 'block' : 'hidden lg:block'}`}>
               <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm sticky top-24">
                   <div className="flex justify-between items-center mb-6 lg:hidden">
@@ -157,8 +160,15 @@ export default function CategoryPage() {
                           <Link 
                               key={product._id} 
                               to={productLink} 
-                              className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-xl hover:border-orange-200 transition-all duration-300 group flex flex-col h-full"
+                              className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-xl hover:border-orange-200 transition-all duration-300 group flex flex-col h-full relative" // Adicionei 'relative' aqui
                           >
+                              {/* 👇 2. SELO DE FRETE GRÁTIS */}
+                              {product.freeShipping && (
+                                <div className="absolute top-3 right-3 bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-md z-10">
+                                   <Truck size={10} /> <span>Frete Grátis</span>
+                                </div>
+                              )}
+
                               <div className="h-40 w-full bg-white rounded-lg mb-4 flex items-center justify-center overflow-hidden relative p-2">
                                   {product.imageUrl ? <img src={`${product.imageUrl}?w=300`} alt={product.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" /> : <Package size={32} className="text-gray-200"/>}
                               </div>
@@ -178,7 +188,7 @@ export default function CategoryPage() {
                                         {price ? formatPrice(price) : 'Consulte'}
                                       </p>
 
-                                      {/* Tags de condição (Igual ao Carrossel) */}
+                                      {/* Tags de condição */}
                                       {price > 0 && (
                                         <div className="mt-1 flex flex-col gap-0.5">
                                           <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">
