@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Search, MapPin, ShoppingCart, Heart, User, Menu, 
-  Phone, ShieldCheck, X, ArrowRight, LogIn
+  Phone, ShieldCheck, X, ArrowRight, LogIn, ChevronRight
 } from 'lucide-react';
 import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/clerk-react";
 import { motion, AnimatePresence } from 'framer-motion';
@@ -102,9 +102,10 @@ export default function Header() {
           </button>
         </form>
 
-        {/* ÍCONES DESKTOP (Escondidos no Mobile) */}
+        {/* ÍCONES DESKTOP */}
         <div className="hidden lg:flex items-center gap-6 text-sm font-medium justify-end">
-           <div onClick={() => setIsCepModalOpen(true)} className="hidden xl:flex items-center gap-2 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors border border-transparent hover:border-white/20">
+           {/* 🔥 CORREÇÃO: Mudei de 'hidden xl:flex' para 'hidden lg:flex' para aparecer em notebooks */}
+           <div onClick={() => setIsCepModalOpen(true)} className="hidden lg:flex items-center gap-2 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors border border-transparent hover:border-white/20">
               <MapPin size={24} className="text-white animate-pulse"/>
               <div className="leading-tight text-white text-left">
                 <span className="block text-[10px] opacity-70">Enviar para</span>
@@ -161,9 +162,28 @@ export default function Header() {
           
           <ul className="flex flex-col lg:flex-row lg:items-center justify-between text-[11px] font-black uppercase tracking-tight py-2 lg:py-0 gap-4 lg:gap-0">
             
-            {/* 🔥 PERFIL DO USUÁRIO MOBILE (SÓ APARECE NO CELULAR DENTRO DO MENU) */}
-            <li className="lg:hidden border-b border-gray-100 pb-4 mb-2">
-                <div className="flex items-center justify-between mb-4">
+            {/* 🔥 NOVO: ÁREA DO USUÁRIO + CEP NO MOBILE */}
+            <li className="lg:hidden flex flex-col gap-2 border-b border-gray-100 pb-4 mb-2">
+                
+                {/* 1. Botão de CEP Mobile */}
+                <div 
+                    onClick={() => { setIsMenuOpen(false); setIsCepModalOpen(true); }}
+                    className="flex items-center gap-3 bg-orange-50 p-3 rounded-xl border border-orange-100 active:scale-95 transition-transform cursor-pointer"
+                >
+                    <div className="bg-white p-2 rounded-full text-orange-500 shadow-sm">
+                        <MapPin size={20} />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-500 font-normal uppercase">Localização de Entrega</span>
+                        <span className="text-sm font-black text-gray-800">
+                            {globalCep ? `CEP: ${globalCep}` : 'Toque para informar CEP'}
+                        </span>
+                    </div>
+                    <ChevronRight size={16} className="ml-auto text-orange-300"/>
+                </div>
+
+                {/* 2. Login / Perfil Mobile */}
+                <div className="flex items-center justify-between mt-2">
                     <span className="text-sm font-bold text-crocus-deep">Minha Conta</span>
                     <Link to="/favoritos" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-1 text-gray-500">
                         <Heart size={16}/> Favoritos ({favCount})
@@ -186,7 +206,7 @@ export default function Header() {
                             <span className="text-sm font-black text-gray-800">{user?.firstName}</span>
                         </div>
                         <Link to="/profile" onClick={() => setIsMenuOpen(false)} className="ml-auto text-xs text-blue-600 underline">
-                            Meus Pedidos
+                            Pedidos
                         </Link>
                     </div>
                 </SignedIn>
@@ -211,7 +231,6 @@ export default function Header() {
                      exit={{ opacity: 0, y: 10 }}
                      className="static lg:absolute top-full left-0 w-full lg:w-80 bg-white shadow-none lg:shadow-xl border-t border-gray-100 lg:border rounded-b-2xl z-50 overflow-hidden py-2 pl-4 lg:pl-0"
                    >
-                     {/* 🔥 CORREÇÃO: Adicionei onClick na div pai para fechar o menu ao clicar em qualquer categoria */}
                      <div onClick={() => setIsMenuOpen(false)}>
                         <CategoryMenu onItemClick={() => setIsMenuOpen(false)} />
                      </div>
@@ -220,11 +239,10 @@ export default function Header() {
                </AnimatePresence>
             </li>
 
-            {/* 🔥 DESTAQUES / LINKS RÁPIDOS */}
-            {/* Adicionei 'overflow-x-auto' para permitir rolagem horizontal no mobile se tiver muitos itens, parecendo a barra do PC */}
+            {/* DESTAQUES / LINKS RÁPIDOS */}
             <div 
                 className="flex flex-row lg:flex-row gap-4 lg:gap-0 w-full lg:w-auto overflow-x-auto pb-2 lg:pb-0 scrollbar-hide"
-                onClick={() => setIsMenuOpen(false)} // Fecha ao clicar num destaque
+                onClick={() => setIsMenuOpen(false)}
             >
                 <FeaturedMenu />
             </div>
@@ -238,7 +256,7 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Modal CEP (Mantido igual) */}
+      {/* Modal CEP */}
       <AnimatePresence>
         {isCepModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
