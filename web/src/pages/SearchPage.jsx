@@ -6,7 +6,7 @@ import { Loader, Package, Search } from 'lucide-react';
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  useCdn: false,
+  useCdn: false, // Mantive false para garantir que quando você desativar, suma na hora (sem cache)
   apiVersion: '2023-05-03',
 });
 
@@ -23,11 +23,14 @@ export default function SearchPage() {
       if (!queryTerm) return;
       setLoading(true);
       try {
-        const groq = `*[_type == "product" && (title match $term + "*" || description match $term + "*")]{
+        // 🔥 CORREÇÃO AQUI: Adicionei "&& isActive == true"
+        // Agora o site só busca produtos que estiverem com a chave ligada no Sanity.
+        const groq = `*[_type == "product" && isActive == true && (title match $term + "*" || description match $term + "*")]{
             _id, title, price, slug,
             "imageUrl": images[0].asset->url,
             variants[0] { price }
         }`;
+        
         const result = await client.fetch(groq, { term: queryTerm });
         setProducts(result);
       } catch (err) { console.error(err); } 
@@ -55,7 +58,14 @@ export default function SearchPage() {
                 const price = product.variants?.price || product.price || 0;
                 return (
                    <Link key={product._id} to={`/product/${product.slug.current}`} className="bg-white border p-4 rounded-xl hover:shadow-lg transition-all flex flex-col">
-                      <img src={`${product.imageUrl}?w=300`} className="h-40 object-contain mb-4 mix-blend-multiply" alt={product.title}/>
+                      
+                      {/* Pequena proteção extra: se a imagem vier nula, não quebra o layout */}
+                      <img 
+                        src={product.imageUrl ? `${product.imageUrl}?w=300` : 'https://via.placeholder.com/300?text=Sem+Foto'} 
+                        className="h-40 object-contain mb-4 mix-blend-multiply" 
+                        alt={product.title}
+                      />
+                      
                       <h3 className="text-sm font-medium line-clamp-2 h-10 mb-2">{product.title}</h3>
                       <div className="mt-auto">
                          <p className="text-lg font-black text-green-700">{formatPrice(price)}</p>

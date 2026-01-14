@@ -1,4 +1,3 @@
-// ARQUIVO: src/components/Header.jsx
 import React, { useState } from 'react'; 
 import { Link, useNavigate } from 'react-router-dom';
 import { 
@@ -9,10 +8,8 @@ import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/c
 import { motion, AnimatePresence } from 'framer-motion';
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
-// 👇 Importando o contexto
 import { useZipCode } from '../context/ZipCodeContext';
 
-// IMPORTANTE: Importe seus menus aqui
 import CategoryMenu from "./layout/CategoryMenu";
 import FeaturedMenu from "./layout/FeaturedMenu"; 
 
@@ -24,15 +21,15 @@ export default function Header() {
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
 
-  // 👇 Pegando o CEP Global
   const { globalCep, setGlobalCep } = useZipCode();
-  const [tempCep, setTempCep] = useState(''); // Estado temporário do modal
+  const [tempCep, setTempCep] = useState('');
 
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
       navigate(`/busca?q=${encodeURIComponent(searchTerm)}`);
       setSearchTerm('');
+      setIsMenuOpen(false); // Fecha o menu ao buscar no mobile
     }
   };
   
@@ -45,7 +42,7 @@ export default function Header() {
   const handleSaveCep = (e) => {
     e.preventDefault();
     if (tempCep.length === 8) {
-      setGlobalCep(tempCep); // 🔥 Atualiza o Global!
+      setGlobalCep(tempCep); 
       setIsCepModalOpen(false);
     } else {
       alert("Por favor, digite um CEP válido com 8 números.");
@@ -66,19 +63,37 @@ export default function Header() {
 
       {/* 2. BARRA PRINCIPAL */}
       <div className="container mx-auto px-4 py-4 flex flex-col lg:flex-row gap-4 items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 group">
-          <div className="bg-white text-crocus-deep px-3 py-1 rounded-lg font-black text-2xl tracking-tighter group-hover:rotate-3 transition-transform shadow-md uppercase">P</div>
-          <div className="leading-none drop-shadow-md">
-            <span className="block font-black text-2xl tracking-tight text-white uppercase italic">Palastore</span>
-            <span className="block font-medium text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Oficial</span>
-          </div>
-        </Link>
+        
+        {/* LOGO + BOTÃO MOBILE */}
+        <div className="flex items-center justify-between w-full lg:w-auto">
+            {/* 🔥 NOVO: Botão Menu Mobile */}
+            <button 
+                onClick={() => setIsMenuOpen(!isMenuOpen)} 
+                className="lg:hidden text-white p-2 hover:bg-white/10 rounded-lg mr-2"
+            >
+                {isMenuOpen ? <X size={28}/> : <Menu size={28}/>}
+            </button>
+
+            <Link to="/" className="flex items-center gap-2 group mr-auto lg:mr-0">
+            <div className="bg-white text-crocus-deep px-3 py-1 rounded-lg font-black text-2xl tracking-tighter group-hover:rotate-3 transition-transform shadow-md uppercase">P</div>
+            <div className="leading-none drop-shadow-md">
+                <span className="block font-black text-2xl tracking-tight text-white uppercase italic">Palastore</span>
+                <span className="block font-medium text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Oficial</span>
+            </div>
+            </Link>
+
+            {/* Carrinho Mobile (Aparece no topo) */}
+            <Link to="/cart" className="lg:hidden relative text-white">
+                <ShoppingCart size={24}/>
+                {cartCount > 0 && <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{cartCount}</span>}
+            </Link>
+        </div>
 
         {/* --- CAMPO DE BUSCA --- */}
-        <form onSubmit={handleSearch} className="flex-1 w-full max-w-3xl relative mx-4">
+        <form onSubmit={handleSearch} className="flex-1 w-full max-w-3xl relative mx-0 lg:mx-4">
           <input 
             type="text" 
-            placeholder="O que você procura hoje na Palastore?" 
+            placeholder="O que você procura hoje?" 
             className="w-full h-12 pl-4 pr-12 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-inner bg-white placeholder-gray-400 font-medium"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -88,12 +103,12 @@ export default function Header() {
           </button>
         </form>
 
-        <div className="flex items-center gap-6 text-sm font-medium w-full lg:w-auto justify-between lg:justify-end">
+        {/* ÍCONES DESKTOP (Escondidos no Mobile para economizar espaço) */}
+        <div className="hidden lg:flex items-center gap-6 text-sm font-medium justify-end">
            <div onClick={() => setIsCepModalOpen(true)} className="hidden xl:flex items-center gap-2 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors border border-transparent hover:border-white/20">
               <MapPin size={24} className="text-white animate-pulse"/>
               <div className="leading-tight text-white text-left">
                 <span className="block text-[10px] opacity-70">Enviar para</span>
-                {/* 👇 MOSTRA O CEP GLOBAL AQUI */}
                 <span className="font-black block truncate max-w-[100px] text-xs uppercase tracking-tighter">
                   {globalCep || 'Informe seu CEP'}
                 </span>
@@ -141,17 +156,22 @@ export default function Header() {
         </div>
       </div>
 
-      {/* 3. MENU DE DEPARTAMENTOS */}
-      <div className="bg-white text-gray-800 shadow-sm border-b border-gray-100 hidden lg:block relative">
+      {/* 3. MENU DE DEPARTAMENTOS (RESPONSIVO AGORA) */}
+      {/* 🔥 MUDANÇA: Tirei o "hidden" e coloquei lógica condicional */}
+      <div className={`bg-white text-gray-800 shadow-sm border-b border-gray-100 relative ${isMenuOpen ? 'block' : 'hidden'} lg:block`}>
         <div className="container mx-auto px-4">
-          <ul className="flex items-center justify-between text-[11px] font-black uppercase tracking-tight">
+          
+          {/* 🔥 MUDANÇA: "flex-col" no mobile para os itens ficarem um embaixo do outro */}
+          <ul className="flex flex-col lg:flex-row lg:items-center justify-between text-[11px] font-black uppercase tracking-tight py-2 lg:py-0 gap-4 lg:gap-0">
             
-            <li className="relative group">
+            <li className="relative group w-full lg:w-auto">
                <button 
-                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                 className={`flex items-center gap-2 py-3 px-4 transition-colors border-r border-gray-100 ${isMenuOpen ? 'bg-crocus-deep text-white' : 'hover:bg-gray-50 text-crocus-deep'}`}
+                 onClick={() => setIsMenuOpen(!isMenuOpen)} // No desktop pode manter a lógica de toggle
+                 className={`flex items-center gap-2 py-3 px-4 transition-colors border-r border-gray-100 w-full lg:w-auto ${isMenuOpen ? 'bg-crocus-deep text-white' : 'hover:bg-gray-50 text-crocus-deep'}`}
                >
-                 {isMenuOpen ? <X size={18}/> : <Menu size={18}/>} 
+                 {/* No mobile, escondemos este ícone X/Menu pois já tem lá em cima, deixamos só o texto ou ícone fixo */}
+                 <Menu size={18} className="lg:hidden" /> 
+                 <span className="hidden lg:inline">{isMenuOpen ? <X size={18}/> : <Menu size={18}/>}</span>
                  Departamentos
                </button>
 
@@ -161,38 +181,45 @@ export default function Header() {
                      initial={{ opacity: 0, y: 10 }}
                      animate={{ opacity: 1, y: 0 }}
                      exit={{ opacity: 0, y: 10 }}
-                     className="absolute top-full left-0 w-80 bg-white shadow-xl border border-gray-100 rounded-b-2xl z-50 overflow-hidden py-2"
+                     className="static lg:absolute top-full left-0 w-full lg:w-80 bg-white shadow-none lg:shadow-xl border-t border-gray-100 lg:border rounded-b-2xl z-50 overflow-hidden py-2"
                    >
+                     {/* Passamos setIsMenuOpen para fechar ao clicar num item */}
                      <CategoryMenu onItemClick={() => setIsMenuOpen(false)} />
                    </motion.div>
                  )}
                </AnimatePresence>
             </li>
 
-            <FeaturedMenu />
+            <div className="flex flex-col lg:flex-row gap-4 lg:gap-0 w-full lg:w-auto">
+                <FeaturedMenu />
+            </div>
 
-            <li className="ml-auto"><span className="flex items-center gap-1 py-3 px-2 text-gray-400 select-none"><ShieldCheck size={14} className="text-green-500"/> Site 100% Seguro</span></li>
+            <li className="ml-auto lg:block py-2 lg:py-0 text-center w-full lg:w-auto border-t lg:border-none border-gray-100 mt-2 lg:mt-0">
+                <span className="flex items-center justify-center lg:justify-start gap-1 py-3 px-2 text-gray-400 select-none">
+                    <ShieldCheck size={14} className="text-green-500"/> Site 100% Seguro
+                </span>
+            </li>
           </ul>
         </div>
       </div>
 
-      {/* Modal CEP */}
+      {/* Modal CEP (Mantido igual) */}
       <AnimatePresence>
         {isCepModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsCepModalOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-             <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} className="relative bg-white rounded-[32px] p-8 max-w-sm w-full shadow-2xl text-gray-900 border border-gray-100">
-              <button onClick={() => setIsCepModalOpen(false)} className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"><X size={20}/></button>
-              <div className="flex flex-col items-center text-center">
-                <div className="bg-orange-100 p-4 rounded-full text-orange-600 mb-6"><MapPin size={32} /></div>
-                <h3 className="text-2xl font-black uppercase tracking-tighter italic mb-2">Onde você está?</h3>
-                <p className="text-gray-500 text-sm font-medium mb-8">Informe seu CEP para calcularmos frete e prazos de entrega exclusivos.</p>
-                <form onSubmit={handleSaveCep} className="w-full space-y-4">
-                  <input autoFocus type="text" maxLength={8} placeholder="00000000" className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-center text-xl font-black tracking-widest focus:border-orange-500 outline-none transition-all placeholder:text-gray-300" value={tempCep} onChange={(e) => setTempCep(e.target.value.replace(/\D/g, ''))} />
-                  <button type="submit" className="w-full bg-crocus-deep text-white py-5 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-crocus-vivid transition-all shadow-xl shadow-crocus-deep/20">Confirmar Localização <ArrowRight size={16}/></button>
-                </form>
-              </div>
-            </motion.div>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsCepModalOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} className="relative bg-white rounded-[32px] p-8 max-w-sm w-full shadow-2xl text-gray-900 border border-gray-100">
+               <button onClick={() => setIsCepModalOpen(false)} className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"><X size={20}/></button>
+               <div className="flex flex-col items-center text-center">
+                 <div className="bg-orange-100 p-4 rounded-full text-orange-600 mb-6"><MapPin size={32} /></div>
+                 <h3 className="text-2xl font-black uppercase tracking-tighter italic mb-2">Onde você está?</h3>
+                 <p className="text-gray-500 text-sm font-medium mb-8">Informe seu CEP para calcularmos frete e prazos de entrega exclusivos.</p>
+                 <form onSubmit={handleSaveCep} className="w-full space-y-4">
+                   <input autoFocus type="text" maxLength={8} placeholder="00000000" className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-center text-xl font-black tracking-widest focus:border-orange-500 outline-none transition-all placeholder:text-gray-300" value={tempCep} onChange={(e) => setTempCep(e.target.value.replace(/\D/g, ''))} />
+                   <button type="submit" className="w-full bg-crocus-deep text-white py-5 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-crocus-vivid transition-all shadow-xl shadow-crocus-deep/20">Confirmar Localização <ArrowRight size={16}/></button>
+                 </form>
+               </div>
+             </motion.div>
           </div>
         )}
       </AnimatePresence>
