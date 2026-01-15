@@ -10,7 +10,7 @@ import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
 import { useZipCode } from '../context/ZipCodeContext';
 
-// --- COMPONENTE DE ZOOM NATIVO (Mantido igual) ---
+// --- COMPONENTE DE ZOOM NATIVO ---
 const ZoomImage = ({ src, alt }) => {
   const [zoomParams, setZoomParams] = useState({ show: false, x: 0, y: 0 });
   const imgRef = useRef(null);
@@ -46,7 +46,7 @@ const ZoomImage = ({ src, alt }) => {
   );
 };
 
-// --- CONFIGURAÇÃO DO TEXTO RICO (Mantido igual) ---
+// --- CONFIGURAÇÃO DO TEXTO RICO ---
 const myPortableTextComponents = {
   types: {
     htmlBlock: ({ value }) => {
@@ -96,10 +96,10 @@ export default function ProductDetails() {
 
   const carouselRef = useRef(null);
 
-  // 👇 NOVOS ESTADOS PARA O SWIPE (ARRASTAR)
+  // Estados para Swipe Mobile
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
-  const minSwipeDistance = 50; // Mínimo de pixels para considerar um swipe
+  const minSwipeDistance = 50; 
 
   useEffect(() => {
     const fetchData = async () => {
@@ -242,38 +242,35 @@ export default function ProductDetails() {
     }
   };
 
-  // 👇 LÓGICA DE SWIPE (ARRASTAR)
+  // --- NAVEGAÇÃO ENTRE FOTOS (Mobile Swipe + PC Arrows) ---
+  const navigateImage = (direction) => {
+      const allImages = product?.images || [];
+      if (allImages.length <= 1) return;
+
+      const currentIndex = allImages.findIndex(img => img._key === activeMedia?._key);
+      // Se não achou (ex: é imagem de variação), começa do 0
+      const safeIndex = currentIndex === -1 ? 0 : currentIndex; 
+
+      if (direction === 'next') {
+          const nextIndex = (safeIndex + 1) % allImages.length;
+          setActiveMedia(allImages[nextIndex]);
+      } else {
+          const prevIndex = (safeIndex - 1 + allImages.length) % allImages.length;
+          setActiveMedia(allImages[prevIndex]);
+      }
+  };
+
+  // Swipe Mobile
   const onTouchStart = (e) => {
-    setTouchEnd(null); // Reseta o fim para garantir um novo swipe
+    setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
   }
-
   const onTouchMove = (e) => setTouchEnd(e.targetTouches[0].clientX);
-
   const onTouchEnd = () => {
     if (!touchStart || !touchEnd) return;
     const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-    
-    // Pegar todas as imagens possíveis para navegar
-    const allImages = product?.images || [];
-    if (allImages.length <= 1) return;
-
-    // Achar o índice atual
-    const currentIndex = allImages.findIndex(img => img._key === activeMedia?._key);
-    
-    if (isLeftSwipe) {
-        // Próxima imagem
-        const nextIndex = (currentIndex + 1) % allImages.length;
-        setActiveMedia(allImages[nextIndex]);
-    } 
-    
-    if (isRightSwipe) {
-        // Imagem anterior
-        const prevIndex = (currentIndex - 1 + allImages.length) % allImages.length;
-        setActiveMedia(allImages[prevIndex]);
-    }
+    if (distance > minSwipeDistance) navigateImage('next');
+    if (distance < -minSwipeDistance) navigateImage('prev');
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-orange-500 rounded-full animate-spin"></div></div>;
@@ -301,9 +298,9 @@ export default function ProductDetails() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col lg:flex-row mb-10">
           
           {/* FOTOS */}
-          <div className="lg:w-3/5 p-6 border-r border-gray-50 bg-white">
+          <div className="lg:w-3/5 p-6 border-r border-gray-50 bg-white group relative">
             
-            {/* 👇 ADICIONEI OS EVENTOS DE TOQUE AQUI NESSE DIV PAI */}
+            {/* CONTAINER DA FOTO PRINCIPAL */}
             <div 
                 className="aspect-square w-full flex items-center justify-center mb-4 relative overflow-hidden rounded-lg border border-gray-50 select-none"
                 onTouchStart={onTouchStart}
@@ -321,7 +318,35 @@ export default function ProductDetails() {
                 )
                 )}
 
-                {/* Dica visual para swipe no mobile */}
+                {/* 👇 SETAS DE NAVEGAÇÃO NO PC (ELEGANTES & MODERNAS) */}
+                {/* Só aparecem no PC (hidden lg:flex) e quando tem mais de 1 foto */}
+                {product.images?.length > 1 && (
+                    <>
+                        {/* SETA ESQUERDA */}
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); navigateImage('prev'); }}
+                            className="hidden lg:flex absolute left-4 top-1/2 -translate-y-1/2 z-20 
+                                       bg-crocus-deep text-white w-10 h-10 rounded-full items-center justify-center 
+                                       shadow-lg shadow-purple-900/20 opacity-0 group-hover:opacity-100 
+                                       transition-all duration-300 hover:scale-110 hover:bg-purple-900"
+                        >
+                            <ChevronLeft size={20} strokeWidth={3} />
+                        </button>
+
+                        {/* SETA DIREITA */}
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); navigateImage('next'); }}
+                            className="hidden lg:flex absolute right-4 top-1/2 -translate-y-1/2 z-20 
+                                       bg-crocus-deep text-white w-10 h-10 rounded-full items-center justify-center 
+                                       shadow-lg shadow-purple-900/20 opacity-0 group-hover:opacity-100 
+                                       transition-all duration-300 hover:scale-110 hover:bg-purple-900"
+                        >
+                            <ChevronRight size={20} strokeWidth={3} />
+                        </button>
+                    </>
+                )}
+
+                {/* BOLINHAS (Indicador Mobile) */}
                 <div className="lg:hidden absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
                      {product.images?.map((_, idx) => (
                          <div key={idx} className={`h-1.5 rounded-full transition-all ${activeMedia?._key === product.images[idx]._key ? 'w-4 bg-orange-500' : 'w-1.5 bg-gray-300'}`}></div>

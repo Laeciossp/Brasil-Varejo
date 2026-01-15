@@ -1,0 +1,13 @@
+RODAR  WINDOWS R :    "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\chrome-debug"
+
+ABIR E COLAR URL DO PRODUTO
+
+EXECUTAR NA PASRTA RAÍZ DO GESTOR:      node importador-v9.js
+
+
+PAREI NA PÁGINA 2:    Smartphone Samsung Galaxy A16 Preto, 128GB, 4GB RAM, Câmera de até 50MP, Tela 6.7", NFC, IP54, Bateria 5000 mAh e Processador Helio G99
+
+
+
+
+
