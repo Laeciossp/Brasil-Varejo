@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { client } from '../lib/sanity';
 import { 
   Package, User, MapPin, LogOut, MessageSquare, Send, 
-  ShoppingBag, CheckCircle2, Trash2, CreditCard
+  ShoppingBag, CheckCircle2, Trash2, CreditCard, Truck, Calendar
 } from 'lucide-react';
 import { useUser, SignOutButton } from "@clerk/clerk-react";
 import useCartStore from '../store/useCartStore';
@@ -10,7 +10,7 @@ import { formatCurrency } from '../lib/utils';
 
 export default function Profile() {
   const { user, isLoaded } = useUser();
-  const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'address'
+  const [activeTab, setActiveTab] = useState('orders'); 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -26,21 +26,28 @@ export default function Profile() {
     neighborhood: '', city: '', state: '', document: ''
   });
 
-  // --- FUNÇÃO PARA CORRIGIR A DATA (Fuso Horário Brasil) ---
+  // --- FORMATAÇÃO DE DATA ---
   const formatarData = (dataString) => {
     if (!dataString) return '-';
     const date = new Date(dataString);
     return new Intl.DateTimeFormat('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'America/Sao_Paulo' // Força o horário de Brasília
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'America/Sao_Paulo'
     }).format(date);
   };
 
-  // --- 1. RECUPERAÇÃO DOS DADOS PADRÃO ---
+  // --- TRADUÇÃO DE PAGAMENTO ---
+  const getPaymentLabel = (method) => {
+      const map = { 
+          'pix': 'Pix (À Vista)', 
+          'credit_card': 'Cartão de Crédito', 
+          'ticket': 'Boleto Bancário' 
+      };
+      return map[method] || method || 'Não informado';
+  };
+
+  // --- RECUPERAÇÃO DE DADOS PADRÃO ---
   useEffect(() => {
     if (customer.addresses.length === 0) {
         const defaultAddresses = [
@@ -69,7 +76,6 @@ export default function Profile() {
                 document: '03343869503'
             }
         ];
-        
         defaultAddresses.forEach(addr => addAddress(addr));
         if(defaultAddresses.length > 0) setActiveAddress(defaultAddresses[0].id);
     }
@@ -79,9 +85,7 @@ export default function Profile() {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-    // [CORREÇÃO AQUI]:
-    // 1. "order(_createdAt desc)" -> Garante que o MAIS NOVO fique no topo.
-    // 2. Trazemos "_createdAt" explicitamente para não dar data vazia.
+    // --- QUERY ATUALIZADA PARA TRAZER FOTOS E ENDEREÇO ---
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, 
       orderNumber, 
@@ -89,7 +93,15 @@ export default function Profile() {
       status, 
       totalAmount, 
       cancellationReason,
-      "items": items[]{ productName, quantity, price },
+      paymentMethod,
+      shippingAddress,
+      "deliveryEstimate": shippingMethod, 
+      "items": items[]{ 
+        productName, 
+        quantity, 
+        price,
+        "imageUrl": product->images[0].asset->url 
+      },
       messages
     }`;
 
@@ -141,10 +153,9 @@ export default function Profile() {
   return (
     <div className="bg-gray-50 min-h-screen font-sans">
       
-      {/* HEADER COM IDENTIDADE DE SHOPPING */}
+      {/* HEADER */}
       <div className="bg-white border-b border-gray-200 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-orange-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50 pointer-events-none"></div>
-
         <div className="container mx-auto px-4 py-8 max-w-6xl flex items-center justify-between relative z-10">
             <div className="flex items-center gap-5">
                 <div className="relative group cursor-pointer">
@@ -153,7 +164,6 @@ export default function Profile() {
                     </div>
                     <div className="absolute -bottom-1 -right-1 bg-green-500 border-2 border-white w-5 h-5 rounded-full" title="Online"></div>
                 </div>
-                
                 <div>
                     <h1 className="text-2xl font-black text-gray-900 tracking-tight">Olá, {user.firstName}</h1>
                     <div className="flex items-center gap-2 mt-1">
@@ -164,7 +174,6 @@ export default function Profile() {
                     </div>
                 </div>
             </div>
-
             <div className="hidden md:flex flex-col items-end opacity-20 select-none">
                 <ShoppingBag size={64} className="text-gray-900" />
                 <span className="text-xs font-black uppercase tracking-[0.2em] mt-1">Palastore</span>
@@ -175,7 +184,7 @@ export default function Profile() {
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             
-            {/* SIDEBAR DE NAVEGAÇÃO */}
+            {/* SIDEBAR */}
             <div className="lg:col-span-1">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden sticky top-8">
                     <nav className="flex flex-col p-2 gap-1">
@@ -196,10 +205,9 @@ export default function Profile() {
                 </div>
             </div>
 
-            {/* CONTEÚDO PRINCIPAL */}
+            {/* CONTEÚDO */}
             <div className="lg:col-span-3">
                 
-                {/* --- ABA PEDIDOS --- */}
                 {activeTab === 'orders' && (
                     <div className="space-y-6">
                         <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -223,10 +231,7 @@ export default function Profile() {
                                         </div>
                                         <div>
                                             <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Pedido #{order.orderNumber || order._id.slice(0,6).toUpperCase()}</p>
-                                            
-                                            {/* USANDO _createdAt PARA A DATA DO SISTEMA */}
                                             <p className="text-sm font-bold text-gray-800">{formatarData(order._createdAt)}</p>
-                                            
                                         </div>
                                     </div>
                                     <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide border ${getStatusColor(order.status).replace('text-', 'border-').replace('bg-', 'bg-opacity-20 ')}`}>
@@ -234,37 +239,93 @@ export default function Profile() {
                                     </div>
                                 </div>
 
-                                {/* Corpo do Pedido */}
+                                {/* CORPO DO PEDIDO REFORMULADO */}
                                 <div className="p-6">
-                                    <div className="flex flex-col md:flex-row gap-6 mb-6">
-                                        <div className="flex-1 space-y-3">
+                                    <div className="flex flex-col lg:flex-row gap-8">
+                                        
+                                        {/* COLUNA 1: PRODUTOS (COM FOTO) */}
+                                        <div className="flex-1 space-y-4">
+                                            <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2">Produtos Adquiridos</h4>
                                             {order.items?.map((item, i) => (
-                                                <div key={i} className="flex justify-between text-sm items-center py-1 border-b border-dashed border-gray-100 last:border-0">
-                                                    <span className="text-gray-600 font-medium flex items-center gap-2">
-                                                        <span className="bg-gray-100 text-gray-600 w-6 h-6 flex items-center justify-center rounded text-xs font-bold">{item.quantity}</span> 
-                                                        {item.productName}
-                                                    </span>
-                                                    <span className="text-gray-900 font-bold">{formatCurrency(item.price)}</span>
+                                                <div key={i} className="flex gap-4 items-center py-2 border-b border-dashed border-gray-100 last:border-0">
+                                                    {/* Miniatura do Produto */}
+                                                    <div className="w-16 h-16 bg-white border border-gray-200 rounded-lg p-1 flex-shrink-0">
+                                                        {item.imageUrl ? (
+                                                            <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-contain" />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center text-gray-300"><Package size={20}/></div>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <div className="flex-1">
+                                                        <p className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight">{item.productName}</p>
+                                                        <p className="text-xs text-gray-500 mt-1">Qtd: {item.quantity}</p>
+                                                    </div>
+                                                    <span className="text-sm font-black text-gray-900">{formatCurrency(item.price)}</span>
                                                 </div>
                                             ))}
-                                            <div className="bg-gray-50 p-3 rounded-lg mt-3 flex justify-between items-center">
-                                                <span className="text-gray-500 font-bold text-xs uppercase">Total do Pedido</span>
-                                                <span className="text-xl font-black text-gray-900">{formatCurrency(order.totalAmount)}</span>
+                                        </div>
+
+                                        {/* COLUNA 2: ENDEREÇO E PAGAMENTO */}
+                                        <div className="lg:w-1/3 space-y-6 lg:border-l lg:border-gray-100 lg:pl-6">
+                                            
+                                            {/* Endereço */}
+                                            <div>
+                                                <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2 flex items-center gap-1">
+                                                    <MapPin size={12}/> Entrega em:
+                                                </h4>
+                                                {order.shippingAddress ? (
+                                                    <div className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                                        <p className="font-bold text-gray-800">{order.shippingAddress.street}, {order.shippingAddress.number}</p>
+                                                        <p>{order.shippingAddress.neighborhood}</p>
+                                                        <p>{order.shippingAddress.city} - {order.shippingAddress.state}</p>
+                                                        <p className="text-xs text-gray-400 mt-1">CEP: {order.shippingAddress.zip}</p>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-xs text-gray-400 italic bg-gray-50 p-2 rounded">Endereço não registrado no pedido.</p>
+                                                )}
                                             </div>
+
+                                            {/* Resumo Financeiro & Prazo */}
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-1 flex items-center gap-1">
+                                                        <CreditCard size={12}/> Pagamento:
+                                                    </h4>
+                                                    <p className="text-sm font-medium text-gray-800">{getPaymentLabel(order.paymentMethod)}</p>
+                                                </div>
+                                                
+                                                <div>
+                                                    <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-1 flex items-center gap-1">
+                                                        <Truck size={12}/> Prazo Estimado:
+                                                    </h4>
+                                                    <p className="text-sm font-medium text-green-700">
+                                                        {order.deliveryEstimate ? order.deliveryEstimate : '5 a 12 dias úteis'}
+                                                    </p>
+                                                </div>
+
+                                                <div className="border-t border-gray-200 pt-3 mt-2">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-gray-500 font-bold text-xs uppercase">Total</span>
+                                                        <span className="text-xl font-black text-gray-900">{formatCurrency(order.totalAmount)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
                                         </div>
                                     </div>
 
                                     {/* Ações e Chat */}
-                                    <div className="border-t border-gray-100 pt-4">
+                                    <div className="border-t border-gray-100 pt-4 mt-4">
                                         <button 
                                             onClick={() => setActiveChatOrder(activeChatOrder === order._id ? null : order._id)} 
                                             className="text-gray-600 text-sm font-bold flex items-center gap-2 hover:text-orange-600 transition-colors"
                                         >
-                                            <MessageSquare size={16}/> {activeChatOrder === order._id ? 'Ocultar Chat' : 'Suporte / Mensagens'}
+                                            <MessageSquare size={16}/> {activeChatOrder === order._id ? 'Ocultar Chat' : 'Precisa de ajuda com este pedido?'}
                                         </button>
 
                                         {activeChatOrder === order._id && (
-                                            <div className="mt-4 bg-white p-4 rounded-xl border border-gray-200 shadow-inner">
+                                            <div className="mt-4 bg-white p-4 rounded-xl border border-gray-200 shadow-inner animate-in fade-in slide-in-from-top-2">
                                                 <div className="h-40 overflow-y-auto mb-3 space-y-3 pr-2 scrollbar-thin scrollbar-thumb-gray-200">
                                                     {order.messages?.length > 0 ? order.messages.map((msg, idx) => (
                                                         <div key={idx} className={`flex ${msg.user === 'cliente' ? 'justify-end' : 'justify-start'}`}>
@@ -272,7 +333,7 @@ export default function Profile() {
                                                                 {msg.text}
                                                             </span>
                                                         </div>
-                                                    )) : <p className="text-center text-xs text-gray-400 py-4 italic">Inicie a conversa com nosso suporte...</p>}
+                                                    )) : <p className="text-center text-xs text-gray-400 py-4 italic">Envie uma mensagem para nosso suporte...</p>}
                                                 </div>
                                                 <div className="flex gap-2 relative">
                                                     <input 
@@ -295,7 +356,7 @@ export default function Profile() {
                     </div>
                 )}
 
-                {/* --- ABA ENDEREÇOS (MANTIDA IGUAL) --- */}
+                {/* ABA ENDEREÇOS (Mantida Idêntica) */}
                 {activeTab === 'address' && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                          <div className="flex justify-between items-center mb-6">
@@ -306,7 +367,6 @@ export default function Profile() {
                                 <CheckCircle2 size={16}/> Cadastrar Novo Endereço
                             </button>
                         </div>
-
                         {showAddressForm && (
                             <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xl mb-8 relative">
                                 <button onClick={() => setShowAddressForm(false)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500"><Trash2 size={18}/></button>
@@ -323,64 +383,35 @@ export default function Profile() {
                                 <button onClick={handleSaveAddress} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-600/20 transition-all">Salvar Endereço</button>
                             </div>
                         )}
-
                         <div className="space-y-4">
                              {customer.addresses?.map(addr => {
                                 const isActive = addr.id === customer.activeAddressId;
                                 return (
                                 <div key={addr.id} className={`p-6 rounded-2xl border-2 transition-all relative group ${isActive ? 'bg-white border-green-500 shadow-xl shadow-green-500/10' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
-                                    <button 
-                                        onClick={() => removeAddress(addr.id)} 
-                                        className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-full"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-
+                                    <button onClick={() => removeAddress(addr.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-full"><Trash2 size={16} /></button>
                                     <div className="flex items-center gap-3 mb-3">
                                         <h4 className="font-black text-gray-800 text-lg uppercase tracking-tight">{addr.alias || 'Local'}</h4>
-                                        {isActive && (
-                                            <span className="text-[10px] font-black text-green-700 bg-green-100 px-2 py-0.5 rounded-full uppercase tracking-wide flex items-center gap-1">
-                                                <CheckCircle2 size={10}/> Ativo
-                                            </span>
-                                        )}
+                                        {isActive && (<span className="text-[10px] font-black text-green-700 bg-green-100 px-2 py-0.5 rounded-full uppercase tracking-wide flex items-center gap-1"><CheckCircle2 size={10}/> Ativo</span>)}
                                     </div>
-
                                     <div className="space-y-1 text-sm text-gray-600 border-l-2 border-gray-100 pl-4 mb-4">
                                         <p className="font-bold text-gray-900">{addr.name || user.fullName}</p>
                                         <p>{addr.street}, {addr.number}</p>
                                         <p>{addr.neighborhood} - {addr.city}/{addr.state}</p>
                                         <p className="font-mono text-gray-400 text-xs">CEP: {addr.zip}</p>
                                     </div>
-
                                     <div className="pt-4 border-t border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                                         <div className="text-xs bg-gray-50 px-3 py-2 rounded-lg border border-gray-100 w-full sm:w-auto">
                                             <span className="block text-gray-400 font-bold uppercase text-[10px]">Faturamento / CPF</span>
                                             <span className="font-mono font-medium text-gray-800">{addr.document || customer.document || 'Não informado'}</span>
                                         </div>
-
-                                        {!isActive && (
-                                            <button 
-                                                onClick={() => {
-                                                    setActiveAddress(addr.id);
-                                                    if(addr.document) setDocument(addr.document); 
-                                                }} 
-                                                className="w-full sm:w-auto bg-gray-900 hover:bg-black text-white px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors"
-                                            >
-                                                Usar Este
-                                            </button>
-                                        )}
-                                        {isActive && (
-                                            <span className="text-xs font-bold text-green-600 flex items-center gap-1 select-none">
-                                                Endereço Selecionado
-                                            </span>
-                                        )}
+                                        {!isActive && (<button onClick={() => { setActiveAddress(addr.id); if(addr.document) setDocument(addr.document); }} className="w-full sm:w-auto bg-gray-900 hover:bg-black text-white px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors">Usar Este</button>)}
+                                        {isActive && (<span className="text-xs font-bold text-green-600 flex items-center gap-1 select-none">Endereço Selecionado</span>)}
                                     </div>
                                 </div>
                              )})}
                         </div>
                     </div>
                 )}
-
             </div>
         </div>
       </div>

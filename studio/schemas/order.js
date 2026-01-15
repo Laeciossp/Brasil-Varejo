@@ -40,6 +40,23 @@ export default {
       ]
     },
 
+    // --- NOVO: ENDEREÇO DE ENTREGA (Essencial para o Profile.jsx) ---
+    {
+      name: 'shippingAddress',
+      title: '📍 Endereço de Entrega',
+      type: 'object',
+      options: { collapsible: true, collapsed: false },
+      fields: [
+        { name: 'zip', type: 'string', title: 'CEP' },
+        { name: 'street', type: 'string', title: 'Rua' },
+        { name: 'number', type: 'string', title: 'Número' },
+        { name: 'neighborhood', type: 'string', title: 'Bairro' },
+        { name: 'city', type: 'string', title: 'Cidade' },
+        { name: 'state', type: 'string', title: 'Estado (UF)' },
+        { name: 'complement', type: 'string', title: 'Complemento' }
+      ]
+    },
+
     // --- CARRINHO DE COMPRAS ---
     {
       name: 'items',
@@ -53,7 +70,8 @@ export default {
             { name: 'quantity', type: 'number', title: 'Quantidade' },
             { name: 'price', type: 'number', title: 'Preço Unitário' },
             { 
-              name: 'productRef', 
+              // ATENÇÃO: Mudei de 'productRef' para 'product' para bater com a Query do frontend
+              name: 'product', 
               type: 'reference', 
               to: [{type: 'product'}], 
               title: 'Produto Original (Link)' 
@@ -62,49 +80,68 @@ export default {
           preview: {
             select: {
               title: 'productName',
-              subtitle: 'quantity'
+              subtitle: 'quantity',
+              media: 'product.images.0' // Tenta mostrar a foto no painel do admin também
             },
-            prepare({title, subtitle}) {
+            prepare({title, subtitle, media}) {
               return {
                 title: title,
-                subtitle: `${subtitle}x unidades`
+                subtitle: `${subtitle}x unidades`,
+                media: media
               }
             }
           }
         }
       ]
     },
+
+    // --- PAGAMENTO E TOTAIS ---
     {
       name: 'totalAmount',
       title: 'Valor Total (R$)',
       type: 'number'
     },
+    // NOVO: Método de Pagamento
+    {
+      name: 'paymentMethod',
+      title: '💳 Método de Pagamento',
+      type: 'string',
+      options: {
+        list: [
+          { title: 'Pix', value: 'pix' },
+          { title: 'Cartão de Crédito', value: 'credit_card' },
+          { title: 'Boleto', value: 'ticket' }
+        ]
+      }
+    },
 
-    // --- LOGÍSTICA (Mantido para compatibilidade com seu Profile.jsx) ---
+    // --- LOGÍSTICA ---
     {
       name: 'logistics',
       title: 'Operação e Logística',
       type: 'object',
       fields: [
-        { name: 'selectedCarrier', title: 'Transportadora (Nome do Serviço)', type: 'string' },
+        { name: 'selectedCarrier', title: 'Transportadora', type: 'string' },
+        // NOVO: Prazo Estimado de Entrega
+        { name: 'shippingMethod', title: 'Prazo / Serviço (Ex: 5 a 12 dias)', type: 'string' }, 
         { name: 'trackingCode', title: 'Código de Rastreio', type: 'string' },
-        { name: 'trackingUrl', title: 'Link de Rastreio (Opcional)', type: 'url' },
+        { name: 'trackingUrl', title: 'Link de Rastreio', type: 'url' },
         { name: 'shippedAt', title: 'Data do Envio', type: 'datetime' }
       ]
     },
 
-    // --- NOVOS CAMPOS (Chat e Cancelamento) ---
+    // --- CANCELAMENTO ---
     {
       name: 'cancellationReason',
       title: 'Motivo do Cancelamento',
       type: 'text',
-      description: 'Preenchido automaticamente quando o cliente ou admin cancela.',
-      hidden: ({document}) => document?.status !== 'cancelled' // Só aparece se estiver cancelado
+      hidden: ({document}) => document?.status !== 'cancelled'
     },
+
+    // --- CHAT (SAC) ---
     {
       name: 'messages',
       title: '💬 Histórico de Mensagens (SAC)',
-      description: 'Chat entre cliente e loja referente a este pedido.',
       type: 'array',
       of: [
         {
@@ -117,11 +154,7 @@ export default {
               type: 'string', 
               options: { list: ['cliente', 'admin'] } 
             },
-            { 
-              name: 'text', 
-              title: 'Texto', 
-              type: 'text' 
-            },
+            { name: 'text', title: 'Texto', type: 'text' },
             { 
               name: 'date', 
               title: 'Data/Hora', 
@@ -130,11 +163,7 @@ export default {
             }
           ],
           preview: {
-            select: {
-              title: 'text',
-              subtitle: 'user',
-              date: 'date'
-            },
+            select: { title: 'text', subtitle: 'user', date: 'date' },
             prepare({title, subtitle, date}) {
               const emoji = subtitle === 'admin' ? '🛡️' : '👤';
               return {
@@ -147,7 +176,8 @@ export default {
       ]
     }
   ],
-  // Visualização bonita na lista de pedidos
+  
+  // PREVIEW DA LISTA DE PEDIDOS NO ADMIN
   preview: {
     select: {
       title: 'orderNumber',
@@ -159,13 +189,14 @@ export default {
       const statusMap = { 
         pending: '🟡', 
         paid: '🟢', 
+        invoiced: '📄',
         shipped: '🚚', 
         delivered: '🏠', 
         cancelled: '❌' 
       };
       
       return {
-        title: `${statusMap[status] || '⚪'} Pedido #${title}`,
+        title: `${statusMap[status] || '⚪'} Pedido #${title || 'Sem Número'}`,
         subtitle: `${subtitle} | R$ ${total ? total.toFixed(2) : '0.00'}`
       }
     }
