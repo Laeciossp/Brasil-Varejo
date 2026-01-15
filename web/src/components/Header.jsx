@@ -48,6 +48,9 @@ export default function Header() {
     }
   };
 
+  // Cores do Gradiente para reutilizar (Roxo Escuro -> Roxo Vivo -> Roxo Escuro)
+  const gradientClass = "h-[3px] w-full bg-gradient-to-r from-[#4C1D95] via-[#7C3AED] to-[#4C1D95]";
+
   return (
     <header className="w-full bg-crocus-deep font-sans text-white sticky top-0 z-50 shadow-xl border-b border-white/10">
       
@@ -104,7 +107,6 @@ export default function Header() {
 
         {/* ÍCONES DESKTOP */}
         <div className="hidden lg:flex items-center gap-6 text-sm font-medium justify-end">
-           {/* 🔥 CORREÇÃO: Mudei de 'hidden xl:flex' para 'hidden lg:flex' para aparecer em notebooks */}
            <div onClick={() => setIsCepModalOpen(true)} className="hidden lg:flex items-center gap-2 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors border border-transparent hover:border-white/20">
               <MapPin size={24} className="text-white animate-pulse"/>
               <div className="leading-tight text-white text-left">
@@ -156,16 +158,17 @@ export default function Header() {
         </div>
       </div>
 
-      {/* 3. MENU / BARRA DE DEPARTAMENTOS */}
-      <div className={`bg-white text-gray-800 shadow-sm border-b border-gray-100 relative ${isMenuOpen ? 'block' : 'hidden'} lg:block`}>
+      {/* 3. MENU / BARRA DE DEPARTAMENTOS (COM EFEITO BORDA GRADIENTE) */}
+      <div className={`bg-white text-gray-800 shadow-sm relative ${isMenuOpen ? 'block' : 'hidden'} lg:block`}>
+        
+        {/* LINHA GRADIENTE SUPERIOR */}
+        <div className={gradientClass}></div>
+
         <div className="container mx-auto px-4">
-          
           <ul className="flex flex-col lg:flex-row lg:items-center justify-between text-[11px] font-black uppercase tracking-tight py-2 lg:py-0 gap-4 lg:gap-0">
             
-            {/* 🔥 NOVO: ÁREA DO USUÁRIO + CEP NO MOBILE */}
+            {/* AREA DO USUÁRIO MOBILE */}
             <li className="lg:hidden flex flex-col gap-2 border-b border-gray-100 pb-4 mb-2">
-                
-                {/* 1. Botão de CEP Mobile */}
                 <div 
                     onClick={() => { setIsMenuOpen(false); setIsCepModalOpen(true); }}
                     className="flex items-center gap-3 bg-orange-50 p-3 rounded-xl border border-orange-100 active:scale-95 transition-transform cursor-pointer"
@@ -182,7 +185,6 @@ export default function Header() {
                     <ChevronRight size={16} className="ml-auto text-orange-300"/>
                 </div>
 
-                {/* 2. Login / Perfil Mobile */}
                 <div className="flex items-center justify-between mt-2">
                     <span className="text-sm font-bold text-crocus-deep">Minha Conta</span>
                     <Link to="/favoritos" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-1 text-gray-500">
@@ -254,6 +256,10 @@ export default function Header() {
             </li>
           </ul>
         </div>
+
+        {/* LINHA GRADIENTE INFERIOR */}
+        <div className={gradientClass}></div>
+
       </div>
 
       {/* Modal CEP */}
