@@ -104,21 +104,42 @@ const DepartmentsBlock = ({ data }) => {
   );
 };
 
-// --- Bloco C: Banners de Destaque ---
+// --- Bloco C: Banners de Destaque (CORRIGIDO) ---
 const FeaturedBannersBlock = ({ data }) => {
   return (
     <div className="max-w-[1440px] mx-auto px-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-8">
+      {/* ALTERAÇÃO 1: Mudei para 'md:grid-cols-2' para ficarem 2 banners grandes lado a lado.
+         Se quiser 4 pequenos, volte para 'md:grid-cols-4'.
+      */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-8">
         {data.banners?.map((banner, idx) => (
-          <a key={idx} href={banner.link} className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
-            <img src={urlFor(banner.image)} alt={banner.title} className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500" />
+          <a 
+            key={idx} 
+            href={banner.link} 
+            className="rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group relative block border border-gray-100"
+          >
+            {/* ALTERAÇÃO 2: Adicionei esta div com 'aspect-[3/4]'. 
+               Isso força o formato Retrato (Vertical).
+            */}
+            <div className="aspect-[3/4] w-full overflow-hidden">
+              <img 
+                src={urlFor(banner.image)} 
+                alt={banner.title} 
+                // ALTERAÇÃO 3: 'h-full object-cover' garante o corte perfeito
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+              />
+            </div>
+            
+            {/* (Opcional) Título sobre a imagem, se quiser igual ao design anterior */}
+            <div className="absolute bottom-0 left-0 w-full p-4 bg-gradient-to-t from-black/60 to-transparent">
+               <span className="text-white font-bold text-xl">{banner.title}</span>
+            </div>
           </a>
         ))}
       </div>
     </div>
   );
 };
-
 // --- Bloco D: Carrossel de Produtos (ATUALIZADO PADRÃO NOVO) ---
 const ProductCarouselBlock = ({ data }) => {
   const rawProducts = data.products || [];
