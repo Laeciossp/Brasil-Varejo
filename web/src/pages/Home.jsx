@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom'; // 1. IMPORT NECESSÁRIO
+import React, { useEffect, useState, useRef } from 'react';
+import { Link } from 'react-router-dom'; 
 import { createClient } from "@sanity/client";
 import imageUrlBuilder from '@sanity/image-url';
-import { Package } from 'lucide-react'; // Importei o ícone caso a imagem falhe (opcional)
+import { Package, ChevronLeft, ChevronRight } from 'lucide-react'; // Ícones para navegação
 
 const client = createClient({
   projectId: 'o4upb251',
@@ -16,7 +16,7 @@ function urlFor(source) {
   return source ? builder.image(source).url() : '';
 }
 
-// Helper rápido para formatar moeda sem precisar importar lib externa
+// Helper rápido para formatar moeda
 const formatCurrency = (value) => {
   return value ? `R$ ${value.toFixed(2).replace('.', ',')}` : 'R$ 0,00';
 };
@@ -104,13 +104,10 @@ const DepartmentsBlock = ({ data }) => {
   );
 };
 
-// --- Bloco C: Banners de Destaque (CORRIGIDO) ---
+// --- Bloco C: Banners de Destaque ---
 const FeaturedBannersBlock = ({ data }) => {
   return (
     <div className="max-w-[1440px] mx-auto px-4">
-      {/* ALTERAÇÃO 1: Mudei para 'md:grid-cols-2' para ficarem 2 banners grandes lado a lado.
-         Se quiser 4 pequenos, volte para 'md:grid-cols-4'.
-      */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-8">
         {data.banners?.map((banner, idx) => (
           <a 
@@ -118,19 +115,14 @@ const FeaturedBannersBlock = ({ data }) => {
             href={banner.link} 
             className="rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group relative block border border-gray-100"
           >
-            {/* ALTERAÇÃO 2: Adicionei esta div com 'aspect-[3/4]'. 
-               Isso força o formato Retrato (Vertical).
-            */}
             <div className="aspect-[3/4] w-full overflow-hidden">
               <img 
                 src={urlFor(banner.image)} 
                 alt={banner.title} 
-                // ALTERAÇÃO 3: 'h-full object-cover' garante o corte perfeito
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
               />
             </div>
             
-            {/* (Opcional) Título sobre a imagem, se quiser igual ao design anterior */}
             <div className="absolute bottom-0 left-0 w-full p-4 bg-gradient-to-t from-black/60 to-transparent">
                <span className="text-white font-bold text-xl">{banner.title}</span>
             </div>
@@ -140,21 +132,64 @@ const FeaturedBannersBlock = ({ data }) => {
     </div>
   );
 };
-// --- Bloco D: Carrossel de Produtos (ATUALIZADO PADRÃO NOVO) ---
+
+// --- Bloco D: Carrossel de Produtos (ATUALIZADO: HÍBRIDO E RESPONSIVO) ---
 const ProductCarouselBlock = ({ data }) => {
   const rawProducts = data.products || [];
   const products = rawProducts.filter(prod => prod && prod.isActive !== false);
+  
+  // Ref para controlar o scroll
+  const carouselRef = useRef(null);
 
   if (!products.length) return null;
 
+  // Função para rolar com os botões
+  const scrollCarousel = (direction) => {
+    if (carouselRef.current) {
+      const scrollAmount = 300; // Quantidade de scroll em pixels
+      carouselRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   return (
     <div className="max-w-[1440px] mx-auto my-10 px-4">
+      {/* Cabeçalho com Título e Navegação */}
       <div className="flex justify-between items-center mb-4 border-b pb-2">
         <h2 className="text-xl md:text-2xl font-bold text-gray-800">{data.title}</h2>
-        <Link to="/products" className="text-purple-600 text-sm hover:underline font-semibold">Ver todos</Link>
+        
+        <div className="flex items-center gap-4">
+          <Link to="/products" className="text-purple-600 text-sm hover:underline font-semibold">
+            Ver todos
+          </Link>
+          
+          {/* Botões de seta (Só aparecem em telas médias/grandes) */}
+          <div className="hidden md:flex gap-2">
+            <button 
+              onClick={() => scrollCarousel('left')} 
+              className="p-1.5 rounded-full border border-gray-200 hover:bg-gray-100 text-gray-600 transition-colors"
+              aria-label="Anterior"
+            >
+              <ChevronLeft size={20}/>
+            </button>
+            <button 
+              onClick={() => scrollCarousel('right')} 
+              className="p-1.5 rounded-full border border-gray-200 hover:bg-gray-100 text-gray-600 transition-colors"
+              aria-label="Próximo"
+            >
+              <ChevronRight size={20}/>
+            </button>
+          </div>
+        </div>
       </div>
       
-      <div className="flex gap-3 overflow-x-auto pb-6 scrollbar-hide scroll-smooth px-1">
+      {/* Container dos Produtos (snap-x para travar a rolagem) */}
+      <div 
+        ref={carouselRef}
+        className="flex gap-3 overflow-x-auto pb-6 scrollbar-hide scroll-smooth px-1 snap-x snap-mandatory"
+      >
         {products.map((prod) => (
           <Link 
             to={`/product/${prod.slug}`} 
@@ -175,7 +210,7 @@ const ProductCarouselBlock = ({ data }) => {
                {prod.title}
             </h4>
             
-            {/* PREÇO E CONDIÇÕES (Padronizado) */}
+            {/* PREÇO E CONDIÇÕES */}
             <div className="mt-auto pt-2 border-t border-gray-50">
                {/* Preço Antigo */}
                {prod.oldPrice > prod.price && (
