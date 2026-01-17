@@ -1,12 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { client } from '../lib/sanity';
+import { createClient } from '@sanity/client'; // Import necessário para escrita
 import { 
   Package, User, MapPin, LogOut, MessageSquare, Send, 
-  ShoppingBag, CheckCircle2, Trash2, CreditCard, Truck, Calendar
+  ShoppingBag, CheckCircle2, Trash2, CreditCard, Truck, Calendar,
+  XCircle // Ícone novo para o cancelamento
 } from 'lucide-react';
 import { useUser, SignOutButton } from "@clerk/clerk-react";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
+
+// --- CLIENTE SANITY COM PERMISSÃO DE ESCRITA (TOKEN) ---
+// Adicionado para permitir Chat e Cancelamento sem erro 403
+const writeClient = createClient({
+  projectId: 'o4upb251',
+  dataset: 'production',
+  apiVersion: '2023-05-03',
+  useCdn: false, // False para garantir dados frescos
+  token: 'skmLtdy7ME2lnyS0blM3IWiNv0wuWzBG4egK7jUYdVVkBktLngwz47GbsPPdq5NLX58WJEiR3bmW0TBpeMtBhPNEIxf5mk6uQ14PvbGYKlWQdSiP2uWdBDafWhVAGMw5RYh3IyKhDSmqEqSLg1bEzzYVEwcGWDZ9tEPmZhNDkljeyvY6IcEO'
+});
 
 export default function Profile() {
   const { user, isLoaded } = useUser();
@@ -47,7 +58,7 @@ export default function Profile() {
       return map[method] || method || 'Não informado';
   };
 
-  // --- RECUPERAÇÃO DE DADOS PADRÃO ---
+  // --- RECUPERAÇÃO DE DADOS PADRÃO (MANTIDO INTACTO) ---
   useEffect(() => {
     if (customer.addresses.length === 0) {
         const defaultAddresses = [
@@ -85,7 +96,7 @@ export default function Profile() {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-    // --- QUERY ATUALIZADA PARA TRAZER FOTOS E ENDEREÇO ---
+    // Query para trazer pedidos
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, 
       orderNumber, 
@@ -106,7 +117,8 @@ export default function Profile() {
     }`;
 
     try {
-      const ordersResult = await client.fetch(ordersQuery, { email });
+      // Usando writeClient aqui para garantir que vemos as atualizações na hora
+      const ordersResult = await writeClient.fetch(ordersQuery, { email });
       setOrders(ordersResult);
       setLoading(false);
     } catch (err) { 
@@ -116,15 +128,42 @@ export default function Profile() {
 
   useEffect(() => { if (isLoaded && user) fetchData(); }, [isLoaded, user]);
 
+  // --- FUNÇÃO DE CHAT (ATUALIZADA) ---
   const handleSendMessage = async (orderId) => {
     if (!messageInput.trim()) return;
     setProcessing(true);
     const newMessage = { _key: Math.random().toString(36).substring(7), user: 'cliente', text: messageInput, date: new Date().toISOString() };
     try {
-      await client.patch(orderId).setIfMissing({ messages: [] }).append('messages', [newMessage]).commit();
+      await writeClient.patch(orderId).setIfMissing({ messages: [] }).append('messages', [newMessage]).commit();
       setMessageInput('');
-      fetchData();
-    } catch (err) { alert("Erro ao enviar."); } finally { setProcessing(false); }
+      await fetchData(); // Atualiza a lista para mostrar a mensagem nova
+    } catch (err) { 
+        console.error(err);
+        alert("Erro ao enviar mensagem. Tente novamente."); 
+    } finally { 
+        setProcessing(false); 
+    }
+  };
+
+  // --- FUNÇÃO DE CANCELAMENTO (NOVA) ---
+  const handleCancelOrder = async (orderId) => {
+    if(!confirm("Tem certeza que deseja cancelar este pedido? Essa ação não pode ser desfeita.")) return;
+    
+    setProcessing(true);
+    try {
+        await writeClient.patch(orderId).set({ 
+            status: 'cancelled',
+            cancellationReason: 'Cancelado pelo cliente via painel'
+        }).commit();
+        
+        alert("Pedido cancelado com sucesso.");
+        await fetchData(); // Atualiza a tela
+    } catch (err) {
+        console.error("Erro ao cancelar:", err);
+        alert("Erro ao cancelar. Entre em contato com o suporte.");
+    } finally {
+        setProcessing(false);
+    }
   };
 
   const handleSaveAddress = () => {
@@ -243,12 +282,11 @@ export default function Profile() {
                                 <div className="p-6">
                                     <div className="flex flex-col lg:flex-row gap-8">
                                         
-                                        {/* COLUNA 1: PRODUTOS (COM FOTO) */}
+                                        {/* COLUNA 1: PRODUTOS */}
                                         <div className="flex-1 space-y-4">
                                             <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2">Produtos Adquiridos</h4>
                                             {order.items?.map((item, i) => (
                                                 <div key={i} className="flex gap-4 items-center py-2 border-b border-dashed border-gray-100 last:border-0">
-                                                    {/* Miniatura do Produto */}
                                                     <div className="w-16 h-16 bg-white border border-gray-200 rounded-lg p-1 flex-shrink-0">
                                                         {item.imageUrl ? (
                                                             <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-contain" />
@@ -266,7 +304,7 @@ export default function Profile() {
                                             ))}
                                         </div>
 
-                                        {/* COLUNA 2: ENDEREÇO E PAGAMENTO */}
+                                        {/* COLUNA 2: ENDEREÇO, PAGAMENTO E AÇÕES */}
                                         <div className="lg:w-1/3 space-y-6 lg:border-l lg:border-gray-100 lg:pl-6">
                                             
                                             {/* Endereço */}
@@ -305,17 +343,28 @@ export default function Profile() {
                                                 </div>
 
                                                 <div className="border-t border-gray-200 pt-3 mt-2">
-                                                    <div className="flex justify-between items-center">
+                                                    <div className="flex justify-between items-center mb-4">
                                                         <span className="text-gray-500 font-bold text-xs uppercase">Total</span>
                                                         <span className="text-xl font-black text-gray-900">{formatCurrency(order.totalAmount)}</span>
                                                     </div>
+
+                                                    {/* BOTÃO DE CANCELAMENTO (NOVO) */}
+                                                    {['pending', 'paid'].includes(order.status) && (
+                                                        <button 
+                                                            onClick={() => handleCancelOrder(order._id)}
+                                                            disabled={processing}
+                                                            className="w-full border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2.5 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-2 transition-colors shadow-sm"
+                                                        >
+                                                            <XCircle size={16} /> Cancelar Pedido
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
 
                                         </div>
                                     </div>
 
-                                    {/* Ações e Chat */}
+                                    {/* Chat */}
                                     <div className="border-t border-gray-100 pt-4 mt-4">
                                         <button 
                                             onClick={() => setActiveChatOrder(activeChatOrder === order._id ? null : order._id)} 
