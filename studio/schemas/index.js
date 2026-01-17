@@ -7,6 +7,7 @@ import shippingSettings from './shippingSettings'
 import carrierConfig from './carrierConfig'
 import order from './order'
 import customer from './customer'
+import staff from './staff' // <--- NOVO IMPORT
 
 // --- Schemas da Home / Page Builder (Novos) ---
 import hero from './hero'
@@ -23,6 +24,7 @@ export const schemaTypes = [
   carrierConfig,
   order,
   customer,
+  staff, // <--- ADICIONADO AQUI
 
   // Page Builder da Home
   hero,

@@ -1,21 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@sanity/client'; // Import necessário para escrita
+import { createClient } from '@sanity/client'; 
 import { 
   Package, User, MapPin, LogOut, MessageSquare, Send, 
   ShoppingBag, CheckCircle2, Trash2, CreditCard, Truck, Calendar,
-  XCircle // Ícone novo para o cancelamento
+  XCircle 
 } from 'lucide-react';
 import { useUser, SignOutButton } from "@clerk/clerk-react";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CLIENTE SANITY COM PERMISSÃO DE ESCRITA (TOKEN) ---
-// Adicionado para permitir Chat e Cancelamento sem erro 403
+// --- CLIENTE SANITY COM PERMISSÃO DE ESCRITA ---
 const writeClient = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
   apiVersion: '2023-05-03',
-  useCdn: false, // False para garantir dados frescos
+  useCdn: false, // OBRIGATÓRIO false para tempo real
   token: 'skmLtdy7ME2lnyS0blM3IWiNv0wuWzBG4egK7jUYdVVkBktLngwz47GbsPPdq5NLX58WJEiR3bmW0TBpeMtBhPNEIxf5mk6uQ14PvbGYKlWQdSiP2uWdBDafWhVAGMw5RYh3IyKhDSmqEqSLg1bEzzYVEwcGWDZ9tEPmZhNDkljeyvY6IcEO'
 });
 
@@ -37,7 +36,6 @@ export default function Profile() {
     neighborhood: '', city: '', state: '', document: ''
   });
 
-  // --- FORMATAÇÃO DE DATA ---
   const formatarData = (dataString) => {
     if (!dataString) return '-';
     const date = new Date(dataString);
@@ -48,7 +46,6 @@ export default function Profile() {
     }).format(date);
   };
 
-  // --- TRADUÇÃO DE PAGAMENTO ---
   const getPaymentLabel = (method) => {
       const map = { 
           'pix': 'Pix (À Vista)', 
@@ -58,7 +55,6 @@ export default function Profile() {
       return map[method] || method || 'Não informado';
   };
 
-  // --- RECUPERAÇÃO DE DADOS PADRÃO (MANTIDO INTACTO) ---
   useEffect(() => {
     if (customer.addresses.length === 0) {
         const defaultAddresses = [
@@ -96,7 +92,7 @@ export default function Profile() {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-    // Query para trazer pedidos
+    // QUERY ATUALIZADA: Trazendo nome e foto do staff dentro das mensagens
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, 
       orderNumber, 
@@ -113,11 +109,16 @@ export default function Profile() {
         price,
         "imageUrl": product->images[0].asset->url 
       },
-      messages
+      messages[]{
+        text,
+        user,
+        date,
+        "staffName": staff->name,
+        "staffImage": staff->avatar.asset->url
+      }
     }`;
 
     try {
-      // Usando writeClient aqui para garantir que vemos as atualizações na hora
       const ordersResult = await writeClient.fetch(ordersQuery, { email });
       setOrders(ordersResult);
       setLoading(false);
@@ -128,39 +129,72 @@ export default function Profile() {
 
   useEffect(() => { if (isLoaded && user) fetchData(); }, [isLoaded, user]);
 
-  // --- FUNÇÃO DE CHAT (ATUALIZADA) ---
+  // --- OUVINTE EM TEMPO REAL (REAL-TIME LISTENER) ---
+  // Isso faz a mensagem do suporte aparecer sem dar F5
+  useEffect(() => {
+    if (!activeChatOrder) return;
+
+    const subscription = writeClient
+      .listen(`*[_id == $orderId]`, { orderId: activeChatOrder })
+      .subscribe((update) => {
+        if (update.result) {
+          // Atualiza apenas o pedido que mudou
+          setOrders((prevOrders) => 
+            prevOrders.map((order) => 
+              order._id === activeChatOrder ? { ...order, ...update.result } : order
+            )
+          );
+          // Re-executa fetchData para garantir projeções (como a foto do staff)
+          fetchData();
+        }
+      });
+
+    return () => subscription.unsubscribe();
+  }, [activeChatOrder]);
+
+  // --- ENVIO DE MENSAGEM (Com Notificação) ---
   const handleSendMessage = async (orderId) => {
     if (!messageInput.trim()) return;
     setProcessing(true);
-    const newMessage = { _key: Math.random().toString(36).substring(7), user: 'cliente', text: messageInput, date: new Date().toISOString() };
+    
+    const newMessage = { 
+        _key: Math.random().toString(36).substring(7), 
+        user: 'cliente', 
+        text: messageInput, 
+        date: new Date().toISOString() 
+    };
+
     try {
-      await writeClient.patch(orderId).setIfMissing({ messages: [] }).append('messages', [newMessage]).commit();
+      // Salva mensagem E marca como "Não Lida" para o admin ver
+      await writeClient
+        .patch(orderId)
+        .setIfMissing({ messages: [] })
+        .append('messages', [newMessage])
+        .set({ hasUnreadMessage: true }) // <--- NOTIFICAÇÃO
+        .commit();
+        
       setMessageInput('');
-      await fetchData(); // Atualiza a lista para mostrar a mensagem nova
+      // O Listener vai atualizar a tela automaticamente
     } catch (err) { 
         console.error(err);
-        alert("Erro ao enviar mensagem. Tente novamente."); 
+        alert("Erro ao enviar mensagem."); 
     } finally { 
         setProcessing(false); 
     }
   };
 
-  // --- FUNÇÃO DE CANCELAMENTO (NOVA) ---
   const handleCancelOrder = async (orderId) => {
     if(!confirm("Tem certeza que deseja cancelar este pedido? Essa ação não pode ser desfeita.")) return;
-    
     setProcessing(true);
     try {
         await writeClient.patch(orderId).set({ 
             status: 'cancelled',
             cancellationReason: 'Cancelado pelo cliente via painel'
         }).commit();
-        
         alert("Pedido cancelado com sucesso.");
-        await fetchData(); // Atualiza a tela
     } catch (err) {
         console.error("Erro ao cancelar:", err);
-        alert("Erro ao cancelar. Entre em contato com o suporte.");
+        alert("Erro ao cancelar.");
     } finally {
         setProcessing(false);
     }
@@ -278,7 +312,7 @@ export default function Profile() {
                                     </div>
                                 </div>
 
-                                {/* CORPO DO PEDIDO REFORMULADO */}
+                                {/* CORPO DO PEDIDO */}
                                 <div className="p-6">
                                     <div className="flex flex-col lg:flex-row gap-8">
                                         
@@ -304,10 +338,8 @@ export default function Profile() {
                                             ))}
                                         </div>
 
-                                        {/* COLUNA 2: ENDEREÇO, PAGAMENTO E AÇÕES */}
+                                        {/* COLUNA 2: INFO */}
                                         <div className="lg:w-1/3 space-y-6 lg:border-l lg:border-gray-100 lg:pl-6">
-                                            
-                                            {/* Endereço */}
                                             <div>
                                                 <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2 flex items-center gap-1">
                                                     <MapPin size={12}/> Entrega em:
@@ -324,7 +356,6 @@ export default function Profile() {
                                                 )}
                                             </div>
 
-                                            {/* Resumo Financeiro & Prazo */}
                                             <div className="space-y-3">
                                                 <div>
                                                     <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-1 flex items-center gap-1">
@@ -348,7 +379,6 @@ export default function Profile() {
                                                         <span className="text-xl font-black text-gray-900">{formatCurrency(order.totalAmount)}</span>
                                                     </div>
 
-                                                    {/* BOTÃO DE CANCELAMENTO (NOVO) */}
                                                     {['pending', 'paid'].includes(order.status) && (
                                                         <button 
                                                             onClick={() => handleCancelOrder(order._id)}
@@ -360,11 +390,10 @@ export default function Profile() {
                                                     )}
                                                 </div>
                                             </div>
-
                                         </div>
                                     </div>
 
-                                    {/* Chat */}
+                                    {/* CHAT COM IDENTIDADE DO SUPORTE */}
                                     <div className="border-t border-gray-100 pt-4 mt-4">
                                         <button 
                                             onClick={() => setActiveChatOrder(activeChatOrder === order._id ? null : order._id)} 
@@ -377,10 +406,33 @@ export default function Profile() {
                                             <div className="mt-4 bg-white p-4 rounded-xl border border-gray-200 shadow-inner animate-in fade-in slide-in-from-top-2">
                                                 <div className="h-40 overflow-y-auto mb-3 space-y-3 pr-2 scrollbar-thin scrollbar-thumb-gray-200">
                                                     {order.messages?.length > 0 ? order.messages.map((msg, idx) => (
-                                                        <div key={idx} className={`flex ${msg.user === 'cliente' ? 'justify-end' : 'justify-start'}`}>
-                                                            <span className={`px-4 py-2 rounded-2xl text-xs max-w-[85%] leading-relaxed ${msg.user === 'cliente' ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-gray-100 text-gray-700 rounded-tl-none'}`}>
-                                                                {msg.text}
-                                                            </span>
+                                                        <div key={idx} className={`flex gap-2 ${msg.user === 'cliente' ? 'justify-end' : 'justify-start items-end'}`}>
+                                                            
+                                                            {/* FOTO DO ATENDENTE */}
+                                                            {msg.user !== 'cliente' && (
+                                                                <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 border border-gray-300 flex-shrink-0 mb-1" title={msg.staffName || 'Suporte'}>
+                                                                     {msg.staffImage ? (
+                                                                        <img src={msg.staffImage} alt="Staff" className="w-full h-full object-cover" />
+                                                                     ) : (
+                                                                        <User size={16} className="text-gray-500 m-2"/>
+                                                                     )}
+                                                                </div>
+                                                            )}
+
+                                                            <div className={`flex flex-col ${msg.user === 'cliente' ? 'items-end' : 'items-start'}`}>
+                                                                {/* NOME DO ATENDENTE */}
+                                                                {msg.user !== 'cliente' && msg.staffName && (
+                                                                    <span className="text-[10px] text-gray-400 ml-1 mb-0.5">{msg.staffName}</span>
+                                                                )}
+
+                                                                <span className={`px-4 py-2 rounded-2xl text-xs max-w-[85%] leading-relaxed shadow-sm ${
+                                                                    msg.user === 'cliente' 
+                                                                    ? 'bg-orange-500 text-white rounded-tr-none' 
+                                                                    : 'bg-white border border-gray-200 text-gray-700 rounded-tl-none'
+                                                                }`}>
+                                                                    {msg.text}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     )) : <p className="text-center text-xs text-gray-400 py-4 italic">Envie uma mensagem para nosso suporte...</p>}
                                                 </div>

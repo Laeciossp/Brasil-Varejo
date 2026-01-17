@@ -10,6 +10,14 @@ export default {
       type: 'string',
       readOnly: true
     },
+    // --- NOTIFICAÇÃO DE SUPORTE (NOVO) ---
+    {
+      name: 'hasUnreadMessage',
+      title: '🔴 Mensagem Não Lida (Cliente)',
+      type: 'boolean',
+      initialValue: false,
+      description: 'Marcado automaticamente quando o cliente envia mensagem. Desmarque ao responder.'
+    },
     {
       name: 'status',
       title: 'Status Atual',
@@ -40,7 +48,7 @@ export default {
       ]
     },
 
-    // --- NOVO: ENDEREÇO DE ENTREGA (Essencial para o Profile.jsx) ---
+    // --- ENDEREÇO DE ENTREGA ---
     {
       name: 'shippingAddress',
       title: '📍 Endereço de Entrega',
@@ -70,7 +78,6 @@ export default {
             { name: 'quantity', type: 'number', title: 'Quantidade' },
             { name: 'price', type: 'number', title: 'Preço Unitário' },
             { 
-              // ATENÇÃO: Mudei de 'productRef' para 'product' para bater com a Query do frontend
               name: 'product', 
               type: 'reference', 
               to: [{type: 'product'}], 
@@ -81,7 +88,7 @@ export default {
             select: {
               title: 'productName',
               subtitle: 'quantity',
-              media: 'product.images.0' // Tenta mostrar a foto no painel do admin também
+              media: 'product.images.0'
             },
             prepare({title, subtitle, media}) {
               return {
@@ -101,7 +108,6 @@ export default {
       title: 'Valor Total (R$)',
       type: 'number'
     },
-    // NOVO: Método de Pagamento
     {
       name: 'paymentMethod',
       title: '💳 Método de Pagamento',
@@ -122,8 +128,7 @@ export default {
       type: 'object',
       fields: [
         { name: 'selectedCarrier', title: 'Transportadora', type: 'string' },
-        // NOVO: Prazo Estimado de Entrega
-        { name: 'shippingMethod', title: 'Prazo / Serviço (Ex: 5 a 12 dias)', type: 'string' }, 
+        { name: 'shippingMethod', title: 'Prazo / Serviço', type: 'string' }, 
         { name: 'trackingCode', title: 'Código de Rastreio', type: 'string' },
         { name: 'trackingUrl', title: 'Link de Rastreio', type: 'url' },
         { name: 'shippedAt', title: 'Data do Envio', type: 'datetime' }
@@ -138,7 +143,7 @@ export default {
       hidden: ({document}) => document?.status !== 'cancelled'
     },
 
-    // --- CHAT (SAC) ---
+    // --- CHAT (SAC) ATUALIZADO ---
     {
       name: 'messages',
       title: '💬 Histórico de Mensagens (SAC)',
@@ -152,7 +157,18 @@ export default {
               name: 'user', 
               title: 'Autor', 
               type: 'string', 
-              options: { list: ['cliente', 'admin'] } 
+              options: { list: [
+                { title: '👤 Cliente', value: 'cliente' }, 
+                { title: '🛡️ Suporte', value: 'admin' }
+              ]} 
+            },
+            // VINCULA O ATENDENTE PARA MOSTRAR FOTO
+            {
+              name: 'staff',
+              title: 'Atendente (Se for Suporte)',
+              type: 'reference',
+              to: [{ type: 'staff' }],
+              hidden: ({ parent }) => parent?.user === 'cliente'
             },
             { name: 'text', title: 'Texto', type: 'text' },
             { 
@@ -163,12 +179,12 @@ export default {
             }
           ],
           preview: {
-            select: { title: 'text', subtitle: 'user', date: 'date' },
-            prepare({title, subtitle, date}) {
-              const emoji = subtitle === 'admin' ? '🛡️' : '👤';
+            select: { title: 'text', subtitle: 'user', date: 'date', staffName: 'staff.name' },
+            prepare({title, subtitle, date, staffName}) {
+              const isSupport = subtitle === 'admin';
               return {
-                title: `${emoji} ${title}`,
-                subtitle: new Date(date).toLocaleString()
+                title: `${isSupport ? '🛡️' : '👤'} ${title}`,
+                subtitle: `${isSupport && staffName ? staffName : subtitle} - ${new Date(date).toLocaleString()}`
               }
             }
           }
@@ -177,15 +193,15 @@ export default {
     }
   ],
   
-  // PREVIEW DA LISTA DE PEDIDOS NO ADMIN
   preview: {
     select: {
       title: 'orderNumber',
       subtitle: 'customer.email',
       status: 'status',
-      total: 'totalAmount'
+      total: 'totalAmount',
+      unread: 'hasUnreadMessage' // Mostra bolinha vermelha na lista se tiver msg
     },
-    prepare({title, subtitle, status, total}) {
+    prepare({title, subtitle, status, total, unread}) {
       const statusMap = { 
         pending: '🟡', 
         paid: '🟢', 
@@ -195,8 +211,10 @@ export default {
         cancelled: '❌' 
       };
       
+      const unreadAlert = unread ? '🔴 ' : '';
+      
       return {
-        title: `${statusMap[status] || '⚪'} Pedido #${title || 'Sem Número'}`,
+        title: `${unreadAlert}${statusMap[status] || '⚪'} Pedido #${title || 'Sem Número'}`,
         subtitle: `${subtitle} | R$ ${total ? total.toFixed(2) : '0.00'}`
       }
     }

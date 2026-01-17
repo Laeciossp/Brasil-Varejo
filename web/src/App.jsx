@@ -12,12 +12,13 @@ import Cart from './pages/Cart';
 import Profile from './pages/Profile';
 import Success from './pages/Success';
 import Favorites from './pages/Favorites';
-import SearchPage from './pages/SearchPage'; // <--- IMPORTANTE
+import SearchPage from './pages/SearchPage';
 
 // Páginas Institucionais
 import About from './pages/About';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
+import Policies from './pages/Policies'; // <--- 1. IMPORT NOVO
 
 function App() {
   return (
@@ -33,7 +34,6 @@ function App() {
           <Route path="/category/:slug" element={<CategoryPage />} />
           <Route path="/categoria/:slug" element={<CategoryPage />} />
           
-          {/* NOVA ROTA DE BUSCA OBRIGATÓRIA */}
           <Route path="/busca" element={<SearchPage />} />
 
           <Route path="/cart" element={<Cart />} />
@@ -42,6 +42,9 @@ function App() {
           <Route path="/sobre" element={<About />} />
           <Route path="/termos-de-uso" element={<Terms />} />
           <Route path="/politica-de-privacidade" element={<Privacy />} />
+          
+          {/* 2. ROTA NOVA ADICIONADA AQUI */}
+          <Route path="/politicas" element={<Policies />} />
 
           <Route 
             path="/profile" 

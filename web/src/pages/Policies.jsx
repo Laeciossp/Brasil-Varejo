@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Camera, Truck, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Camera, AlertTriangle } from 'lucide-react';
 
 export default function Policies() {
   return (

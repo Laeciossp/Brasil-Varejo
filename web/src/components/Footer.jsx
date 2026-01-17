@@ -34,6 +34,10 @@ export default function Footer() {
             <ul className="space-y-3 text-sm font-medium">
                <li><Link to="/sobre" className="hover:text-orange-500 transition-colors">Sobre Nós</Link></li>
                <li><Link to="/politica-de-privacidade" className="hover:text-orange-500 transition-colors">Política de Privacidade</Link></li>
+               
+               {/* LINK NOVO ADICIONADO AQUI: */}
+               <li><Link to="/politicas" className="hover:text-orange-500 transition-colors text-orange-600 font-bold">Trocas e Devoluções</Link></li>
+               
                <li><Link to="/termos-de-uso" className="hover:text-orange-500 transition-colors">Termos de Uso</Link></li>
             </ul>
           </div>
@@ -42,13 +46,11 @@ export default function Footer() {
           <div className="md:col-span-2">
              <h4 className="font-black text-gray-800 uppercase mb-4 text-xs tracking-widest">Pagamento Seguro</h4>
              <div className="flex flex-wrap gap-3 mb-6 items-center">
-                {/* Ícones de Cartão */}
                 <div className="h-8 px-2 bg-white border rounded shadow-sm flex items-center justify-center"><span className="text-[10px] font-black">VISA</span></div>
                 <div className="h-8 px-2 bg-white border rounded shadow-sm flex items-center justify-center"><span className="text-[10px] font-black">MASTER</span></div>
                 <div className="h-8 px-2 bg-white border rounded shadow-sm flex items-center justify-center"><span className="text-[10px] font-black">PIX</span></div>
                 <div className="h-8 px-2 bg-white border rounded shadow-sm flex items-center justify-center"><span className="text-[10px] font-black">ELO</span></div>
                 
-                {/* Logo Mercado Pago */}
                 <div className="h-8 px-3 bg-[#009EE3]/10 border border-[#009EE3]/30 rounded flex items-center gap-2">
                     <img src="https://http2.mlstatic.com/frontend-assets/ui-navigation/5.14.3/mercadopago/logo__large.png" className="h-4 object-contain" alt="Mercado Pago" />
                 </div>
@@ -64,7 +66,6 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* 2. RODAPÉ LEGAL (DADOS DA EMPRESA) */}
       <div className="bg-[#f2f2f2] py-8 border-t border-gray-200">
          <div className="container mx-auto px-4 text-center text-[10px] text-gray-400 leading-relaxed uppercase tracking-wide font-medium">
             <p className="flex justify-center items-center gap-2 mb-2">
