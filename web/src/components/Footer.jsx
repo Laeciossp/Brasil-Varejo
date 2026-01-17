@@ -35,7 +35,6 @@ export default function Footer() {
                <li><Link to="/sobre" className="hover:text-orange-500 transition-colors">Sobre Nós</Link></li>
                <li><Link to="/politica-de-privacidade" className="hover:text-orange-500 transition-colors">Política de Privacidade</Link></li>
                
-               {/* LINK NOVO ADICIONADO AQUI: */}
                <li><Link to="/politicas" className="hover:text-orange-500 transition-colors text-orange-600 font-bold">Trocas e Devoluções</Link></li>
                
                <li><Link to="/termos-de-uso" className="hover:text-orange-500 transition-colors">Termos de Uso</Link></li>
@@ -58,8 +57,23 @@ export default function Footer() {
 
              <h4 className="font-black text-gray-800 uppercase mb-4 text-xs tracking-widest">Redes Sociais</h4>
              <div className="flex gap-4">
-                <a href="#" className="p-2 bg-white rounded-full border hover:border-pink-500 hover:text-pink-600 transition-all shadow-sm"><Instagram size={20}/></a>
-                <a href="#" className="p-2 bg-white rounded-full border hover:border-red-600 hover:text-red-600 transition-all shadow-sm"><Youtube size={20}/></a>
+                {/* --- LINKS DO INSTAGRAM E YOUTUBE ATUALIZADOS --- */}
+                <a 
+                    href="https://www.instagram.com/palastoreoficial/" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="p-2 bg-white rounded-full border hover:border-pink-500 hover:text-pink-600 transition-all shadow-sm"
+                >
+                    <Instagram size={20}/>
+                </a>
+                <a 
+                    href="https://www.youtube.com/channel/UCK-HZ2ztYPMqHdoYtXGVd9w" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="p-2 bg-white rounded-full border hover:border-red-600 hover:text-red-600 transition-all shadow-sm"
+                >
+                    <Youtube size={20}/>
+                </a>
              </div>
           </div>
 

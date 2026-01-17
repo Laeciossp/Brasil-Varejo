@@ -1,8 +1,9 @@
 import React, { useState } from 'react'; 
 import { Link, useNavigate } from 'react-router-dom';
+// CORREÇÃO AQUI: Adicionei 'ShieldCheck' na lista de imports
 import { 
   Search, MapPin, ShoppingCart, Heart, User, Menu, 
-  Phone, ShieldCheck, X, ArrowRight, LogIn, ChevronRight
+  Phone, X, ArrowRight, LogIn, ChevronRight, ShieldCheck
 } from 'lucide-react';
 import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/clerk-react";
 import { motion, AnimatePresence } from 'framer-motion';
@@ -48,7 +49,6 @@ export default function Header() {
     }
   };
 
-  // Cores do Gradiente para reutilizar (Roxo Escuro -> Roxo Vivo -> Roxo Escuro)
   const gradientClass = "h-[3px] w-full bg-gradient-to-r from-[#4C1D95] via-[#7C3AED] to-[#4C1D95]";
 
   return (
@@ -77,7 +77,13 @@ export default function Header() {
             </button>
 
             <Link to="/" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 group mr-auto lg:mr-0">
-            <div className="bg-white text-crocus-deep px-3 py-1 rounded-lg font-black text-2xl tracking-tighter group-hover:rotate-3 transition-transform shadow-md uppercase">P</div>
+            {/* LOGO P */}
+            <img 
+                src="/logo-p.png" 
+                alt="P Palastore" 
+                className="h-10 w-auto object-contain group-hover:rotate-3 transition-transform drop-shadow-md"
+            />
+            
             <div className="leading-none drop-shadow-md">
                 <span className="block font-black text-2xl tracking-tight text-white uppercase italic">Palastore</span>
                 <span className="block font-medium text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Oficial</span>
@@ -158,16 +164,14 @@ export default function Header() {
         </div>
       </div>
 
-      {/* 3. MENU / BARRA DE DEPARTAMENTOS (COM EFEITO BORDA GRADIENTE) */}
+      {/* 3. MENU / BARRA DE DEPARTAMENTOS */}
       <div className={`bg-white text-gray-800 shadow-sm relative ${isMenuOpen ? 'block' : 'hidden'} lg:block`}>
         
-        {/* LINHA GRADIENTE SUPERIOR */}
         <div className={gradientClass}></div>
 
         <div className="container mx-auto px-4">
           <ul className="flex flex-col lg:flex-row lg:items-center justify-between text-[11px] font-black uppercase tracking-tight py-2 lg:py-0 gap-4 lg:gap-0">
             
-            {/* AREA DO USUÁRIO MOBILE */}
             <li className="lg:hidden flex flex-col gap-2 border-b border-gray-100 pb-4 mb-2">
                 <div 
                     onClick={() => { setIsMenuOpen(false); setIsCepModalOpen(true); }}
@@ -214,7 +218,6 @@ export default function Header() {
                 </SignedIn>
             </li>
             
-            {/* MENU DEPARTAMENTOS */}
             <li className="relative group w-full lg:w-auto">
                <button 
                  onClick={() => setIsMenuOpen(!isMenuOpen)} 
@@ -241,7 +244,6 @@ export default function Header() {
                </AnimatePresence>
             </li>
 
-            {/* DESTAQUES / LINKS RÁPIDOS */}
             <div 
                 className="flex flex-row lg:flex-row gap-4 lg:gap-0 w-full lg:w-auto overflow-x-auto pb-2 lg:pb-0 scrollbar-hide"
                 onClick={() => setIsMenuOpen(false)}
@@ -257,12 +259,10 @@ export default function Header() {
           </ul>
         </div>
 
-        {/* LINHA GRADIENTE INFERIOR */}
         <div className={gradientClass}></div>
 
       </div>
 
-      {/* Modal CEP */}
       <AnimatePresence>
         {isCepModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
