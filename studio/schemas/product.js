@@ -68,6 +68,17 @@ export default {
       group: 'main',
       of: [{ type: 'image', options: { hotspot: true } }]
     },
+    // --- NOVO CAMPO DE VÍDEO (SOLICITADO) ---
+    {
+      name: 'videoFile',
+      title: 'Vídeo do Produto',
+      description: 'Upload de arquivo de vídeo (MP4, WebM) vindo da importação.',
+      type: 'file',
+      group: 'main',
+      options: {
+        accept: 'video/*'
+      }
+    },
     {
       name: 'description',
       title: 'Descrição Completa',

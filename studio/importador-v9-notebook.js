@@ -1,5 +1,5 @@
 // importador-v9-notebook.js
-// VERSÃO NOTEBOOKS - MODO DEBUG (CHROME ABERTO)
+// VERSÃO FINAL: Preço Correto (+25%), Scroll Seguro e Todas as Imagens
 const { createClient } = require('@sanity/client');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -9,7 +9,6 @@ const slugify = require('slugify');
 
 puppeteer.use(StealthPlugin());
 
-// --- CONFIGURAÇÕES ---
 const SANITY_CONFIG = {
   projectId: 'o4upb251',
   dataset: 'production',
@@ -18,152 +17,179 @@ const SANITY_CONFIG = {
   token: 'skmLtdy7ME2lnyS0blM3IWiNv0wuWzBG4egK7jUYdVVkBktLngwz47GbsPPdq5NLX58WJEiR3bmW0TBpeMtBhPNEIxf5mk6uQ14PvbGYKlWQdSiP2uWdBDafWhVAGMw5RYh3IyKhDSmqEqSLg1bEzzYVEwcGWDZ9tEPmZhNDkljeyvY6IcEO' 
 };
 
-// ID da Categoria (NOTEBOOKS) - Atualizado
 const CATEGORY_ID = '4685ccb5-a7e6-4799-bb7a-cac69d3b9a2a'; 
-
 const client = createClient(SANITY_CONFIG);
 
-// --- DETECTAR MARCA (ATUALIZADO PARA NOTEBOOKS) ---
+const generateKey = () => Math.random().toString(36).substring(2, 15);
+
 function getBrand(title) {
-    const brands = [
-        // Notebooks
-        'Dell', 'HP', 'Lenovo', 'Acer', 'Asus', 'Apple', 'Samsung', 'Vaio', 'Compaq', 'Avell', 'MSI', 'Gigabyte', 'Razer',
-        // Celulares/Geral (mantido caso apareça)
-        'Motorola', 'Xiaomi', 'LG', 'Positivo', 'Multilaser', 'Philco'
-    ];
-    // Verifica marcas compostas primeiro ou busca simples
+    const brands = ['Dell', 'HP', 'Lenovo', 'Acer', 'Asus', 'Apple', 'Samsung', 'Vaio', 'Compaq', 'Avell', 'MSI', 'Gigabyte', 'Razer'];
     const titleUpper = title.toUpperCase();
     for (const brand of brands) {
-        if (titleUpper.includes(brand.toUpperCase())) {
-            return brand;
-        }
+        if (titleUpper.includes(brand.toUpperCase())) return brand;
     }
     return 'Genérica';
 }
 
-async function uploadImageToSanity(imageUrl) {
+async function uploadMediaToSanity(mediaUrl) {
   try {
-    const cleanUrl = imageUrl.split('?')[0]; 
-    console.log(`   ⬇️ Baixando: ${cleanUrl.substring(0, 40)}...`);
+    const cleanUrl = mediaUrl.split('?')[0];
+    const isVideo = cleanUrl.match(/\.(mp4|webm|mov|mkv)$/i);
+    const assetType = isVideo ? 'file' : 'image';
+    
+    console.log(`   ⬇️ Baixando [${assetType.toUpperCase()}]: ${cleanUrl.substring(0, 40)}...`);
     
     const response = await axios.get(cleanUrl, { 
         responseType: 'arraybuffer',
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36' }
+        timeout: 20000, 
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
     });
+
     const buffer = Buffer.from(response.data, 'binary');
-    const asset = await client.assets.upload('image', buffer, { filename: path.basename(cleanUrl) });
-    return asset._id;
+    const asset = await client.assets.upload(assetType, buffer, { filename: path.basename(cleanUrl) });
+    return { id: asset._id, type: assetType };
   } catch (error) {
-    console.error(`   ❌ Falha ao baixar imagem: ${error.message}`);
-    return null;
+    console.warn(`   ⚠️ PULEI (Erro download): ${error.message}`);
+    return null; 
   }
 }
 
 async function startScraper() {
-  console.log('🔌 Conectando ao Chrome (Modo Debug)...');
-  
+  console.log('🔌 Conectando ao Chrome...');
   let browser;
   try {
-      // MANTIDO: Conecta ao Chrome já aberto pelo usuário
-      browser = await puppeteer.connect({
-        browserURL: 'http://127.0.0.1:9222',
-        defaultViewport: null
-      });
+      browser = await puppeteer.connect({ browserURL: 'http://127.0.0.1:9222', defaultViewport: null });
   } catch (e) {
       console.error("❌ Erro: Chrome debug não encontrado.");
-      console.error("   Certifique-se de rodar o Chrome com: --remote-debugging-port=9222");
       return;
   }
   
-  // Pega a primeira aba aberta (a que você está olhando)
   const pages = await browser.pages();
   const page = pages[0]; 
   
-  console.log('✅ Conectado! Lendo página ativa...');
+  console.log('✅ Conectado! Extraindo dados...');
 
+  // Scroll Limitado (5 segundos max)
   try {
-    // Scroll para garantir carregamento de imagens (Lazy Load)
     await page.evaluate(async () => {
-        window.scrollBy(0, document.body.scrollHeight);
+        await new Promise((resolve) => {
+            let totalHeight = 0;
+            const distance = 200;
+            let ticks = 0;
+            const timer = setInterval(() => {
+                const scrollHeight = document.body.scrollHeight;
+                window.scrollBy(0, distance);
+                totalHeight += distance;
+                ticks++;
+                if(totalHeight >= scrollHeight || ticks >= 50){
+                    clearInterval(timer);
+                    resolve();
+                }
+            }, 100);
+        });
     });
-    await new Promise(r => setTimeout(r, 1000));
+  } catch (e) {}
 
-    // EXTRAÇÃO DE DADOS
-    const rawData = await page.evaluate(() => {
+  const rawData = await page.evaluate(() => {
         const titleEl = document.querySelector('h1') || document.querySelector('.product-title-text');
         
-        // Tentativa genérica de pegar preço
-        const priceEl = document.querySelector('[data-testid="product-price-value"]') || 
-                        document.querySelector('.price') || 
-                        document.querySelector('.sale-price') ||
-                        document.querySelector('.andes-money-amount__fraction'); // Exemplo ML
+        // 1. PREÇO VIA META TAG (Mais confiável)
+        const metaPrice = document.querySelector('meta[property="product:price:amount"]') || 
+                          document.querySelector('meta[property="og:price:amount"]');
         
         let rawPrice = 0;
-        if (priceEl) {
-            const onlyNumbers = priceEl.innerText.replace(/[^\d,]/g, '').replace(',', '.');
-            rawPrice = parseFloat(onlyNumbers);
+        
+        if (metaPrice && metaPrice.content) {
+            rawPrice = parseFloat(metaPrice.content);
+        } else {
+            // 2. Fallback Visual
+            const priceEl = document.querySelector('[data-testid="product-price-value"]') || 
+                            document.querySelector('.ui-pdp-price__second-line .andes-money-amount__fraction') || 
+                            document.querySelector('.price') || 
+                            document.querySelector('.sale-price');
+            
+            if (priceEl) {
+                const cleanText = priceEl.innerText.replace(/[^\d,]/g, '').replace(',', '.');
+                rawPrice = parseFloat(cleanText);
+            }
         }
 
         const data = {
-            title: titleEl ? titleEl.innerText : 'Produto Sem Título',
+            title: titleEl ? titleEl.innerText : 'Notebook Sem Título',
             originalPrice: rawPrice || 0,
-            images: []
+            medias: []
         };
 
-        // 1. Tenta pegar imagens via JSON-LD (Melhor qualidade)
+        // Imagens e Vídeos
         const scripts = document.querySelectorAll('script[type="application/ld+json"]');
         scripts.forEach(s => {
             try {
                 const json = JSON.parse(s.innerText);
-                if ((json['@type'] === 'Product' || json['@type'] === 'ItemPage') && json.image) {
+                if (json.image) {
                     const imgs = Array.isArray(json.image) ? json.image : [json.image];
-                    data.images.push(...imgs);
+                    data.medias.push(...imgs);
+                }
+                if (json.video && json.video.contentUrl) {
+                     data.medias.push(json.video.contentUrl);
                 }
             } catch(e){}
         });
 
-        // 2. Fallback: Pega imagens grandes do DOM se JSON falhar
-        if (data.images.length === 0) {
-            document.querySelectorAll('img').forEach(img => {
-                // Filtra ícones pequenos
-                if(img.naturalWidth > 300 || img.width > 300) {
-                    let src = img.getAttribute('src');
-                    // Tenta pegar versão HD se existir atributos de zoom
-                    if (img.getAttribute('data-zoom')) src = img.getAttribute('data-zoom');
-                    data.images.push(src); 
-                }
+        // Galerias
+        const gallerySelectors = ['.ui-pdp-gallery__figure img', '.ui-pdp-image-gallery__figure img', '#gallery img', '.product-gallery img'];
+        gallerySelectors.forEach(sel => {
+            document.querySelectorAll(sel).forEach(img => {
+                let src = img.getAttribute('data-zoom') || img.getAttribute('src');
+                if(src) data.medias.push(src);
             });
-        }
+        });
+
+        document.querySelectorAll('img').forEach(img => {
+            if(img.naturalWidth > 450 || img.width > 450) { 
+                let src = img.getAttribute('data-zoom') || img.getAttribute('src');
+                if(src) data.medias.push(src);
+            }
+        });
+        
+        document.querySelectorAll('video source, video').forEach(v => {
+            const src = v.src || v.getAttribute('src');
+            if (src && src.startsWith('http') && (src.includes('.mp4') || src.includes('.webm'))) {
+                data.medias.push(src);
+            }
+        });
 
         return data;
     });
 
-    console.log(`📦 Notebook identificado: ${rawData.title}`);
+    console.log(`📦 Produto: ${rawData.title}`);
 
-    // --- PREÇO (Lógica mantida: +25% ou ajuste conforme necessidade) ---
-    const finalPrice = rawData.originalPrice > 0 ? (rawData.originalPrice * 1.25) : 0; 
+    // --- CÁLCULO DE PREÇO ---
+    const costPrice = Number(rawData.originalPrice);
+    const salePrice = costPrice > 0 ? (costPrice * 1.25) : 0; // +25%
+    
+    console.log(`💰 Custo Original: R$ ${costPrice.toFixed(2)}`);
+    console.log(`📈 Preço Venda (+25%): R$ ${salePrice.toFixed(2)}`);
 
-    // --- FILTRO IMAGENS ---
-    // Limpa URLs e pega apenas únicas
-    const uniqueImages = [...new Set(rawData.images.map(u => u ? u.split('?')[0] : null))].filter(Boolean);
-    const finalImages = uniqueImages.filter(u => u.startsWith('http')).slice(0, 8); // Max 8 fotos
-
-    if (finalImages.length === 0) {
-        console.error("❌ Nenhuma imagem de qualidade encontrada.");
-        browser.disconnect(); return;
+    const uniqueMedias = [...new Set(rawData.medias.map(u => u ? u.split('?')[0] : null))]
+        .filter(u => u && u.startsWith('http') && !u.includes('.svg'));
+    
+    const uploadedAssets = [];
+    for (const url of uniqueMedias.slice(0, 10)) {
+        const result = await uploadMediaToSanity(url);
+        if (result) uploadedAssets.push(result);
     }
 
-    console.log(`⬆️ Subindo ${finalImages.length} imagens para o Sanity...`);
-    const assetIds = [];
-    for (const url of finalImages) {
-        const id = await uploadImageToSanity(url);
-        if (id) assetIds.push(id);
+    const imageAssets = uploadedAssets.filter(a => a.type === 'image');
+    const videoAssets = uploadedAssets.filter(a => a.type === 'file');
+
+    if (imageAssets.length === 0) {
+        console.error("❌ Erro: Nenhuma imagem encontrada.");
+        browser.disconnect(); return;
     }
 
     const detectedBrand = getBrand(rawData.title);
     const skuCode = `NB-${Math.random().toString(36).substring(7).toUpperCase()}`;
 
-    // --- CRIAÇÃO DO DOCUMENTO (Schema de Produto) ---
     const doc = {
       _type: 'product',
       title: rawData.title,
@@ -175,70 +201,62 @@ async function startScraper() {
       lote: 'Importação V9 (Notebooks)',
       productType: 'tech',
       brand: detectedBrand,
+      warranty: '12 meses',
+      
+      categories: [{ 
+          _type: 'reference', 
+          _ref: CATEGORY_ID,
+          _key: generateKey() 
+      }],
+      
+      // PREÇO CORRIGIDO AQUI
+      price: parseFloat(salePrice.toFixed(2)),
+      oldPrice: parseFloat(costPrice.toFixed(2)),
 
-      categories: [
-        { _type: 'reference', _ref: CATEGORY_ID } // ID de Notebooks
-      ],
-
-      price: parseFloat(finalPrice.toFixed(2)),
-      oldPrice: rawData.originalPrice > 0 ? rawData.originalPrice : null,
-
-      images: assetIds.map(id => ({ 
+      images: imageAssets.map(item => ({ 
         _type: 'image', 
-        _key: id, 
-        asset: { _type: 'reference', _ref: id } 
+        _key: item.id, 
+        asset: { _type: 'reference', _ref: item.id } 
       })),
 
-      // Descrição genérica para preenchimento posterior
+      ...(videoAssets.length > 0 && {
+        videoFile: {
+            _type: 'file',
+            asset: { _type: 'reference', _ref: videoAssets[0].id }
+        }
+      }),
+
       description: [ 
-        { 
+          { 
             _type: 'block', 
-            children: [{ _type: 'span', text: 'Descrição técnica do Notebook pendente. Gerar com IA.' }] 
-        } 
+            _key: generateKey(),
+            style: 'normal',
+            children: [{ 
+                _type: 'span', 
+                _key: generateKey(),
+                text: 'Notebook com 12 meses de garantia.' 
+            }] 
+          } 
       ],
 
       variants: [
         {
             _key: skuCode,
             variantName: 'Padrão',
-            price: parseFloat(finalPrice.toFixed(2)),
-            oldPrice: rawData.originalPrice > 0 ? rawData.originalPrice : null,
-            stock: 5, // Estoque padrão menor para notebooks
-            variantImage: assetIds[0] ? { _type: 'image', asset: { _type: 'reference', _ref: assetIds[0] } } : null
+            price: parseFloat(salePrice.toFixed(2)),
+            oldPrice: parseFloat(costPrice.toFixed(2)),
+            stock: 5,
+            variantImage: imageAssets[0] ? { _type: 'image', asset: { _type: 'reference', _ref: imageAssets[0].id } } : null
         }
       ],
-
-      // Specs vazias (o padrão V9 limpo)
-      techSpecs: {
-        screen: null,
-        camera: null,
-        processor: null,
-        battery: null,
-        os: null
-      },
-
-      logistics: {
-        weight: 2.5, // Peso médio notebook
-        width: 38,
-        height: 5,
-        length: 26
-      },
-      
+      techSpecs: { screen: null, camera: null, processor: null, battery: null, os: null },
+      logistics: { weight: 2.5, width: 38, height: 5, length: 26 },
       freeShipping: true
     };
 
     const result = await client.create(doc);
     console.log(`✅ SUCESSO! Notebook criado.`);
-    console.log(`🆔 ID: ${result._id}`);
-    console.log(`🏷️ Marca: ${detectedBrand} | Categoria: Notebooks`);
-    
-    // IMPORTANTE: Disconnect apenas desconecta o script, não fecha seu Chrome
     browser.disconnect();
-
-  } catch (error) {
-    console.error('❌ Erro Fatal:', error.message);
-    if(browser) browser.disconnect();
-  }
 }
 
 startScraper();
