@@ -1,6 +1,5 @@
 import React, { useState } from 'react'; 
 import { Link, useNavigate } from 'react-router-dom';
-// CORREÇÃO AQUI: Adicionei 'ShieldCheck' na lista de imports
 import { 
   Search, MapPin, ShoppingCart, Heart, User, Menu, 
   Phone, X, ArrowRight, LogIn, ChevronRight, ShieldCheck
@@ -76,19 +75,21 @@ export default function Header() {
                 {isMenuOpen ? <X size={28}/> : <Menu size={28}/>}
             </button>
 
-            <Link to="/" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 group mr-auto lg:mr-0">
-            {/* LOGO P */}
-            <img 
-                src="/logo-p.png" 
-                alt="P Palastore" 
-                className="h-10 w-auto object-contain group-hover:rotate-3 transition-transform drop-shadow-md"
-            />
-            
-            <div className="leading-none drop-shadow-md">
-                <span className="block font-black text-2xl tracking-tight text-white uppercase italic">Palastore</span>
-                <span className="block font-medium text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Oficial</span>
-            </div>
+            {/* --- CORREÇÃO DO LOGO AQUI --- */}
+            {/* Removi 'group-hover:rotate-3' e 'transition-transform' */}
+            <Link to="/" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 group mr-auto lg:mr-0 select-none">
+                <img 
+                    src="/logo-p.png" 
+                    alt="P Palastore" 
+                    className="h-10 w-auto object-contain drop-shadow-md" 
+                />
+                
+                <div className="leading-none drop-shadow-md">
+                    <span className="block font-black text-2xl tracking-tight text-white uppercase italic">Palastore</span>
+                    <span className="block font-medium text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Oficial</span>
+                </div>
             </Link>
+            {/* ----------------------------- */}
 
             {/* Carrinho Mobile */}
             <Link to="/cart" onClick={() => setIsMenuOpen(false)} className="lg:hidden relative text-white p-2">

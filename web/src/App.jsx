@@ -1,5 +1,5 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react'; // 1. Adicionado useEffect
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'; // 2. Adicionado useLocation
 import { SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
 
 import Header from './components/Header';
@@ -18,9 +18,16 @@ import SearchPage from './pages/SearchPage';
 import About from './pages/About';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
-import Policies from './pages/Policies'; // <--- 1. IMPORT NOVO
+import Policies from './pages/Policies';
 
 function App() {
+  // 3. Lógica para rolar para o topo sempre que a rota mudar
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
   return (
     <div className="flex flex-col min-h-screen bg-[#f2f2f2] font-sans text-gray-900">
       
@@ -42,8 +49,6 @@ function App() {
           <Route path="/sobre" element={<About />} />
           <Route path="/termos-de-uso" element={<Terms />} />
           <Route path="/politica-de-privacidade" element={<Privacy />} />
-          
-          {/* 2. ROTA NOVA ADICIONADA AQUI */}
           <Route path="/politicas" element={<Policies />} />
 
           <Route 
