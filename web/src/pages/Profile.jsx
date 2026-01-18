@@ -56,19 +56,35 @@ export default function Profile() {
       return map[method] || method || 'Não informado';
   };
 
+  // Carrega endereços padrão se vazio (pode remover isso em produção se preferir)
   useEffect(() => {
-    if (customer.addresses.length === 0 && user) {
-        // Lógica de fallback se necessário
+    if (customer.addresses.length === 0) {
+        const defaultAddresses = [
+            {
+                id: 'addr_default_01',
+                alias: 'CASA',
+                name: user?.fullName || 'Cliente', 
+                street: 'Endereço Principal',
+                number: 'SN',
+                neighborhood: 'Bairro',
+                city: 'Cidade',
+                state: 'UF',
+                zip: '00000000',
+                document: ''
+            }
+        ];
+        // Comentado para não criar endereços fictícios automaticamente na versão final,
+        // mas você pode descomentar se quiser testar.
+        // defaultAddresses.forEach(addr => addAddress(addr));
     }
-  }, [customer.addresses.length, user]);
+  }, [customer.addresses.length, addAddress, user]);
 
   const fetchData = async () => {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-    // --- QUERY BLINDADA V2 (CORREÇÃO DE LINK) ---
-    // 1. match: Busca case-insensitive (ignora maiúsculas/minúsculas)
-    // 2. !(_id in path("drafts.**")): Garante que não pega rascunho, só produto publicado
+    // --- QUERY CORRIGIDA E OTIMIZADA ---
+    // Usamos coalesce() para tentar pegar a imagem de várias fontes se falhar
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, 
       orderNumber, 
@@ -83,19 +99,10 @@ export default function Profile() {
         productName, 
         quantity, 
         price,
-        
-        // Tenta link direto. Se falhar, busca pelo NOME (match) ignorando rascunhos.
-        "productSlug": coalesce(
-            product->slug.current, 
-            *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].slug.current
-        ), 
-        
-        // Tenta imagem direta. Se falhar, busca pelo NOME.
-        "imageUrl": coalesce(
-            product->images[0].asset->url, 
-            *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].images[0].asset->url,
-            imageUrl
-        )
+        // Tenta pegar o slug do produto referenciado
+        "productSlug": product->slug.current, 
+        // Tenta pegar imagem do produto referenciado OU a imagem salva no item (se houver snapshot)
+        "imageUrl": coalesce(product->images[0].asset->url, imageUrl)
       },
       messages[]{
         text,
@@ -111,14 +118,14 @@ export default function Profile() {
       setOrders(ordersResult);
       setLoading(false);
     } catch (err) { 
-      console.error("Erro busca:", err); 
+      console.error("Erro ao buscar pedidos:", err); 
       setLoading(false); 
     }
   };
 
   useEffect(() => { if (isLoaded && user) fetchData(); }, [isLoaded, user]);
 
-  // Listener Real-Time
+  // Real-time listener
   useEffect(() => {
     if (!activeChatOrder) return;
     const subscription = writeClient
@@ -130,7 +137,7 @@ export default function Profile() {
               order._id === activeChatOrder ? { ...order, ...update.result } : order
             )
           );
-          fetchData(); 
+          fetchData(); // Atualiza dados completos para garantir referências
         }
       });
     return () => subscription.unsubscribe();
@@ -153,19 +160,20 @@ export default function Profile() {
         .set({ hasUnreadMessage: true }) 
         .commit();
       setMessageInput('');
-    } catch (err) { console.error(err); alert("Erro ao enviar."); } 
-    finally { setProcessing(false); }
+    } catch (err) { 
+        console.error(err); alert("Erro ao enviar mensagem."); 
+    } finally { setProcessing(false); }
   };
 
   const handleCancelOrder = async (orderId) => {
-    if(!confirm("Tem certeza que deseja cancelar?")) return;
+    if(!confirm("Tem certeza que deseja cancelar este pedido?")) return;
     setProcessing(true);
     try {
         await writeClient.patch(orderId).set({ 
             status: 'cancelled',
-            cancellationReason: 'Cancelado pelo cliente'
+            cancellationReason: 'Cancelado pelo cliente via painel'
         }).commit();
-        alert("Pedido cancelado.");
+        alert("Pedido cancelado com sucesso.");
     } catch (err) { console.error(err); alert("Erro ao cancelar."); } 
     finally { setProcessing(false); }
   };
@@ -290,11 +298,12 @@ export default function Profile() {
                                         <div className="flex-1 space-y-4">
                                             <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2">Produtos Adquiridos</h4>
                                             {order.items?.map((item, i) => {
-                                                const hasSlug = item.productSlug && item.productSlug !== '';
-                                                const ItemWrapper = hasSlug ? Link : 'div';
-                                                // Link Seguro: Adicionei encodeURIComponent para evitar erros com caracteres especiais
-                                                const wrapperProps = hasSlug ? { to: `/produto/${encodeURIComponent(item.productSlug)}`, title: `Ver produto: ${item.productSlug}` } : {};
-                                                const cursorClass = hasSlug ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default opacity-90';
+                                                // Verifica se existe slug para criar o link. Se não, usa div.
+                                                const ItemWrapper = item.productSlug ? Link : 'div';
+                                                const wrapperProps = item.productSlug ? { to: `/produto/${item.productSlug}` } : {};
+                                                
+                                                // Se não tiver slug, visualmente indicamos que não é clicável
+                                                const cursorClass = item.productSlug ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default opacity-90';
 
                                                 return (
                                                     <ItemWrapper 
@@ -302,39 +311,45 @@ export default function Profile() {
                                                         {...wrapperProps}
                                                         className={`flex gap-4 items-start py-3 border-b border-dashed border-gray-100 last:border-0 group/item transition-colors p-2 -mx-2 rounded-lg ${cursorClass}`}
                                                     >
-                                                        {/* IMAGEM */}
+                                                        {/* IMAGEM DO PRODUTO */}
                                                         <div className="w-20 h-20 bg-white border border-gray-200 rounded-lg p-1 flex-shrink-0 relative overflow-hidden flex items-center justify-center">
                                                             {item.imageUrl ? (
-                                                                <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-contain" />
+                                                                <img 
+                                                                    src={item.imageUrl} 
+                                                                    alt={item.productName} 
+                                                                    // CORRIGIDO: Removido mix-blend-multiply que sumia com a imagem
+                                                                    className="w-full h-full object-contain" 
+                                                                />
                                                             ) : (
                                                                 <Package size={24} className="text-gray-300"/>
                                                             )}
                                                         </div>
                                                         
                                                         <div className="flex-1 min-w-0">
-                                                            <p className={`text-sm font-bold text-gray-800 leading-tight ${hasSlug ? 'group-hover/item:text-orange-600 transition-colors' : ''}`}>
+                                                            {/* NOME COMPLETO (SEM CORTE) */}
+                                                            <p className={`text-sm font-bold text-gray-800 leading-tight ${item.productSlug ? 'group-hover/item:text-orange-600 transition-colors' : ''}`}>
                                                                 {item.productName}
                                                             </p>
+                                                            
                                                             <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
                                                                 <span className="bg-gray-100 px-2 py-1 rounded">Qtd: {item.quantity}</span>
-                                                                {!hasSlug && (
-                                                                    <span className="text-orange-400 flex items-center gap-1" title="Produto indisponível ou link não encontrado"><AlertCircle size={10}/> Indisponível</span>
+                                                                {!item.productSlug && (
+                                                                    <span className="text-orange-400 flex items-center gap-1" title="Produto indisponível ou link antigo"><AlertCircle size={10}/> Link indisponível</span>
                                                                 )}
                                                             </div>
                                                         </div>
                                                         
                                                         <div className="flex flex-col items-end gap-1">
                                                             <span className="text-sm font-black text-gray-900">{formatCurrency(item.price)}</span>
-                                                            {hasSlug && <ChevronRight size={16} className="text-gray-300 group-hover/item:text-orange-500 mt-2"/>}
+                                                            {item.productSlug && <ChevronRight size={16} className="text-gray-300 group-hover/item:text-orange-500 mt-2"/>}
                                                         </div>
                                                     </ItemWrapper>
                                                 );
                                             })}
                                         </div>
 
-                                        {/* COLUNA 2: INFO */}
+                                        {/* COLUNA 2: INFO (Sem alterações de lógica, apenas layout) */}
                                         <div className="lg:w-1/3 space-y-6 lg:border-l lg:border-gray-100 lg:pl-6">
-                                            {/* Endereço */}
                                             <div>
                                                 <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2 flex items-center gap-1">
                                                     <MapPin size={12}/> Entrega em:
@@ -346,27 +361,40 @@ export default function Profile() {
                                                         <p>{order.shippingAddress.city} - {order.shippingAddress.state}</p>
                                                         <p className="text-xs text-gray-400 mt-1">CEP: {order.shippingAddress.zip}</p>
                                                     </div>
-                                                ) : <p className="text-xs text-gray-400 italic bg-gray-50 p-2 rounded">Endereço não registrado.</p>}
+                                                ) : (
+                                                    <p className="text-xs text-gray-400 italic bg-gray-50 p-2 rounded">Endereço não registrado.</p>
+                                                )}
                                             </div>
 
-                                            {/* Pagamento e Prazo */}
                                             <div className="space-y-3">
                                                 <div>
-                                                    <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-1 flex items-center gap-1"><CreditCard size={12}/> Pagamento:</h4>
+                                                    <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-1 flex items-center gap-1">
+                                                        <CreditCard size={12}/> Pagamento:
+                                                    </h4>
                                                     <p className="text-sm font-medium text-gray-800">{getPaymentLabel(order.paymentMethod)}</p>
                                                 </div>
+                                                
                                                 <div>
-                                                    <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-1 flex items-center gap-1"><Truck size={12}/> Prazo Estimado:</h4>
-                                                    <p className="text-sm font-medium text-green-700">{order.deliveryEstimate || '5 a 12 dias úteis'}</p>
+                                                    <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-1 flex items-center gap-1">
+                                                        <Truck size={12}/> Prazo Estimado:
+                                                    </h4>
+                                                    <p className="text-sm font-medium text-green-700">
+                                                        {order.deliveryEstimate || '5 a 12 dias úteis'}
+                                                    </p>
                                                 </div>
-                                                {/* Botão Cancelar */}
+
                                                 <div className="border-t border-gray-200 pt-3 mt-2">
                                                     <div className="flex justify-between items-center mb-4">
                                                         <span className="text-gray-500 font-bold text-xs uppercase">Total</span>
                                                         <span className="text-xl font-black text-gray-900">{formatCurrency(order.totalAmount)}</span>
                                                     </div>
+
                                                     {['pending', 'paid'].includes(order.status) && (
-                                                        <button onClick={() => handleCancelOrder(order._id)} disabled={processing} className="w-full border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2.5 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-2 transition-colors shadow-sm">
+                                                        <button 
+                                                            onClick={() => handleCancelOrder(order._id)}
+                                                            disabled={processing}
+                                                            className="w-full border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2.5 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-2 transition-colors shadow-sm"
+                                                        >
                                                             <XCircle size={16} /> Cancelar Pedido
                                                         </button>
                                                     )}
@@ -377,9 +405,13 @@ export default function Profile() {
 
                                     {/* CHAT */}
                                     <div className="border-t border-gray-100 pt-4 mt-4">
-                                        <button onClick={() => setActiveChatOrder(activeChatOrder === order._id ? null : order._id)} className="text-gray-600 text-sm font-bold flex items-center gap-2 hover:text-orange-600 transition-colors">
+                                        <button 
+                                            onClick={() => setActiveChatOrder(activeChatOrder === order._id ? null : order._id)} 
+                                            className="text-gray-600 text-sm font-bold flex items-center gap-2 hover:text-orange-600 transition-colors"
+                                        >
                                             <MessageSquare size={16}/> {activeChatOrder === order._id ? 'Ocultar Chat' : 'Precisa de ajuda com este pedido?'}
                                         </button>
+
                                         {activeChatOrder === order._id && (
                                             <div className="mt-4 bg-white p-4 rounded-xl border border-gray-200 shadow-inner animate-in fade-in slide-in-from-top-2">
                                                 <div className="h-40 overflow-y-auto mb-3 space-y-3 pr-2 scrollbar-thin scrollbar-thumb-gray-200">
@@ -392,14 +424,24 @@ export default function Profile() {
                                                             )}
                                                             <div className={`flex flex-col ${msg.user === 'cliente' ? 'items-end' : 'items-start'}`}>
                                                                 {msg.user !== 'cliente' && msg.staffName && <span className="text-[10px] text-gray-400 ml-1 mb-0.5">{msg.staffName}</span>}
-                                                                <span className={`px-4 py-2 rounded-2xl text-xs max-w-[85%] leading-relaxed shadow-sm ${msg.user === 'cliente' ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-white border border-gray-200 text-gray-700 rounded-tl-none'}`}>{msg.text}</span>
+                                                                <span className={`px-4 py-2 rounded-2xl text-xs max-w-[85%] leading-relaxed shadow-sm ${msg.user === 'cliente' ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-white border border-gray-200 text-gray-700 rounded-tl-none'}`}>
+                                                                    {msg.text}
+                                                                </span>
                                                             </div>
                                                         </div>
                                                     )) : <p className="text-center text-xs text-gray-400 py-4 italic">Envie uma mensagem para nosso suporte...</p>}
                                                 </div>
                                                 <div className="flex gap-2 relative">
-                                                    <input className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 focus:border-orange-500 outline-none transition-all" placeholder="Digite sua mensagem..." value={messageInput} onChange={e => setMessageInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendMessage(order._id)}/>
-                                                    <button onClick={() => handleSendMessage(order._id)} disabled={processing} className="bg-gray-900 hover:bg-black text-white p-3 rounded-xl transition-colors"><Send size={18}/></button>
+                                                    <input 
+                                                        className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 focus:border-orange-500 outline-none transition-all" 
+                                                        placeholder="Digite sua mensagem..."
+                                                        value={messageInput}
+                                                        onChange={e => setMessageInput(e.target.value)}
+                                                        onKeyDown={e => e.key === 'Enter' && handleSendMessage(order._id)}
+                                                    />
+                                                    <button onClick={() => handleSendMessage(order._id)} disabled={processing} className="bg-gray-900 hover:bg-black text-white p-3 rounded-xl transition-colors">
+                                                        <Send size={18}/>
+                                                    </button>
                                                 </div>
                                             </div>
                                         )}
@@ -409,12 +451,17 @@ export default function Profile() {
                         ))}
                     </div>
                 )}
-                {/* ABA ENDEREÇOS - Mantido igual */}
+
+                {/* ABA ENDEREÇOS */}
                 {activeTab === 'address' && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                          <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><MapPin className="text-orange-500" /> Gerenciar Endereços</h2>
-                            <button onClick={() => setShowAddressForm(!showAddressForm)} className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide hover:bg-black transition-all shadow-lg shadow-gray-200 flex items-center gap-2"><CheckCircle2 size={16}/> Cadastrar Novo Endereço</button>
+                            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                <MapPin className="text-orange-500" /> Gerenciar Endereços
+                            </h2>
+                            <button onClick={() => setShowAddressForm(!showAddressForm)} className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide hover:bg-black transition-all shadow-lg shadow-gray-200 flex items-center gap-2">
+                                <CheckCircle2 size={16}/> Cadastrar Novo Endereço
+                            </button>
                         </div>
                         {showAddressForm && (
                             <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xl mb-8 relative">

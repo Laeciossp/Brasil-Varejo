@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react'; // 1. Adicionado useEffect
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'; // 2. Adicionado useLocation
+import React, { useEffect } from 'react'; 
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'; 
 import { SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
 
 import Header from './components/Header';
@@ -21,7 +21,6 @@ import Privacy from './pages/Privacy';
 import Policies from './pages/Policies';
 
 function App() {
-  // 3. Lógica para rolar para o topo sempre que a rota mudar
   const { pathname } = useLocation();
 
   useEffect(() => {
@@ -36,7 +35,12 @@ function App() {
       <main className="flex-grow">
         <Routes>
           <Route path="/" element={<Home />} />
+          
+          {/* --- CORREÇÃO AQUI --- */}
+          {/* Mantivemos o inglês para compatibilidade e adicionamos o português */}
           <Route path="/product/:slug" element={<ProductDetails />} />
+          <Route path="/produto/:slug" element={<ProductDetails />} />
+          {/* ------------------- */}
           
           <Route path="/category/:slug" element={<CategoryPage />} />
           <Route path="/categoria/:slug" element={<CategoryPage />} />
@@ -66,6 +70,8 @@ function App() {
           />
 
           <Route path="/sucesso" element={<Success />} />
+          
+          {/* Esta linha era a culpada, ela mandava tudo que não existe para a Home */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
