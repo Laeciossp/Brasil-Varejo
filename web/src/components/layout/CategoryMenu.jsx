@@ -20,22 +20,26 @@ const CategoryItem = ({ category, level = 0, onItemClick }) => {
 
   // Design: Recuo progressivo
   const paddingLeft = level === 0 ? '16px' : `${(level * 16) + 16}px`;
-  const textSize = level === 0 ? 'text-sm font-semibold' : 'text-xs font-medium';
-  const textColor = level === 0 ? 'text-gray-800' : 'text-gray-600';
+  
+  // CORES ATUALIZADAS PARA O TEMA CROCUS-DEEP
+  const textSize = level === 0 ? 'text-sm font-bold' : 'text-xs font-medium';
+  // Nível 0 = Roxo Forte, Nível 1+ = Roxo um pouco mais suave
+  const textColor = level === 0 ? 'text-crocus-deep' : 'text-crocus-deep/80';
 
   return (
     <div className="w-full">
       <div 
         className={`
-          flex items-center justify-between py-2 pr-3 hover:bg-gray-50 transition-colors cursor-pointer group
-          ${isOpen ? 'bg-gray-50' : ''}
+          flex items-center justify-between py-2 pr-3 hover:bg-purple-50 transition-colors cursor-pointer group
+          ${isOpen ? 'bg-purple-50' : ''}
         `}
         style={{ paddingLeft }}
       >
         {/* Link da Categoria */}
         <Link 
           to={`/categoria/${category.slug.current}`} 
-          className={`flex-1 ${textSize} ${textColor} group-hover:text-blue-600 transition-colors`}
+          // CORRIGIDO: Hover agora usa text-crocus-vivid (ou similar) em vez de blue
+          className={`flex-1 ${textSize} ${textColor} group-hover:text-purple-700 transition-colors`}
           onClick={onItemClick} // Fecha o menu ao clicar
         >
           {category.title}
@@ -49,7 +53,8 @@ const CategoryItem = ({ category, level = 0, onItemClick }) => {
               e.stopPropagation();
               setIsOpen(!isOpen);
             }} 
-            className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all"
+            // CORRIGIDO: Cores dos ícones e fundo do botão para roxo
+            className="p-1 text-crocus-deep/40 hover:text-crocus-deep hover:bg-purple-100 rounded-full transition-all"
           >
             {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </button>
@@ -60,7 +65,8 @@ const CategoryItem = ({ category, level = 0, onItemClick }) => {
       {hasChildren && isOpen && (
         <div className="relative">
           <div 
-            className="absolute bg-gray-200 w-[1px] top-0 bottom-0"
+            // CORRIGIDO: Linha vertical agora é um roxo bem clarinho
+            className="absolute bg-purple-100 w-[1px] top-0 bottom-0"
             style={{ left: `${(level * 16) + 24}px` }} 
           ></div>
           
@@ -103,9 +109,9 @@ export default function CategoryMenu({ onItemClick }) {
     fetchCategories();
   }, []);
 
-  if (loading) return <div className="p-6 text-center text-gray-400 text-sm animate-pulse">Carregando...</div>;
+  if (loading) return <div className="p-6 text-center text-crocus-deep/50 text-sm animate-pulse">Carregando...</div>;
   
-  if (tree.length === 0) return <div className="p-4 text-center text-gray-400 text-xs">Nenhuma categoria ativa.</div>;
+  if (tree.length === 0) return <div className="p-4 text-center text-crocus-deep/50 text-xs">Nenhuma categoria ativa.</div>;
 
   return (
     <div className="flex flex-col py-2 max-h-[80vh] overflow-y-auto custom-scrollbar">

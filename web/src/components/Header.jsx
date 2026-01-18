@@ -75,8 +75,7 @@ export default function Header() {
                 {isMenuOpen ? <X size={28}/> : <Menu size={28}/>}
             </button>
 
-            {/* --- CORREÇÃO DO LOGO AQUI --- */}
-            {/* Removi 'group-hover:rotate-3' e 'transition-transform' */}
+            {/* LOGO */}
             <Link to="/" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 group mr-auto lg:mr-0 select-none">
                 <img 
                     src="/logo-p.png" 
@@ -89,7 +88,6 @@ export default function Header() {
                     <span className="block font-medium text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Oficial</span>
                 </div>
             </Link>
-            {/* ----------------------------- */}
 
             {/* Carrinho Mobile */}
             <Link to="/cart" onClick={() => setIsMenuOpen(false)} className="lg:hidden relative text-white p-2">
@@ -166,7 +164,8 @@ export default function Header() {
       </div>
 
       {/* 3. MENU / BARRA DE DEPARTAMENTOS */}
-      <div className={`bg-white text-gray-800 shadow-sm relative ${isMenuOpen ? 'block' : 'hidden'} lg:block`}>
+      {/* ATUALIZADO: text-crocus-deep para cor do tema */}
+      <div className={`bg-white text-crocus-deep shadow-sm relative ${isMenuOpen ? 'block' : 'hidden'} lg:block`}>
         
         <div className={gradientClass}></div>
 
