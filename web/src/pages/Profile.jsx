@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { 
   Package, User, MapPin, LogOut, MessageSquare, Send, 
   ShoppingBag, CheckCircle2, Trash2, CreditCard, Truck,
-  XCircle, ChevronRight, AlertCircle, Search
+  XCircle, ChevronRight, AlertCircle
 } from 'lucide-react';
 import { useUser, SignOutButton } from "@clerk/clerk-react";
 import useCartStore from '../store/useCartStore';
@@ -56,7 +56,6 @@ export default function Profile() {
       return map[method] || method || 'Não informado';
   };
 
-  // Endereços Padrão (Exemplo)
   useEffect(() => {
     if (customer.addresses.length === 0 && user) {
         // Lógica de fallback se necessário
@@ -67,8 +66,9 @@ export default function Profile() {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-    // --- QUERY BLINDADA (BUSCA INTELIGENTE) ---
-    // Se a referência 'product->' falhar (null), ele busca um produto com o mesmo TITLE.
+    // --- QUERY BLINDADA V2 (CORREÇÃO DE LINK) ---
+    // 1. match: Busca case-insensitive (ignora maiúsculas/minúsculas)
+    // 2. !(_id in path("drafts.**")): Garante que não pega rascunho, só produto publicado
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, 
       orderNumber, 
@@ -84,16 +84,16 @@ export default function Profile() {
         quantity, 
         price,
         
-        // 1. Tenta Link Direto | 2. Tenta Busca por Nome
+        // Tenta link direto. Se falhar, busca pelo NOME (match) ignorando rascunhos.
         "productSlug": coalesce(
             product->slug.current, 
-            *[_type == "product" && title == ^.productName][0].slug.current
+            *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].slug.current
         ), 
         
-        // 1. Tenta Imagem Direta | 2. Tenta Imagem por Busca de Nome | 3. Tenta Imagem Snapshot
+        // Tenta imagem direta. Se falhar, busca pelo NOME.
         "imageUrl": coalesce(
             product->images[0].asset->url, 
-            *[_type == "product" && title == ^.productName][0].images[0].asset->url,
+            *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].images[0].asset->url,
             imageUrl
         )
       },
@@ -290,9 +290,11 @@ export default function Profile() {
                                         <div className="flex-1 space-y-4">
                                             <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2">Produtos Adquiridos</h4>
                                             {order.items?.map((item, i) => {
-                                                const ItemWrapper = item.productSlug ? Link : 'div';
-                                                const wrapperProps = item.productSlug ? { to: `/produto/${item.productSlug}` } : {};
-                                                const cursorClass = item.productSlug ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default opacity-90';
+                                                const hasSlug = item.productSlug && item.productSlug !== '';
+                                                const ItemWrapper = hasSlug ? Link : 'div';
+                                                // Link Seguro: Adicionei encodeURIComponent para evitar erros com caracteres especiais
+                                                const wrapperProps = hasSlug ? { to: `/produto/${encodeURIComponent(item.productSlug)}`, title: `Ver produto: ${item.productSlug}` } : {};
+                                                const cursorClass = hasSlug ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default opacity-90';
 
                                                 return (
                                                     <ItemWrapper 
@@ -310,20 +312,20 @@ export default function Profile() {
                                                         </div>
                                                         
                                                         <div className="flex-1 min-w-0">
-                                                            <p className={`text-sm font-bold text-gray-800 leading-tight ${item.productSlug ? 'group-hover/item:text-orange-600 transition-colors' : ''}`}>
+                                                            <p className={`text-sm font-bold text-gray-800 leading-tight ${hasSlug ? 'group-hover/item:text-orange-600 transition-colors' : ''}`}>
                                                                 {item.productName}
                                                             </p>
                                                             <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
                                                                 <span className="bg-gray-100 px-2 py-1 rounded">Qtd: {item.quantity}</span>
-                                                                {!item.productSlug && (
-                                                                    <span className="text-orange-400 flex items-center gap-1" title="Produto indisponível"><AlertCircle size={10}/> Indisponível</span>
+                                                                {!hasSlug && (
+                                                                    <span className="text-orange-400 flex items-center gap-1" title="Produto indisponível ou link não encontrado"><AlertCircle size={10}/> Indisponível</span>
                                                                 )}
                                                             </div>
                                                         </div>
                                                         
                                                         <div className="flex flex-col items-end gap-1">
                                                             <span className="text-sm font-black text-gray-900">{formatCurrency(item.price)}</span>
-                                                            {item.productSlug && <ChevronRight size={16} className="text-gray-300 group-hover/item:text-orange-500 mt-2"/>}
+                                                            {hasSlug && <ChevronRight size={16} className="text-gray-300 group-hover/item:text-orange-500 mt-2"/>}
                                                         </div>
                                                     </ItemWrapper>
                                                 );
