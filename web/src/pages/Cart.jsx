@@ -50,7 +50,6 @@ export default function Cart() {
 
       setRecalculatingShipping(true);
       try {
-        // 🔥 IMPORTANTE: Usa a variável de ambiente se existir, ou fallback
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
         const response = await fetch(`${baseUrl}/shipping`, { 
           method: 'POST',
@@ -91,7 +90,7 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
   };
 
-  // --- CHECKOUT (CORRIGIDO PARA NÃO QUEBRAR) ---
+  // --- CHECKOUT ---
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login para continuar.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
@@ -117,7 +116,6 @@ export default function Cart() {
 
       const data = await response.json();
 
-      // 🚨 BLINDAGEM DE ERRO: Se o Worker devolver erro, paramos aqui
       if (data.error || !data.url) {
         console.error("Erro no Worker:", data);
         alert(`Erro ao criar pagamento: ${JSON.stringify(data.details || data.error)}`);
@@ -125,12 +123,10 @@ export default function Cart() {
         return; 
       }
 
-      // Se tudo estiver certo, abre o Mercado Pago
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
         mp.checkout({ preference: { id: data.id_preferencia } }).open(); 
       } else {
-        // Redirecionamento tradicional
         window.location.href = data.url; 
       }
     } catch (error) {
@@ -169,32 +165,60 @@ export default function Cart() {
             {/* LISTA DE ITENS */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="p-6 space-y-6">
-                {items.map((item) => (
-                  <div key={item._id} className="flex gap-4 sm:gap-6">
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white border border-gray-100 rounded-lg flex-shrink-0 p-2">
-                        <img src={item.image} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
-                    </div>
-                    <div className="flex-1 flex flex-col justify-between">
-                      <div className="flex justify-between items-start gap-2">
-                          <h3 className="font-medium text-gray-900 line-clamp-2 text-sm sm:text-base">{item.name || item.title}</h3>
-                          <button onClick={() => removeItem(item._id)} className="text-gray-400 hover:text-red-500 transition-colors">
-                            <Trash2 size={18}/>
-                          </button>
+                {items.map((item) => {
+                  // Prepara o slug para o link (verifica se existe)
+                  const productSlug = item.slug?.current || item.slug;
+
+                  return (
+                    <div key={item._id} className="flex gap-4 sm:gap-6">
+                      
+                      {/* FOTO DO PRODUTO (AGORA COM LINK) */}
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white border border-gray-100 rounded-lg flex-shrink-0 p-2 relative">
+                          {productSlug ? (
+                             <Link to={`/produto/${productSlug}`} className="block w-full h-full">
+                                <img src={item.image} className="w-full h-full object-contain mix-blend-multiply hover:scale-105 transition-transform" alt={item.title} />
+                             </Link>
+                          ) : (
+                             <img src={item.image} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
+                          )}
                       </div>
-                      <div className="flex justify-between items-end mt-2">
-                          <div className="flex items-center border border-gray-200 rounded-lg">
-                            <button onClick={() => updateQuantity(item._id, item.quantity - 1)} className="px-3 py-1 text-gray-500 hover:bg-gray-50">-</button>
-                            <span className="px-2 text-sm font-bold text-gray-900">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item._id, item.quantity + 1)} className="px-3 py-1 text-gray-500 hover:bg-gray-50">+</button>
-                          </div>
-                          <div className="text-right">
-                              <p className="text-lg font-bold text-gray-900">{formatCurrency(item.price)}</p>
-                              {item.quantity > 1 && <span className="text-xs text-gray-400 block">{formatCurrency(item.price * item.quantity)} total</span>}
-                          </div>
+
+                      <div className="flex-1 flex flex-col justify-between">
+                        <div className="flex justify-between items-start gap-2">
+                            {/* NOME DO PRODUTO (AGORA COM LINK) */}
+                            <h3 className="font-medium text-gray-900 line-clamp-2 text-sm sm:text-base">
+                              {productSlug ? (
+                                <Link to={`/produto/${productSlug}`} className="hover:text-orange-600 transition-colors">
+                                  {item.name || item.title}
+                                </Link>
+                              ) : (
+                                item.name || item.title
+                              )}
+                            </h3>
+
+                            {/* BOTÃO REMOVER (FUNCIONALIDADE MANTIDA) */}
+                            <button onClick={() => removeItem(item._id)} className="text-gray-400 hover:text-red-500 transition-colors">
+                              <Trash2 size={18}/>
+                            </button>
+                        </div>
+                        
+                        <div className="flex justify-between items-end mt-2">
+                            {/* CONTROLE DE QUANTIDADE (FUNCIONALIDADE MANTIDA) */}
+                            <div className="flex items-center border border-gray-200 rounded-lg">
+                              <button onClick={() => updateQuantity(item._id, item.quantity - 1)} className="px-3 py-1 text-gray-500 hover:bg-gray-50">-</button>
+                              <span className="px-2 text-sm font-bold text-gray-900">{item.quantity}</span>
+                              <button onClick={() => updateQuantity(item._id, item.quantity + 1)} className="px-3 py-1 text-gray-500 hover:bg-gray-50">+</button>
+                            </div>
+                            
+                            <div className="text-right">
+                                <p className="text-lg font-bold text-gray-900">{formatCurrency(item.price)}</p>
+                                {item.quantity > 1 && <span className="text-xs text-gray-400 block">{formatCurrency(item.price * item.quantity)} total</span>}
+                            </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

@@ -248,7 +248,6 @@ export default function ProductDetails() {
       if (allImages.length <= 1) return;
 
       const currentIndex = allImages.findIndex(img => img._key === activeMedia?._key);
-      // Se não achou (ex: é imagem de variação), começa do 0
       const safeIndex = currentIndex === -1 ? 0 : currentIndex; 
 
       if (direction === 'next') {
@@ -318,11 +317,9 @@ export default function ProductDetails() {
                 )
                 )}
 
-                {/* 👇 SETAS DE NAVEGAÇÃO NO PC (ELEGANTES & MODERNAS) */}
-                {/* Só aparecem no PC (hidden lg:flex) e quando tem mais de 1 foto */}
+                {/* SETAS DE NAVEGAÇÃO */}
                 {product.images?.length > 1 && (
                     <>
-                        {/* SETA ESQUERDA */}
                         <button 
                             onClick={(e) => { e.stopPropagation(); navigateImage('prev'); }}
                             className="hidden lg:flex absolute left-4 top-1/2 -translate-y-1/2 z-20 
@@ -333,7 +330,6 @@ export default function ProductDetails() {
                             <ChevronLeft size={20} strokeWidth={3} />
                         </button>
 
-                        {/* SETA DIREITA */}
                         <button 
                             onClick={(e) => { e.stopPropagation(); navigateImage('next'); }}
                             className="hidden lg:flex absolute right-4 top-1/2 -translate-y-1/2 z-20 
@@ -346,7 +342,7 @@ export default function ProductDetails() {
                     </>
                 )}
 
-                {/* BOLINHAS (Indicador Mobile) */}
+                {/* BOLINHAS MOBILE */}
                 <div className="lg:hidden absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
                      {product.images?.map((_, idx) => (
                          <div key={idx} className={`h-1.5 rounded-full transition-all ${activeMedia?._key === product.images[idx]._key ? 'w-4 bg-orange-500' : 'w-1.5 bg-gray-300'}`}></div>
@@ -447,12 +443,21 @@ export default function ProductDetails() {
                 </div>
                 {shippingOptions && shippingOptions.length > 0 && (
                     <div className="space-y-1">
-                        {shippingOptions.filter(o => !o.error).map((opt, idx) => (
-                            <div key={idx} onClick={() => setShipping(opt)} className={`flex justify-between p-2 px-3 border rounded-lg cursor-pointer text-xs ${selectedShipping?.name === opt.name ? 'border-blue-500 bg-blue-50/50' : 'border-gray-100'}`}>
-                                <span className="font-bold text-gray-700">{opt.name} <span className="text-gray-400 font-normal">({opt.delivery_time} dias)</span></span>
-                                <span className="font-black text-gray-900">{parseFloat(opt.price) === 0 ? 'Grátis' : formatCurrency(opt.price)}</span>
-                            </div>
-                        ))}
+                        {shippingOptions.filter(o => !o.error).map((opt, idx) => {
+                            // CORREÇÃO: Compara Nome e Preço para ser único
+                            const isSelected = selectedShipping?.name === opt.name && selectedShipping?.price === opt.price;
+                            
+                            return (
+                                <div 
+                                    key={idx} 
+                                    onClick={() => setShipping(opt)} 
+                                    className={`flex justify-between p-2 px-3 border rounded-lg cursor-pointer text-xs ${isSelected ? 'border-blue-500 bg-blue-50/50' : 'border-gray-100'}`}
+                                >
+                                    <span className="font-bold text-gray-700">{opt.name} <span className="text-gray-400 font-normal">({opt.delivery_time} dias)</span></span>
+                                    <span className="font-black text-gray-900">{parseFloat(opt.price) === 0 ? 'Grátis' : formatCurrency(opt.price)}</span>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>
