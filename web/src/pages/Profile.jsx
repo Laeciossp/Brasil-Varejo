@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@sanity/client'; 
+// ADICIONADO: Import do Link para navegação
+import { Link } from 'react-router-dom';
 import { 
   Package, User, MapPin, LogOut, MessageSquare, Send, 
   ShoppingBag, CheckCircle2, Trash2, CreditCard, Truck, Calendar,
-  XCircle 
+  XCircle, ChevronRight
 } from 'lucide-react';
 import { useUser, SignOutButton } from "@clerk/clerk-react";
 import useCartStore from '../store/useCartStore';
@@ -92,7 +94,7 @@ export default function Profile() {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-    // QUERY ATUALIZADA: Trazendo nome e foto do staff dentro das mensagens
+    // QUERY ATUALIZADA: Adicionado productSlug e garantindo imageUrl
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, 
       orderNumber, 
@@ -107,6 +109,7 @@ export default function Profile() {
         productName, 
         quantity, 
         price,
+        "productSlug": product->slug.current, 
         "imageUrl": product->images[0].asset->url 
       },
       messages[]{
@@ -130,7 +133,6 @@ export default function Profile() {
   useEffect(() => { if (isLoaded && user) fetchData(); }, [isLoaded, user]);
 
   // --- OUVINTE EM TEMPO REAL (REAL-TIME LISTENER) ---
-  // Isso faz a mensagem do suporte aparecer sem dar F5
   useEffect(() => {
     if (!activeChatOrder) return;
 
@@ -138,13 +140,11 @@ export default function Profile() {
       .listen(`*[_id == $orderId]`, { orderId: activeChatOrder })
       .subscribe((update) => {
         if (update.result) {
-          // Atualiza apenas o pedido que mudou
           setOrders((prevOrders) => 
             prevOrders.map((order) => 
               order._id === activeChatOrder ? { ...order, ...update.result } : order
             )
           );
-          // Re-executa fetchData para garantir projeções (como a foto do staff)
           fetchData();
         }
       });
@@ -152,7 +152,6 @@ export default function Profile() {
     return () => subscription.unsubscribe();
   }, [activeChatOrder]);
 
-  // --- ENVIO DE MENSAGEM (Com Notificação) ---
   const handleSendMessage = async (orderId) => {
     if (!messageInput.trim()) return;
     setProcessing(true);
@@ -165,16 +164,14 @@ export default function Profile() {
     };
 
     try {
-      // Salva mensagem E marca como "Não Lida" para o admin ver
       await writeClient
         .patch(orderId)
         .setIfMissing({ messages: [] })
         .append('messages', [newMessage])
-        .set({ hasUnreadMessage: true }) // <--- NOTIFICAÇÃO
+        .set({ hasUnreadMessage: true }) 
         .commit();
         
       setMessageInput('');
-      // O Listener vai atualizar a tela automaticamente
     } catch (err) { 
         console.error(err);
         alert("Erro ao enviar mensagem."); 
@@ -316,26 +313,41 @@ export default function Profile() {
                                 <div className="p-6">
                                     <div className="flex flex-col lg:flex-row gap-8">
                                         
-                                        {/* COLUNA 1: PRODUTOS */}
+                                        {/* COLUNA 1: PRODUTOS - ALTERADO PARA USAR LINK */}
                                         <div className="flex-1 space-y-4">
                                             <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2">Produtos Adquiridos</h4>
-                                            {order.items?.map((item, i) => (
-                                                <div key={i} className="flex gap-4 items-center py-2 border-b border-dashed border-gray-100 last:border-0">
-                                                    <div className="w-16 h-16 bg-white border border-gray-200 rounded-lg p-1 flex-shrink-0">
-                                                        {item.imageUrl ? (
-                                                            <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-contain" />
-                                                        ) : (
-                                                            <div className="w-full h-full flex items-center justify-center text-gray-300"><Package size={20}/></div>
-                                                        )}
-                                                    </div>
-                                                    
-                                                    <div className="flex-1">
-                                                        <p className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight">{item.productName}</p>
-                                                        <p className="text-xs text-gray-500 mt-1">Qtd: {item.quantity}</p>
-                                                    </div>
-                                                    <span className="text-sm font-black text-gray-900">{formatCurrency(item.price)}</span>
-                                                </div>
-                                            ))}
+                                            {order.items?.map((item, i) => {
+                                                // Verifica se existe slug para criar o link
+                                                const ItemWrapper = item.productSlug ? Link : 'div';
+                                                const wrapperProps = item.productSlug ? { to: `/produto/${item.productSlug}` } : {};
+
+                                                return (
+                                                    <ItemWrapper 
+                                                        key={i} 
+                                                        {...wrapperProps}
+                                                        className={`flex gap-4 items-center py-2 border-b border-dashed border-gray-100 last:border-0 group/item ${item.productSlug ? 'cursor-pointer hover:bg-gray-50 transition-colors p-2 -mx-2 rounded-lg' : ''}`}
+                                                    >
+                                                        <div className="w-16 h-16 bg-white border border-gray-200 rounded-lg p-1 flex-shrink-0 relative overflow-hidden">
+                                                            {item.imageUrl ? (
+                                                                <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-contain mix-blend-multiply" />
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center text-gray-300"><Package size={20}/></div>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        <div className="flex-1">
+                                                            <p className={`text-sm font-bold text-gray-800 line-clamp-2 leading-tight ${item.productSlug ? 'group-hover/item:text-orange-600 transition-colors' : ''}`}>
+                                                                {item.productName}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500 mt-1">Qtd: {item.quantity}</p>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm font-black text-gray-900">{formatCurrency(item.price)}</span>
+                                                            {item.productSlug && <ChevronRight size={14} className="text-gray-300 group-hover/item:text-orange-500"/>}
+                                                        </div>
+                                                    </ItemWrapper>
+                                                );
+                                            })}
                                         </div>
 
                                         {/* COLUNA 2: INFO */}
