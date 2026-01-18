@@ -32,7 +32,7 @@ export default function Footer() {
               <li>
                 <a href="https://wa.me/5571983774301" target="_blank" rel="noreferrer" className="hover:text-orange-400 transition-colors flex items-center gap-3 group">
                   <span className="bg-white/10 p-2 rounded-full group-hover:bg-orange-500 transition-all"><Phone size={16} className="text-white"/></span> 
-                  (71) 98377-4301
+                   Whatsapp (71) 983810420 ou (71) 98377-4301
                 </a>
               </li>
               <li>

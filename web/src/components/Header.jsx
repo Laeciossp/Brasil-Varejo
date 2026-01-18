@@ -57,7 +57,7 @@ export default function Header() {
       <div className="hidden lg:flex justify-end items-center container mx-auto px-4 py-2 text-xs font-medium border-b border-white/20">
         <div className="flex gap-4 items-center">
           <a href="https://wa.me/5571983774301" target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:underline opacity-90 transition-opacity">
-             <Phone size={12}/> Vendas: (71) 98377-4301
+             <Phone size={12}/> Vendas: Whatsapp (71) 983810420 ou (71) 98377-4301 
           </a>
         </div>
       </div>
