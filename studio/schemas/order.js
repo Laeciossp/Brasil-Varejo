@@ -10,7 +10,7 @@ export default {
       type: 'string',
       readOnly: true
     },
-    // --- NOTIFICAÇÃO DE SUPORTE (NOVO) ---
+    // --- NOTIFICAÇÃO DE SUPORTE ---
     {
       name: 'hasUnreadMessage',
       title: '🔴 Mensagem Não Lida (Cliente)',
@@ -36,10 +36,25 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- DADOS DO CLIENTE ---
+    // --- CAMPOS DE RAIZ (CORREÇÃO DE ERROS) ---
+    // Estes campos estavam aparecendo como "Unknown" no log
+    {
+      name: 'customerEmail',
+      title: 'E-mail do Cliente (Principal)',
+      type: 'string',
+      readOnly: true
+    },
+    {
+      name: 'customerDocument',
+      title: 'CPF/CNPJ do Cliente (Principal)',
+      type: 'string',
+      readOnly: true
+    },
+
+    // --- DADOS DO CLIENTE (OBJETO LEGADO) ---
     {
       name: 'customer',
-      title: 'Dados do Cliente',
+      title: 'Dados do Cliente (Objeto)',
       type: 'object',
       fields: [
         { name: 'name', type: 'string', title: 'Nome' },
@@ -48,13 +63,21 @@ export default {
       ]
     },
 
-    // --- ENDEREÇO DE ENTREGA ---
+    // --- ENDEREÇO DE ENTREGA (ATUALIZADO) ---
     {
       name: 'shippingAddress',
       title: '📍 Endereço de Entrega',
       type: 'object',
       options: { collapsible: true, collapsed: false },
       fields: [
+        // Novos campos para parar os avisos "Unknown fields"
+        { name: 'alias', title: 'Apelido do Endereço', type: 'string' },
+        { name: 'name', title: 'Nome do Destinatário', type: 'string' },
+        { name: 'document', title: 'CPF na Nota (Endereço)', type: 'string' },
+        { name: 'cpf', title: 'CPF (Campo Legado)', type: 'string', hidden: true },
+        { name: 'id', title: 'ID Interno', type: 'string', readOnly: true },
+
+        // Campos Originais
         { name: 'zip', type: 'string', title: 'CEP' },
         { name: 'street', type: 'string', title: 'Rua' },
         { name: 'number', type: 'string', title: 'Número' },
@@ -82,13 +105,15 @@ export default {
               type: 'reference', 
               to: [{type: 'product'}], 
               title: 'Produto Original (Link)' 
-            }
+            },
+            // Adicionado para garantir que a foto apareça mesmo se o produto mudar
+            { name: 'imageUrl', type: 'url', title: 'Foto do Produto (Snapshot)' }
           ],
           preview: {
             select: {
               title: 'productName',
               subtitle: 'quantity',
-              media: 'product.images.0'
+              media: 'imageUrl' // Prioriza a imagem salva no pedido
             },
             prepare({title, subtitle, media}) {
               return {
@@ -143,7 +168,7 @@ export default {
       hidden: ({document}) => document?.status !== 'cancelled'
     },
 
-    // --- CHAT (SAC) ATUALIZADO ---
+    // --- CHAT (SAC) ---
     {
       name: 'messages',
       title: '💬 Histórico de Mensagens (SAC)',
@@ -162,7 +187,6 @@ export default {
                 { title: '🛡️ Suporte', value: 'admin' }
               ]} 
             },
-            // VINCULA O ATENDENTE PARA MOSTRAR FOTO
             {
               name: 'staff',
               title: 'Atendente (Se for Suporte)',
@@ -196,10 +220,10 @@ export default {
   preview: {
     select: {
       title: 'orderNumber',
-      subtitle: 'customer.email',
+      subtitle: 'customerEmail', // Usa o email da raiz que é mais confiável
       status: 'status',
       total: 'totalAmount',
-      unread: 'hasUnreadMessage' // Mostra bolinha vermelha na lista se tiver msg
+      unread: 'hasUnreadMessage'
     },
     prepare({title, subtitle, status, total, unread}) {
       const statusMap = { 
@@ -215,7 +239,7 @@ export default {
       
       return {
         title: `${unreadAlert}${statusMap[status] || '⚪'} Pedido #${title || 'Sem Número'}`,
-        subtitle: `${subtitle} | R$ ${total ? total.toFixed(2) : '0.00'}`
+        subtitle: `${subtitle || 'Cliente'} | R$ ${total ? total.toFixed(2) : '0.00'}`
       }
     }
   }
