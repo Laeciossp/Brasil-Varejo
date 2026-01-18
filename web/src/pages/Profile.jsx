@@ -1,22 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@sanity/client'; 
-// ADICIONADO: Import do Link para navegação
 import { Link } from 'react-router-dom';
 import { 
   Package, User, MapPin, LogOut, MessageSquare, Send, 
-  ShoppingBag, CheckCircle2, Trash2, CreditCard, Truck, Calendar,
-  XCircle, ChevronRight
+  ShoppingBag, CheckCircle2, Trash2, CreditCard, Truck,
+  XCircle, ChevronRight, AlertCircle
 } from 'lucide-react';
 import { useUser, SignOutButton } from "@clerk/clerk-react";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CLIENTE SANITY COM PERMISSÃO DE ESCRITA ---
+// --- CLIENTE SANITY ---
 const writeClient = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
   apiVersion: '2023-05-03',
-  useCdn: false, // OBRIGATÓRIO false para tempo real
+  useCdn: false, 
   token: 'skmLtdy7ME2lnyS0blM3IWiNv0wuWzBG4egK7jUYdVVkBktLngwz47GbsPPdq5NLX58WJEiR3bmW0TBpeMtBhPNEIxf5mk6uQ14PvbGYKlWQdSiP2uWdBDafWhVAGMw5RYh3IyKhDSmqEqSLg1bEzzYVEwcGWDZ9tEPmZhNDkljeyvY6IcEO'
 });
 
@@ -57,44 +56,35 @@ export default function Profile() {
       return map[method] || method || 'Não informado';
   };
 
+  // Carrega endereços padrão se vazio (pode remover isso em produção se preferir)
   useEffect(() => {
     if (customer.addresses.length === 0) {
         const defaultAddresses = [
             {
                 id: 'addr_default_01',
-                alias: 'CASA 2',
-                name: 'ÉRIKA VIRGÍNIA', 
-                street: 'Agostinho Amaral',
-                number: '78',
-                neighborhood: 'São Sebastião do Passé',
-                city: 'São Sebastião do Passé',
-                state: 'BA',
-                zip: '43850000',
-                document: '022.954.045-76'
-            },
-            {
-                id: 'addr_default_02',
-                alias: 'TARCILA DA PAIXÃO DOS REIS',
-                name: 'TARCILA DA PAIXÃO DOS REIS',
-                street: 'JOSÉ NICOLAU FIGUEROA',
-                number: '247',
-                neighborhood: 'SÃO ROQUE',
-                city: 'SÃO SEBASTIÃO DO PASSÉ',
-                state: 'BA',
-                zip: '43850000',
-                document: '03343869503'
+                alias: 'CASA',
+                name: user?.fullName || 'Cliente', 
+                street: 'Endereço Principal',
+                number: 'SN',
+                neighborhood: 'Bairro',
+                city: 'Cidade',
+                state: 'UF',
+                zip: '00000000',
+                document: ''
             }
         ];
-        defaultAddresses.forEach(addr => addAddress(addr));
-        if(defaultAddresses.length > 0) setActiveAddress(defaultAddresses[0].id);
+        // Comentado para não criar endereços fictícios automaticamente na versão final,
+        // mas você pode descomentar se quiser testar.
+        // defaultAddresses.forEach(addr => addAddress(addr));
     }
-  }, [customer.addresses.length, addAddress, setActiveAddress]);
+  }, [customer.addresses.length, addAddress, user]);
 
   const fetchData = async () => {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-    // QUERY ATUALIZADA: Adicionado productSlug e garantindo imageUrl
+    // --- QUERY CORRIGIDA E OTIMIZADA ---
+    // Usamos coalesce() para tentar pegar a imagem de várias fontes se falhar
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, 
       orderNumber, 
@@ -109,8 +99,10 @@ export default function Profile() {
         productName, 
         quantity, 
         price,
+        // Tenta pegar o slug do produto referenciado
         "productSlug": product->slug.current, 
-        "imageUrl": product->images[0].asset->url 
+        // Tenta pegar imagem do produto referenciado OU a imagem salva no item (se houver snapshot)
+        "imageUrl": coalesce(product->images[0].asset->url, imageUrl)
       },
       messages[]{
         text,
@@ -126,16 +118,16 @@ export default function Profile() {
       setOrders(ordersResult);
       setLoading(false);
     } catch (err) { 
-      console.error(err); setLoading(false); 
+      console.error("Erro ao buscar pedidos:", err); 
+      setLoading(false); 
     }
   };
 
   useEffect(() => { if (isLoaded && user) fetchData(); }, [isLoaded, user]);
 
-  // --- OUVINTE EM TEMPO REAL (REAL-TIME LISTENER) ---
+  // Real-time listener
   useEffect(() => {
     if (!activeChatOrder) return;
-
     const subscription = writeClient
       .listen(`*[_id == $orderId]`, { orderId: activeChatOrder })
       .subscribe((update) => {
@@ -145,24 +137,21 @@ export default function Profile() {
               order._id === activeChatOrder ? { ...order, ...update.result } : order
             )
           );
-          fetchData();
+          fetchData(); // Atualiza dados completos para garantir referências
         }
       });
-
     return () => subscription.unsubscribe();
   }, [activeChatOrder]);
 
   const handleSendMessage = async (orderId) => {
     if (!messageInput.trim()) return;
     setProcessing(true);
-    
     const newMessage = { 
         _key: Math.random().toString(36).substring(7), 
         user: 'cliente', 
         text: messageInput, 
         date: new Date().toISOString() 
     };
-
     try {
       await writeClient
         .patch(orderId)
@@ -170,18 +159,14 @@ export default function Profile() {
         .append('messages', [newMessage])
         .set({ hasUnreadMessage: true }) 
         .commit();
-        
       setMessageInput('');
     } catch (err) { 
-        console.error(err);
-        alert("Erro ao enviar mensagem."); 
-    } finally { 
-        setProcessing(false); 
-    }
+        console.error(err); alert("Erro ao enviar mensagem."); 
+    } finally { setProcessing(false); }
   };
 
   const handleCancelOrder = async (orderId) => {
-    if(!confirm("Tem certeza que deseja cancelar este pedido? Essa ação não pode ser desfeita.")) return;
+    if(!confirm("Tem certeza que deseja cancelar este pedido?")) return;
     setProcessing(true);
     try {
         await writeClient.patch(orderId).set({ 
@@ -189,12 +174,8 @@ export default function Profile() {
             cancellationReason: 'Cancelado pelo cliente via painel'
         }).commit();
         alert("Pedido cancelado com sucesso.");
-    } catch (err) {
-        console.error("Erro ao cancelar:", err);
-        alert("Erro ao cancelar.");
-    } finally {
-        setProcessing(false);
-    }
+    } catch (err) { console.error(err); alert("Erro ao cancelar."); } 
+    finally { setProcessing(false); }
   };
 
   const handleSaveAddress = () => {
@@ -300,7 +281,7 @@ export default function Profile() {
                                             <ShoppingBag size={20}/>
                                         </div>
                                         <div>
-                                            <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Pedido #{order.orderNumber || order._id.slice(0,6).toUpperCase()}</p>
+                                            <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Pedido #{order.orderNumber || order._id.slice(0,8).toUpperCase()}</p>
                                             <p className="text-sm font-bold text-gray-800">{formatarData(order._createdAt)}</p>
                                         </div>
                                     </div>
@@ -313,44 +294,61 @@ export default function Profile() {
                                 <div className="p-6">
                                     <div className="flex flex-col lg:flex-row gap-8">
                                         
-                                        {/* COLUNA 1: PRODUTOS - ALTERADO PARA USAR LINK */}
+                                        {/* COLUNA 1: PRODUTOS */}
                                         <div className="flex-1 space-y-4">
                                             <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2">Produtos Adquiridos</h4>
                                             {order.items?.map((item, i) => {
-                                                // Verifica se existe slug para criar o link
+                                                // Verifica se existe slug para criar o link. Se não, usa div.
                                                 const ItemWrapper = item.productSlug ? Link : 'div';
                                                 const wrapperProps = item.productSlug ? { to: `/produto/${item.productSlug}` } : {};
+                                                
+                                                // Se não tiver slug, visualmente indicamos que não é clicável
+                                                const cursorClass = item.productSlug ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default opacity-90';
 
                                                 return (
                                                     <ItemWrapper 
                                                         key={i} 
                                                         {...wrapperProps}
-                                                        className={`flex gap-4 items-center py-2 border-b border-dashed border-gray-100 last:border-0 group/item ${item.productSlug ? 'cursor-pointer hover:bg-gray-50 transition-colors p-2 -mx-2 rounded-lg' : ''}`}
+                                                        className={`flex gap-4 items-start py-3 border-b border-dashed border-gray-100 last:border-0 group/item transition-colors p-2 -mx-2 rounded-lg ${cursorClass}`}
                                                     >
-                                                        <div className="w-16 h-16 bg-white border border-gray-200 rounded-lg p-1 flex-shrink-0 relative overflow-hidden">
+                                                        {/* IMAGEM DO PRODUTO */}
+                                                        <div className="w-20 h-20 bg-white border border-gray-200 rounded-lg p-1 flex-shrink-0 relative overflow-hidden flex items-center justify-center">
                                                             {item.imageUrl ? (
-                                                                <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-contain mix-blend-multiply" />
+                                                                <img 
+                                                                    src={item.imageUrl} 
+                                                                    alt={item.productName} 
+                                                                    // CORRIGIDO: Removido mix-blend-multiply que sumia com a imagem
+                                                                    className="w-full h-full object-contain" 
+                                                                />
                                                             ) : (
-                                                                <div className="w-full h-full flex items-center justify-center text-gray-300"><Package size={20}/></div>
+                                                                <Package size={24} className="text-gray-300"/>
                                                             )}
                                                         </div>
                                                         
-                                                        <div className="flex-1">
-                                                            <p className={`text-sm font-bold text-gray-800 line-clamp-2 leading-tight ${item.productSlug ? 'group-hover/item:text-orange-600 transition-colors' : ''}`}>
+                                                        <div className="flex-1 min-w-0">
+                                                            {/* NOME COMPLETO (SEM CORTE) */}
+                                                            <p className={`text-sm font-bold text-gray-800 leading-tight ${item.productSlug ? 'group-hover/item:text-orange-600 transition-colors' : ''}`}>
                                                                 {item.productName}
                                                             </p>
-                                                            <p className="text-xs text-gray-500 mt-1">Qtd: {item.quantity}</p>
+                                                            
+                                                            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
+                                                                <span className="bg-gray-100 px-2 py-1 rounded">Qtd: {item.quantity}</span>
+                                                                {!item.productSlug && (
+                                                                    <span className="text-orange-400 flex items-center gap-1" title="Produto indisponível ou link antigo"><AlertCircle size={10}/> Link indisponível</span>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                        <div className="flex items-center gap-2">
+                                                        
+                                                        <div className="flex flex-col items-end gap-1">
                                                             <span className="text-sm font-black text-gray-900">{formatCurrency(item.price)}</span>
-                                                            {item.productSlug && <ChevronRight size={14} className="text-gray-300 group-hover/item:text-orange-500"/>}
+                                                            {item.productSlug && <ChevronRight size={16} className="text-gray-300 group-hover/item:text-orange-500 mt-2"/>}
                                                         </div>
                                                     </ItemWrapper>
                                                 );
                                             })}
                                         </div>
 
-                                        {/* COLUNA 2: INFO */}
+                                        {/* COLUNA 2: INFO (Sem alterações de lógica, apenas layout) */}
                                         <div className="lg:w-1/3 space-y-6 lg:border-l lg:border-gray-100 lg:pl-6">
                                             <div>
                                                 <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2 flex items-center gap-1">
@@ -364,7 +362,7 @@ export default function Profile() {
                                                         <p className="text-xs text-gray-400 mt-1">CEP: {order.shippingAddress.zip}</p>
                                                     </div>
                                                 ) : (
-                                                    <p className="text-xs text-gray-400 italic bg-gray-50 p-2 rounded">Endereço não registrado no pedido.</p>
+                                                    <p className="text-xs text-gray-400 italic bg-gray-50 p-2 rounded">Endereço não registrado.</p>
                                                 )}
                                             </div>
 
@@ -381,7 +379,7 @@ export default function Profile() {
                                                         <Truck size={12}/> Prazo Estimado:
                                                     </h4>
                                                     <p className="text-sm font-medium text-green-700">
-                                                        {order.deliveryEstimate ? order.deliveryEstimate : '5 a 12 dias úteis'}
+                                                        {order.deliveryEstimate || '5 a 12 dias úteis'}
                                                     </p>
                                                 </div>
 
@@ -405,7 +403,7 @@ export default function Profile() {
                                         </div>
                                     </div>
 
-                                    {/* CHAT COM IDENTIDADE DO SUPORTE */}
+                                    {/* CHAT */}
                                     <div className="border-t border-gray-100 pt-4 mt-4">
                                         <button 
                                             onClick={() => setActiveChatOrder(activeChatOrder === order._id ? null : order._id)} 
@@ -419,29 +417,14 @@ export default function Profile() {
                                                 <div className="h-40 overflow-y-auto mb-3 space-y-3 pr-2 scrollbar-thin scrollbar-thumb-gray-200">
                                                     {order.messages?.length > 0 ? order.messages.map((msg, idx) => (
                                                         <div key={idx} className={`flex gap-2 ${msg.user === 'cliente' ? 'justify-end' : 'justify-start items-end'}`}>
-                                                            
-                                                            {/* FOTO DO ATENDENTE */}
                                                             {msg.user !== 'cliente' && (
                                                                 <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 border border-gray-300 flex-shrink-0 mb-1" title={msg.staffName || 'Suporte'}>
-                                                                     {msg.staffImage ? (
-                                                                        <img src={msg.staffImage} alt="Staff" className="w-full h-full object-cover" />
-                                                                     ) : (
-                                                                        <User size={16} className="text-gray-500 m-2"/>
-                                                                     )}
+                                                                     {msg.staffImage ? <img src={msg.staffImage} alt="Staff" className="w-full h-full object-cover" /> : <User size={16} className="text-gray-500 m-2"/>}
                                                                 </div>
                                                             )}
-
                                                             <div className={`flex flex-col ${msg.user === 'cliente' ? 'items-end' : 'items-start'}`}>
-                                                                {/* NOME DO ATENDENTE */}
-                                                                {msg.user !== 'cliente' && msg.staffName && (
-                                                                    <span className="text-[10px] text-gray-400 ml-1 mb-0.5">{msg.staffName}</span>
-                                                                )}
-
-                                                                <span className={`px-4 py-2 rounded-2xl text-xs max-w-[85%] leading-relaxed shadow-sm ${
-                                                                    msg.user === 'cliente' 
-                                                                    ? 'bg-orange-500 text-white rounded-tr-none' 
-                                                                    : 'bg-white border border-gray-200 text-gray-700 rounded-tl-none'
-                                                                }`}>
+                                                                {msg.user !== 'cliente' && msg.staffName && <span className="text-[10px] text-gray-400 ml-1 mb-0.5">{msg.staffName}</span>}
+                                                                <span className={`px-4 py-2 rounded-2xl text-xs max-w-[85%] leading-relaxed shadow-sm ${msg.user === 'cliente' ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-white border border-gray-200 text-gray-700 rounded-tl-none'}`}>
                                                                     {msg.text}
                                                                 </span>
                                                             </div>
@@ -469,7 +452,7 @@ export default function Profile() {
                     </div>
                 )}
 
-                {/* ABA ENDEREÇOS (Mantida Idêntica) */}
+                {/* ABA ENDEREÇOS */}
                 {activeTab === 'address' && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                          <div className="flex justify-between items-center mb-6">
