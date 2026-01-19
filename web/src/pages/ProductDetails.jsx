@@ -4,7 +4,7 @@ import { client, urlFor } from '../lib/sanity';
 import { PortableText } from '@portabletext/react'; 
 import { 
   Truck, ShieldCheck, ArrowRight, Heart, 
-  ChevronRight, ChevronLeft, Package, CheckCircle
+  ChevronRight, ChevronLeft, Package, CheckCircle, Lock
 } from 'lucide-react'; 
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
@@ -45,6 +45,21 @@ const ZoomImage = ({ src, alt }) => {
     </div>
   );
 };
+
+// --- SELO MERCADO PAGO ---
+const MercadoPagoTrust = () => (
+  <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col items-center gap-2">
+    <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
+      <Lock size={12} className="text-green-600" />
+      <span>Ambiente 100% Seguro</span>
+    </div>
+    <img 
+      src="https://http2.mlstatic.com/frontend-assets/ui-navigation/5.14.3/mercadopago/logo__large.png" 
+      className="h-5 opacity-50 grayscale hover:grayscale-0 transition-all" 
+      alt="Mercado Pago" 
+    />
+  </div>
+);
 
 // --- CONFIGURAÇÃO DO TEXTO RICO ---
 const myPortableTextComponents = {
@@ -380,10 +395,10 @@ export default function ProductDetails() {
 
             <h1 className="text-2xl font-black text-gray-900 leading-tight mb-4">{product.title}</h1>
 
-            {/* VARIAÇÕES */}
+            {/* VARIAÇÕES (ÚNICA COISA QUE ALTEREI: ADICIONEI LÓGICA DE FOTO) */}
             {product.variants && product.variants.length > 0 && (
               <div className="mb-6">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Opção Selecionada:</span>
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Opção Selecionada: <span className="text-black ml-1">{selectedVariant?.variantName}</span></span>
                 <div className="flex flex-wrap gap-2">
                   {product.variants.map((variant) => {
                     const isSelected = selectedVariant?._key === variant._key;
@@ -391,14 +406,25 @@ export default function ProductDetails() {
                       <button
                         key={variant._key}
                         onClick={() => handleVariantChange(variant)}
-                        className={`relative px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
+                        title={variant.variantName}
+                        className={`relative rounded-lg border transition-all overflow-hidden ${
                           isSelected 
-                            ? 'border-blue-600 bg-blue-50 text-blue-700' 
-                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                        }`}
+                            ? 'border-blue-600 ring-1 ring-blue-600' 
+                            : 'border-gray-200 hover:border-gray-400'
+                        } ${variant.variantImage ? 'w-12 h-12 p-0' : 'px-3 py-2 text-xs font-bold text-gray-600'}`}
                       >
-                        {variant.variantName}
-                        {isSelected && <div className="absolute -top-1 -right-1 text-blue-600 bg-white rounded-full"><CheckCircle size={12} fill="white"/></div>}
+                         {/* SE TIVER FOTO, MOSTRA FOTO. SE NÃO, MOSTRA TEXTO */}
+                         {variant.variantImage ? (
+                            <img 
+                                src={urlFor(variant.variantImage).width(100).url()} 
+                                className="w-full h-full object-cover" 
+                                alt={variant.variantName}
+                            />
+                         ) : (
+                             variant.variantName
+                         )}
+                        {/* Mantive o check apenas se NÃO for imagem, para não poluir a foto */}
+                        {isSelected && !variant.variantImage && <div className="absolute -top-1 -right-1 text-blue-600 bg-white rounded-full"><CheckCircle size={12} fill="white"/></div>}
                       </button>
                     )
                   })}
@@ -444,7 +470,6 @@ export default function ProductDetails() {
                 {shippingOptions && shippingOptions.length > 0 && (
                     <div className="space-y-1">
                         {shippingOptions.filter(o => !o.error).map((opt, idx) => {
-                            // CORREÇÃO: Compara Nome e Preço para ser único
                             const isSelected = selectedShipping?.name === opt.name && selectedShipping?.price === opt.price;
                             
                             return (
@@ -465,6 +490,9 @@ export default function ProductDetails() {
             <button onClick={handleBuyNow} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2">
                 Comprar Agora <ArrowRight size={18} />
             </button>
+            
+            {/* Recuperação do Selo Mercado Pago */}
+            <MercadoPagoTrust />
           </div>
         </div>
 
