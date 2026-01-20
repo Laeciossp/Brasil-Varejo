@@ -14,6 +14,9 @@ import Success from './pages/Success';
 import Favorites from './pages/Favorites';
 import SearchPage from './pages/SearchPage';
 
+// 👇 IMPORTANTE: Importar a nova página de Marcas
+import BrandPage from './pages/BrandPage';
+
 // Páginas Institucionais
 import About from './pages/About';
 import Terms from './pages/Terms';
@@ -23,6 +26,7 @@ import Policies from './pages/Policies';
 function App() {
   const { pathname } = useLocation();
 
+  // Faz o scroll voltar ao topo sempre que mudar de página
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
@@ -36,25 +40,29 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           
-          {/* --- CORREÇÃO AQUI --- */}
-          {/* Mantivemos o inglês para compatibilidade e adicionamos o português */}
+          {/* Rotas de Produto (Inglês e Português) */}
           <Route path="/product/:slug" element={<ProductDetails />} />
           <Route path="/produto/:slug" element={<ProductDetails />} />
-          {/* ------------------- */}
           
+          {/* Rotas de Categoria */}
           <Route path="/category/:slug" element={<CategoryPage />} />
           <Route path="/categoria/:slug" element={<CategoryPage />} />
           
-          <Route path="/busca" element={<SearchPage />} />
+          {/* 👇 NOVA ROTA DE MARCAS AQUI */}
+          <Route path="/marca/:brandName" element={<BrandPage />} />
 
+          {/* Funcionalidades */}
+          <Route path="/busca" element={<SearchPage />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/favoritos" element={<Favorites />} />
 
+          {/* Páginas Institucionais */}
           <Route path="/sobre" element={<About />} />
           <Route path="/termos-de-uso" element={<Terms />} />
           <Route path="/politica-de-privacidade" element={<Privacy />} />
           <Route path="/politicas" element={<Policies />} />
 
+          {/* Perfil do Usuário (Protegido pelo Clerk) */}
           <Route 
             path="/profile" 
             element={
@@ -71,7 +79,7 @@ function App() {
 
           <Route path="/sucesso" element={<Success />} />
           
-          {/* Esta linha era a culpada, ela mandava tudo que não existe para a Home */}
+          {/* Redireciona qualquer página não encontrada para a Home */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>

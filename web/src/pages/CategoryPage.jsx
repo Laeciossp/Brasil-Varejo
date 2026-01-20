@@ -1,8 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { createClient } from "@sanity/client";
-// 👇 ADICIONEI O ÍCONE TRUCK AQUI
 import { Loader, Frown, Filter, X, Package, Truck } from 'lucide-react';
+
+// IMPORTANTE: Certifique-se de que o arquivo CategoryHero.jsx existe nesta pasta
+// Se estiver em outra pasta (ex: components), ajuste o caminho abaixo:
+import CategoryHero from '../components/CategoryHero'; 
 
 const client = createClient({
   projectId: 'o4upb251',
@@ -15,7 +18,7 @@ const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency
 
 export default function CategoryPage() {
   const { slug } = useParams();
-   
+    
   const [data, setData] = useState({ category: null, products: [] });
   const [loading, setLoading] = useState(true);
   const [selectedBrands, setSelectedBrands] = useState([]);
@@ -26,9 +29,27 @@ export default function CategoryPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // ATUALIZAÇÃO: Adicionei o bloco 'heroBanner' na query
         const query = `{
           "category": *[_type == "category" && slug.current == $slug][0] {
-            _id, title, description
+            _id, 
+            title, 
+            description,
+            heroBanner {
+              mediaType,
+              heading,
+              subheading,
+              link,
+              desktopImage {
+                asset->{ _id, url },
+                hotspot,
+                crop,
+                alt
+              },
+              videoFile {
+                asset->{ url }
+              }
+            }
           },
           "products": *[_type == "product" && references(*[_type == "category" && (slug.current == $slug || parent->slug.current == $slug)]._id)] {
             _id,
@@ -39,7 +60,7 @@ export default function CategoryPage() {
             slug,
             "brandName": brand,
             variants[0] { price, oldPrice },
-            freeShipping // 👈 1. ADICIONEI O CAMPO AQUI PARA O SANITY TRAZER
+            freeShipping
           }
         }`;
 
@@ -97,6 +118,11 @@ export default function CategoryPage() {
 
   return (
     <div className="bg-gray-50 min-h-screen">
+      
+      {/* --- NOVO: BANNER DE TOPO --- */}
+      {/* O componente cuida de não aparecer se estiver vazio */}
+      <CategoryHero heroBanner={data.category.heroBanner} />
+      
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="mb-8 pb-6 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -109,7 +135,7 @@ export default function CategoryPage() {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* ASIDE FILTROS (Mantido igual) */}
+          {/* ASIDE FILTROS */}
           <aside className={`lg:w-64 flex-shrink-0 ${showMobileFilters ? 'block' : 'hidden lg:block'}`}>
               <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm sticky top-24">
                   <div className="flex justify-between items-center mb-6 lg:hidden">
@@ -160,9 +186,8 @@ export default function CategoryPage() {
                           <Link 
                               key={product._id} 
                               to={productLink} 
-                              className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-xl hover:border-orange-200 transition-all duration-300 group flex flex-col h-full relative" // Adicionei 'relative' aqui
+                              className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-xl hover:border-orange-200 transition-all duration-300 group flex flex-col h-full relative"
                           >
-                              {/* 👇 2. SELO DE FRETE GRÁTIS */}
                               {product.freeShipping && (
                                 <div className="absolute top-3 right-3 bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-md z-10">
                                    <Truck size={10} /> <span>Frete Grátis</span>
@@ -176,19 +201,16 @@ export default function CategoryPage() {
                                   <h3 className="font-medium text-gray-600 text-xs leading-4 line-clamp-3 h-[3rem] mb-2 group-hover:text-blue-600 transition-colors" title={product.title}>{product.title}</h3>
                                   
                                   <div className="border-t border-gray-50 pt-2">
-                                      {/* Preço Antigo (De:) */}
                                       {oldPrice > price && (
                                         <p className="text-[10px] text-gray-400 line-through block mb-0.5">
                                           de {formatPrice(oldPrice)}
                                         </p>
                                       )}
                                       
-                                      {/* Preço Atual (Por:) */}
                                       <p className="text-lg font-black text-green-700 block tracking-tight leading-none">
                                         {price ? formatPrice(price) : 'Consulte'}
                                       </p>
 
-                                      {/* Tags de condição */}
                                       {price > 0 && (
                                         <div className="mt-1 flex flex-col gap-0.5">
                                           <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">

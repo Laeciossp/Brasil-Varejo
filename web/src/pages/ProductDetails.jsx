@@ -120,8 +120,9 @@ export default function ProductDetails() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // 👇 ALTERAÇÃO 1: ADICIONEI O CAMPO 'brand' NA CONSULTA
         const query = `*[_type == "product" && slug.current == $slug][0]{
-          _id, title, description, specifications, "slug": slug,
+          _id, title, brand, description, specifications, "slug": slug,
           categories[]->{_id, title},
           price, oldPrice,
           "images": images[]{ _key, _type, asset->{_id, url, mimeType} },
@@ -359,9 +360,9 @@ export default function ProductDetails() {
 
                 {/* BOLINHAS MOBILE */}
                 <div className="lg:hidden absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                     {product.images?.map((_, idx) => (
-                         <div key={idx} className={`h-1.5 rounded-full transition-all ${activeMedia?._key === product.images[idx]._key ? 'w-4 bg-orange-500' : 'w-1.5 bg-gray-300'}`}></div>
-                     ))}
+                      {product.images?.map((_, idx) => (
+                          <div key={idx} className={`h-1.5 rounded-full transition-all ${activeMedia?._key === product.images[idx]._key ? 'w-4 bg-orange-500' : 'w-1.5 bg-gray-300'}`}></div>
+                      ))}
                 </div>
             </div>
 
@@ -393,7 +394,17 @@ export default function ProductDetails() {
                 </button>
             </div>
 
-            <h1 className="text-2xl font-black text-gray-900 leading-tight mb-4">{product.title}</h1>
+            <h1 className="text-2xl font-black text-gray-900 leading-tight mb-2">{product.title}</h1>
+
+            {/* 👇 ALTERAÇÃO 2: LINK DA MARCA ADICIONADO AQUI */}
+            {product.brand && (
+                <div className="mb-4">
+                     <span className="text-sm font-medium text-gray-400">Marca: </span>
+                     <Link to={`/marca/${encodeURIComponent(product.brand)}`} className="text-sm font-bold text-blue-600 hover:underline hover:text-blue-800">
+                        {product.brand}
+                     </Link>
+                </div>
+            )}
 
             {/* VARIAÇÕES (ÚNICA COISA QUE ALTEREI: ADICIONEI LÓGICA DE FOTO) */}
             {product.variants && product.variants.length > 0 && (
@@ -413,16 +424,16 @@ export default function ProductDetails() {
                             : 'border-gray-200 hover:border-gray-400'
                         } ${variant.variantImage ? 'w-12 h-12 p-0' : 'px-3 py-2 text-xs font-bold text-gray-600'}`}
                       >
-                         {/* SE TIVER FOTO, MOSTRA FOTO. SE NÃO, MOSTRA TEXTO */}
-                         {variant.variantImage ? (
+                          {/* SE TIVER FOTO, MOSTRA FOTO. SE NÃO, MOSTRA TEXTO */}
+                          {variant.variantImage ? (
                             <img 
                                 src={urlFor(variant.variantImage).width(100).url()} 
                                 className="w-full h-full object-cover" 
                                 alt={variant.variantName}
                             />
-                         ) : (
-                             variant.variantName
-                         )}
+                          ) : (
+                              variant.variantName
+                          )}
                         {/* Mantive o check apenas se NÃO for imagem, para não poluir a foto */}
                         {isSelected && !variant.variantImage && <div className="absolute -top-1 -right-1 text-blue-600 bg-white rounded-full"><CheckCircle size={12} fill="white"/></div>}
                       </button>
@@ -498,7 +509,7 @@ export default function ProductDetails() {
 
         {/* DESCRIÇÃO E CARROSSEL */}
         <div className="grid grid-cols-1 gap-10">
-           
+            
            {/* Descrição */}
            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
                <h3 className="text-xl font-black text-gray-900 mb-6 border-b pb-2">Sobre o Produto</h3>
