@@ -92,14 +92,14 @@ const myPortableTextComponents = {
 
 export default function ProductDetails() {
   const { slug } = useParams();
-  
+   
   const { addItem, setShipping, selectedShipping, toggleFavorite, favorites } = useCartStore();
   const { globalCep } = useZipCode(); 
 
   const [product, setProduct] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+   
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [currentPrice, setCurrentPrice] = useState(0);
   const [currentOldPrice, setCurrentOldPrice] = useState(0);
@@ -116,21 +116,62 @@ export default function ProductDetails() {
   const [touchEnd, setTouchEnd] = useState(null);
   const minSwipeDistance = 50; 
 
+  // --- FUNÇÃO DE PROCESSAMENTO (CORRIGIDA E MELHORADA) ---
+  const processVariants = (rawVariants, productOldPrice) => {
+    if (!rawVariants || !Array.isArray(rawVariants)) return [];
+    
+    const flatList = [];
+    
+    rawVariants.forEach(colorGroup => {
+        // Pega a imagem da COR (Pai)
+        // OBS: Aqui corrigimos o bug. O Sanity já entregou o asset, não precisa de .asset de novo.
+        const groupImage = colorGroup.variantImage; 
+
+        if (colorGroup.sizes && Array.isArray(colorGroup.sizes)) {
+            colorGroup.sizes.forEach(sizeObj => {
+                flatList.push({
+                    _key: sizeObj.sku || Math.random().toString(36),
+                    variantName: `${colorGroup.colorName} - ${sizeObj.size}`,
+                    price: sizeObj.price,
+                    oldPrice: productOldPrice,
+                    stock: sizeObj.stock,
+                    sku: sizeObj.sku,
+                    color: colorGroup.colorName, // Importante para ordenação
+                    size: sizeObj.size,
+                    variantImage: groupImage // Passa a imagem correta para o filho
+                });
+            });
+        }
+    });
+
+    // --- ORDENAÇÃO (FIM DA LISTA MISTURADA) ---
+    // Ordena por Cor (A-Z) e depois por Tamanho
+    return flatList.sort((a, b) => {
+        if (a.color < b.color) return -1;
+        if (a.color > b.color) return 1;
+        return 0; 
+    });
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // 👇 ALTERAÇÃO 1: ADICIONEI O CAMPO 'brand' NA CONSULTA
         const query = `*[_type == "product" && slug.current == $slug][0]{
           _id, title, brand, description, specifications, "slug": slug,
           categories[]->{_id, title},
           price, oldPrice,
           "images": images[]{ _key, _type, asset->{_id, url, mimeType} },
-          variants[] {
-            _key, variantName, price, oldPrice, stock,
-            colorHex, voltage, capacity, ram,
-            "variantImage": variantImage.asset->{_id, url, mimeType}
+          
+          // Busca Bruta: Cor + Imagem da Cor + Tamanhos
+          "rawVariants": variants[] {
+            colorName,
+            "variantImage": variantImage.asset->{_id, url, mimeType},
+            sizes[] {
+                size, price, sku, stock
+            }
           },
+
           freeShipping,
           logistics { width, height, length, weight }
         }`;
@@ -138,20 +179,31 @@ export default function ProductDetails() {
         const data = await client.fetch(query, { slug });
         
         if (data) {
+          // Processa e Ordena
+          const processedVariants = processVariants(data.rawVariants, data.oldPrice);
+          data.variants = processedVariants;
+
           setProduct(data);
           
+          // Seleciona a primeira variante e define a foto inicial
           if (data.variants && data.variants.length > 0) {
             const firstVar = data.variants[0];
             setSelectedVariant(firstVar);
-            setCurrentPrice(firstVar.price);
-            setCurrentOldPrice(firstVar.oldPrice || 0);
+            
+            const safePrice = firstVar.price && firstVar.price > 0 ? firstVar.price : data.price;
+            const safeOldPrice = firstVar.oldPrice && firstVar.oldPrice > 0 ? firstVar.oldPrice : data.oldPrice;
+
+            setCurrentPrice(safePrice || 0);
+            setCurrentOldPrice(safeOldPrice || 0);
+
+            // SE TIVER FOTO NA VARIANTE, USA ELA. SE NÃO, USA A DA GALERIA.
             if (firstVar.variantImage) {
-              setActiveMedia({ _key: 'varImg', asset: firstVar.variantImage });
+              setActiveMedia({ _key: `var-${firstVar._key}`, asset: firstVar.variantImage });
             } else if (data.images?.length > 0) {
               setActiveMedia(data.images[0]);
             }
           } else {
-            setCurrentPrice(data.price);
+            setCurrentPrice(data.price || 0);
             setCurrentOldPrice(data.oldPrice || 0);
             if (data.images?.length > 0) setActiveMedia(data.images[0]);
           }
@@ -161,17 +213,16 @@ export default function ProductDetails() {
             const relatedQuery = `
               *[_type == "product" && references($catId) && _id != $id][0...10] {
                 _id, title, slug, price, oldPrice,
-                "imageUrl": images[0].asset->url,
-                variants[0] { price, oldPrice }
+                "imageUrl": images[0].asset->url
               }
             `;
             const related = await client.fetch(relatedQuery, { catId, id: data._id });
-            setRelatedProducts(related);
+            setRelatedProducts(related || []);
           }
         }
         setLoading(false);
       } catch (err) {
-        console.error("Erro:", err);
+        console.error("Erro no Sanity Fetch:", err);
         setLoading(false);
       }
     };
@@ -179,11 +230,23 @@ export default function ProductDetails() {
   }, [slug]);
 
   const handleVariantChange = (variant) => {
+    if (!variant) return;
+
     setSelectedVariant(variant);
-    setCurrentPrice(variant.price);
-    setCurrentOldPrice(variant.oldPrice || 0);
+    
+    const safePrice = variant.price && variant.price > 0 ? variant.price : product.price;
+    const safeOldPrice = variant.oldPrice && variant.oldPrice > 0 ? variant.oldPrice : product.oldPrice;
+
+    setCurrentPrice(safePrice || 0);
+    setCurrentOldPrice(safeOldPrice || 0);
+
+    // --- CORREÇÃO DA TROCA DE FOTO ---
+    // Atualiza o activeMedia usando a imagem que processamos (vinda do Pai/Cor)
     if (variant.variantImage) {
-      setActiveMedia({ _key: `var-${variant._key}`, asset: variant.variantImage });
+      setActiveMedia({ 
+          _key: `var-${variant._key}`, // Cria uma chave única para forçar o React a atualizar
+          asset: variant.variantImage 
+      });
     }
   };
 
@@ -258,7 +321,6 @@ export default function ProductDetails() {
     }
   };
 
-  // --- NAVEGAÇÃO ENTRE FOTOS (Mobile Swipe + PC Arrows) ---
   const navigateImage = (direction) => {
       const allImages = product?.images || [];
       if (allImages.length <= 1) return;
@@ -275,7 +337,6 @@ export default function ProductDetails() {
       }
   };
 
-  // Swipe Mobile
   const onTouchStart = (e) => {
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
@@ -298,7 +359,6 @@ export default function ProductDetails() {
   return (
     <div className="bg-gray-50 min-h-screen py-8 font-sans">
       
-      {/* HEADER SIMPLIFICADO */}
       <div className="container mx-auto px-4 max-w-6xl mb-6">
          <div className="flex items-center text-xs text-gray-400 gap-1">
             <Link to="/" className="hover:text-orange-600 hover:underline">Home</Link>
@@ -309,13 +369,10 @@ export default function ProductDetails() {
 
       <div className="container mx-auto px-4 max-w-6xl">
         
-        {/* BLOCO PRINCIPAL */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col lg:flex-row mb-10">
           
-          {/* FOTOS */}
           <div className="lg:w-3/5 p-6 border-r border-gray-50 bg-white group relative">
             
-            {/* CONTAINER DA FOTO PRINCIPAL */}
             <div 
                 className="aspect-square w-full flex items-center justify-center mb-4 relative overflow-hidden rounded-lg border border-gray-50 select-none"
                 onTouchStart={onTouchStart}
@@ -333,7 +390,6 @@ export default function ProductDetails() {
                 )
                 )}
 
-                {/* SETAS DE NAVEGAÇÃO */}
                 {product.images?.length > 1 && (
                     <>
                         <button 
@@ -358,7 +414,6 @@ export default function ProductDetails() {
                     </>
                 )}
 
-                {/* BOLINHAS MOBILE */}
                 <div className="lg:hidden absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
                       {product.images?.map((_, idx) => (
                           <div key={idx} className={`h-1.5 rounded-full transition-all ${activeMedia?._key === product.images[idx]._key ? 'w-4 bg-orange-500' : 'w-1.5 bg-gray-300'}`}></div>
@@ -383,7 +438,6 @@ export default function ProductDetails() {
             </div>
           </div>
 
-          {/* INFO */}
           <div className="lg:w-2/5 p-6 lg:p-10 flex flex-col bg-white">
             <div className="flex justify-between items-start mb-2">
                 <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide">
@@ -396,17 +450,15 @@ export default function ProductDetails() {
 
             <h1 className="text-2xl font-black text-gray-900 leading-tight mb-2">{product.title}</h1>
 
-            {/* 👇 ALTERAÇÃO 2: LINK DA MARCA ADICIONADO AQUI */}
             {product.brand && (
                 <div className="mb-4">
-                     <span className="text-sm font-medium text-gray-400">Marca: </span>
-                     <Link to={`/marca/${encodeURIComponent(product.brand)}`} className="text-sm font-bold text-blue-600 hover:underline hover:text-blue-800">
+                      <span className="text-sm font-medium text-gray-400">Marca: </span>
+                      <Link to={`/marca/${encodeURIComponent(product.brand)}`} className="text-sm font-bold text-blue-600 hover:underline hover:text-blue-800">
                         {product.brand}
-                     </Link>
+                      </Link>
                 </div>
             )}
 
-            {/* VARIAÇÕES (ÚNICA COISA QUE ALTEREI: ADICIONEI LÓGICA DE FOTO) */}
             {product.variants && product.variants.length > 0 && (
               <div className="mb-6">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Opção Selecionada: <span className="text-black ml-1">{selectedVariant?.variantName}</span></span>
@@ -434,7 +486,7 @@ export default function ProductDetails() {
                           ) : (
                               variant.variantName
                           )}
-                        {/* Mantive o check apenas se NÃO for imagem, para não poluir a foto */}
+                        
                         {isSelected && !variant.variantImage && <div className="absolute -top-1 -right-1 text-blue-600 bg-white rounded-full"><CheckCircle size={12} fill="white"/></div>}
                       </button>
                     )
@@ -443,7 +495,6 @@ export default function ProductDetails() {
               </div>
             )}
 
-            {/* PREÇO */}
             <div className="mb-6 p-5 bg-slate-50 rounded-xl border border-slate-100">
                 {currentOldPrice > currentPrice && (
                     <span className="text-gray-400 line-through text-xs block mb-1">De: {formatCurrency(currentOldPrice)}</span>
@@ -463,7 +514,6 @@ export default function ProductDetails() {
                 )}
             </div>
 
-            {/* FRETE */}
             <div className="mb-6">
                 <div className="flex gap-2 mb-3">
                   <input 
@@ -502,15 +552,11 @@ export default function ProductDetails() {
                 Comprar Agora <ArrowRight size={18} />
             </button>
             
-            {/* Recuperação do Selo Mercado Pago */}
             <MercadoPagoTrust />
           </div>
         </div>
 
-        {/* DESCRIÇÃO E CARROSSEL */}
         <div className="grid grid-cols-1 gap-10">
-            
-           {/* Descrição */}
            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
                <h3 className="text-xl font-black text-gray-900 mb-6 border-b pb-2">Sobre o Produto</h3>
                <div className="prose prose-sm max-w-none text-gray-600">
@@ -532,7 +578,6 @@ export default function ProductDetails() {
                )}
            </div>
 
-          {/* CARROSSEL */}
           {relatedProducts.length > 0 && (
           <div className="mt-8">
             <div className="flex items-center justify-between mb-4">
@@ -545,8 +590,8 @@ export default function ProductDetails() {
             
             <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-6 snap-x scrollbar-hide scroll-smooth px-1">
               {relatedProducts.map((rel) => {
-                const relPrice = rel.variants && rel.variants[0] ? rel.variants[0].price : rel.price;
-                const relOldPrice = rel.variants && rel.variants[0] ? rel.variants[0].oldPrice : rel.oldPrice;
+                const relPrice = rel.price;
+                const relOldPrice = rel.oldPrice;
 
                 return (
                   <Link 

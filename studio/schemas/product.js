@@ -138,101 +138,46 @@ export default {
       }
     },
 
-    // --- 3. VARIAÇÕES (PREÇO, ESTOQUE E ATRIBUTOS) ---
+ // --- 3. VARIAÇÕES (ESTRUTURA HIERÁRQUICA - V31) ---
     {
       name: 'variants',
-      title: 'Variações (SKUs)',
+      title: 'Variações (Cores -> Tamanhos)',
       type: 'array',
       group: 'variants',
-      description: 'Cadastre aqui as versões do produto (Ex: Azul 110v, Vermelho 220v). Se o produto for único, crie apenas uma variação.',
       of: [
         {
-          type: 'object',
-          title: 'Variação',
+          type: 'object', // Cor (Pai)
+          title: 'Grupo de Cor',
           fields: [
+            { name: 'colorName', title: 'Nome da Cor', type: 'string' },
+            { name: 'variantImage', title: 'Foto da Cor', type: 'image' },
             {
-              name: 'variantName',
-              title: 'Nome da Variação',
-              type: 'string',
-              description: 'Ex: Preto - 256GB - 220v'
-            },
-            {
-              name: 'ean',
-              title: 'Código de Barras (EAN/GTIN)',
-              type: 'string',
-            },
-            {
-              name: 'price',
-              title: 'Preço (R$)',
-              type: 'number',
-              validation: Rule => Rule.required()
-            },
-            {
-              name: 'oldPrice',
-              title: 'Preço Antigo (De:)',
-              type: 'number',
-              description: 'Para promoções.'
-            },
-            {
-              name: 'stock',
-              title: 'Estoque Disponível',
-              type: 'number',
-              initialValue: 0
-            },
-            {
-              name: 'variantImage',
-              title: 'Foto desta Variação',
-              type: 'image',
-              description: 'Se não colocar, o site usa a galeria principal.'
-            },
-            // --- ATRIBUTOS DINÂMICOS DA VARIAÇÃO ---
-            {
-              name: 'color',
-              title: 'Cor (Nome)',
-              type: 'string',
-            },
-            {
-              name: 'colorHex',
-              title: 'Cor (Hexadecimal)',
-              type: 'string',
-              description: 'Ex: #FF0000 para bolinha vermelha.'
-            },
-            {
-              name: 'voltage',
-              title: 'Voltagem',
-              type: 'string',
-              options: { list: ['Bivolt', '110V', '220V', '380V', '12V'] }
-            },
-            {
-              name: 'capacity',
-              title: 'Capacidade / Armazenamento',
-              type: 'string',
-              description: 'Ex: 256GB (Tech) ou 10kg (Eletro)'
-            },
-            {
-              name: 'ram',
-              title: 'Memória RAM (Tech)',
-              type: 'string',
-            },
-            {
-              name: 'size',
-              title: 'Tamanho (Moda)',
-              type: 'string',
+              name: 'sizes',
+              title: 'Tamanhos desta Cor',
+              type: 'array', // Tamanhos (Filhos)
+              of: [
+                {
+                  type: 'object',
+                  title: 'Dados do Tamanho',
+                  fields: [
+                    { name: 'size', title: 'Tamanho', type: 'string' },
+                    { name: 'price', title: 'Preço', type: 'number' },
+                    // SEM oldPrice AQUI
+                    { name: 'stock', title: 'Estoque', type: 'number' },
+                    { name: 'sku', title: 'SKU', type: 'string' }
+                  ],
+                  preview: {
+                    select: { title: 'size', subtitle: 'price' },
+                    prepare({title, subtitle}) {
+                        return { title: title, subtitle: subtitle ? `R$ ${subtitle}` : 'Sem preço' }
+                    }
+                  }
+                }
+              ]
             }
           ],
           preview: {
-            select: {
-              title: 'variantName',
-              price: 'price',
-              media: 'variantImage'
-            },
-            prepare({ title, price, media }) {
-              return {
-                title: title || 'Variação Padrão',
-                subtitle: price ? `R$ ${price}` : 'Sem preço',
-                media: media
-              }
-            }
+            select: { title: 'colorName', media: 'variantImage' }
           }
         }
       ]

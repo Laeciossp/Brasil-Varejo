@@ -45,6 +45,15 @@ export default {
       description: 'Deixe EM BRANCO se for um Departamento Principal (Nível 1). Se for subcategoria, selecione o pai aqui.'
     },
 
+    // 👇 CORREÇÃO: ADICIONADO PARA SUMIR O ERRO "UNKNOWN FIELD" 👇
+    {
+      name: 'isRoot',
+      title: 'É Raiz? (Campo de Sistema)',
+      type: 'boolean',
+      hidden: true, // Fica escondido para não atrapalhar, mas existe para o banco de dados não reclamar
+    },
+    // ------------------------------------------------------------
+
     // ============================================================
     // INÍCIO DA CONFIGURAÇÃO DO BANNER (HERO)
     // ============================================================

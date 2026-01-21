@@ -1,25 +1,29 @@
-import { getCliClient } from 'sanity/cli'
+const { createClient } = require('@sanity/client');
 
-const client = getCliClient()
+const client = createClient({
+  projectId: 'o4upb251',
+  dataset: 'production',
+  apiVersion: '2023-05-03',
+  useCdn: false,
+  token: 'skmLtdy7ME2lnyS0blM3IWiNv0wuWzBG4egK7jUYdVVkBktLngwz47GbsPPdq5NLX58WJEiR3bmW0TBpeMtBhPNEIxf5mk6uQ14PvbGYKlWQdSiP2uWdBDafWhVAGMw5RYh3IyKhDSmqEqSLg1bEzzYVEwcGWDZ9tEPmZhNDkljeyvY6IcEO' 
+});
 
-async function limparProdutos() {
-  // 1. Busca os IDs dos produtos sem imagem
-  const query = '*[_type == "product" && (!defined(images) || count(images) == 0)]._id'
-  const ids = await client.fetch(query)
-
-  if (!ids.length) {
-    console.log('✅ Nenhum produto vazio encontrado.')
-    return
+async function nuke() {
+  console.log("🗑️ Apagando produtos corrompidos...");
+  // Busca todos os produtos da Quintess
+  const query = '*[_type == "product" && slug.current match "quintess*"]';
+  const products = await client.fetch(query);
+  
+  if (products.length === 0) {
+      console.log("✅ Nada para apagar. Tudo limpo.");
+      return;
   }
 
-  console.log(`🗑️ Encontrei ${ids.length} produtos sem imagem. Excluindo...`)
-
-  // 2. Cria a transação de exclusão
-  const transaction = client.transaction()
-  ids.forEach(id => transaction.delete(id))
-  
-  await transaction.commit()
-  console.log('✅ Limpeza concluída com sucesso!')
+  for (const p of products) {
+    await client.delete(p._id);
+    console.log(`🔥 Deletado: ${p.title}`);
+  }
+  console.log("✨ Limpeza concluída! Agora pode rodar o importador V25.");
 }
 
-limparProdutos()
+nuke();
