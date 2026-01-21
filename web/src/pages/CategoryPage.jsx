@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { createClient } from "@sanity/client";
-import { Loader, Frown, Filter, X, Package, Truck } from 'lucide-react';
+import { Loader, Frown, Filter, X, Package, Truck, ChevronRight } from 'lucide-react';
 
 // IMPORTANTE: Certifique-se de que o arquivo CategoryHero.jsx existe nesta pasta
-// Se estiver em outra pasta (ex: components), ajuste o caminho abaixo:
 import CategoryHero from '../components/CategoryHero'; 
 
 const client = createClient({
@@ -19,17 +18,27 @@ const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency
 export default function CategoryPage() {
   const { slug } = useParams();
     
-  const [data, setData] = useState({ category: null, products: [] });
+  // Adicionei 'subcategories' no estado inicial
+  const [data, setData] = useState({ category: null, subcategories: [], products: [] });
   const [loading, setLoading] = useState(true);
+  
+  // Novos estados para filtros
   const [selectedBrands, setSelectedBrands] = useState([]);
+  const [selectedSubcategory, setSelectedSubcategory] = useState(null); // Novo filtro de categoria filha
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      // Resetar filtros ao mudar de página principal
+      setSelectedSubcategory(null); 
+      setSelectedBrands([]);
+      
       try {
-        // ATUALIZAÇÃO: Adicionei o bloco 'heroBanner' na query
+        // ATUALIZAÇÃO DA QUERY:
+        // 1. Buscamos 'subcategories': categorias onde o pai é a categoria atual.
+        // 2. Em 'products': Trazemos o array 'categories' para poder filtrar no front.
         const query = `{
           "category": *[_type == "category" && slug.current == $slug][0] {
             _id, 
@@ -51,6 +60,11 @@ export default function CategoryPage() {
               }
             }
           },
+          "subcategories": *[_type == "category" && parent->slug.current == $slug] | order(title asc) {
+            _id,
+            title,
+            slug
+          },
           "products": *[_type == "product" && references(*[_type == "category" && (slug.current == $slug || parent->slug.current == $slug)]._id)] {
             _id,
             title, 
@@ -59,6 +73,10 @@ export default function CategoryPage() {
             "imageUrl": images[0].asset->url,
             slug,
             "brandName": brand,
+            // Importante: trazer as categorias do produto para comparar no filtro
+            categories[]->{
+              slug
+            },
             variants[0] { price, oldPrice },
             freeShipping
           }
@@ -67,9 +85,13 @@ export default function CategoryPage() {
         const result = await client.fetch(query, { slug });
         
         if (result && result.category) {
-            setData({ category: result.category, products: result.products || [] });
+            setData({ 
+              category: result.category, 
+              subcategories: result.subcategories || [], 
+              products: result.products || [] 
+            });
         } else {
-            setData({ category: null, products: [] });
+            setData({ category: null, subcategories: [], products: [] });
         }
       } catch (error) {
         console.error("Erro:", error);
@@ -81,20 +103,35 @@ export default function CategoryPage() {
     if (slug) fetchData();
   }, [slug]);
 
+  // Lógica de filtragem atualizada
   const filteredProducts = useMemo(() => {
     return data.products.filter(product => {
       const finalPrice = product.variants?.price || product.price || 0;
+      
+      // Filtro de Marca
       const matchesBrand = selectedBrands.length === 0 || (product.brandName && selectedBrands.includes(product.brandName));
+      
+      // Filtro de Preço
       const min = priceRange.min ? parseFloat(priceRange.min) : 0;
       const max = priceRange.max ? parseFloat(priceRange.max) : Infinity;
-      return matchesBrand && finalPrice >= min && finalPrice <= max;
+      const matchesPrice = finalPrice >= min && finalPrice <= max;
+
+      // NOVO: Filtro de Subcategoria
+      // Se não tiver subcategoria selecionada, passa.
+      // Se tiver, verifica se alguma das categorias do produto bate com a selecionada.
+      const matchesSubcategory = !selectedSubcategory || (product.categories && product.categories.some(cat => cat.slug.current === selectedSubcategory));
+
+      return matchesBrand && matchesPrice && matchesSubcategory;
     });
-  }, [data.products, selectedBrands, priceRange]);
+  }, [data.products, selectedBrands, priceRange, selectedSubcategory]);
 
   const availableBrands = useMemo(() => {
-    const brands = data.products.map(p => p.brandName).filter(Boolean);
+    // Marcas baseadas nos produtos FILTRADOS pela subcategoria (para não mostrar marcas que não tem naquela subcategoria)
+    // Se quiser mostrar todas as marcas sempre, mude filteredProducts para data.products aqui
+    const sourceProducts = selectedSubcategory ? filteredProducts : data.products;
+    const brands = sourceProducts.map(p => p.brandName).filter(Boolean);
     return [...new Set(brands)];
-  }, [data.products]);
+  }, [data.products, filteredProducts, selectedSubcategory]);
 
   const toggleBrand = (brand) => {
     setSelectedBrands(prev => prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]);
@@ -119,14 +156,28 @@ export default function CategoryPage() {
   return (
     <div className="bg-gray-50 min-h-screen">
       
-      {/* --- NOVO: BANNER DE TOPO --- */}
-      {/* O componente cuida de não aparecer se estiver vazio */}
+      {/* Componente Hero (Banner) */}
       <CategoryHero heroBanner={data.category.heroBanner} />
       
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="mb-8 pb-6 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-              <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tight">{data.category.title}</h1>
+              <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                <span>{data.category.title}</span>
+                {selectedSubcategory && (
+                  <>
+                    <ChevronRight size={14} />
+                    <span className="font-bold text-orange-600">
+                      {data.subcategories.find(s => s.slug.current === selectedSubcategory)?.title}
+                    </span>
+                  </>
+                )}
+              </div>
+              <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tight">
+                {selectedSubcategory 
+                  ? data.subcategories.find(s => s.slug.current === selectedSubcategory)?.title 
+                  : data.category.title}
+              </h1>
               <p className="text-gray-500 mt-1 text-sm font-medium">{filteredProducts.length} produtos encontrados</p>
           </div>
           <button onClick={() => setShowMobileFilters(!showMobileFilters)} className="lg:hidden flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-700 shadow-sm">
@@ -142,6 +193,42 @@ export default function CategoryPage() {
                       <h3 className="font-bold text-gray-900">Filtrar</h3>
                       <button onClick={() => setShowMobileFilters(false)}><X size={20}/></button>
                   </div>
+
+                  {/* --- NOVO: FILTRO DE SUBCATEGORIAS --- */}
+                  {data.subcategories.length > 0 && (
+                    <div className="mb-8">
+                      <h3 className="font-bold text-gray-900 mb-3 text-sm uppercase tracking-wide">Categorias</h3>
+                      <div className="flex flex-col gap-1">
+                        <button
+                          onClick={() => setSelectedSubcategory(null)}
+                          className={`text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                            selectedSubcategory === null 
+                              ? 'bg-orange-50 text-orange-700 font-bold' 
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          Ver tudo em {data.category.title}
+                        </button>
+                        {data.subcategories.map(sub => (
+                          <button
+                            key={sub._id}
+                            onClick={() => setSelectedSubcategory(sub.slug.current)}
+                            className={`text-left px-3 py-2 rounded-lg text-sm transition-colors flex justify-between items-center ${
+                              selectedSubcategory === sub.slug.current
+                                ? 'bg-orange-600 text-white font-bold shadow-md'
+                                : 'text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            {sub.title}
+                            {selectedSubcategory === sub.slug.current && <span className="text-xs">✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="border-b border-gray-100 my-6"></div>
+                    </div>
+                  )}
+                  {/* ------------------------------------- */}
+
                   <div className="mb-8">
                       <h3 className="font-bold text-gray-900 mb-3 text-sm uppercase tracking-wide">Preço</h3>
                       <div className="flex gap-2 items-center">
@@ -166,8 +253,8 @@ export default function CategoryPage() {
                           </div>
                       </div>
                   )}
-                  {(selectedBrands.length > 0 || priceRange.min || priceRange.max) && (
-                      <button onClick={() => {setSelectedBrands([]); setPriceRange({min:'', max:''})}} className="w-full mt-4 text-xs font-bold text-red-500 hover:bg-red-50 py-3 rounded-lg border border-transparent hover:border-red-100 transition-all uppercase">
+                  {(selectedBrands.length > 0 || priceRange.min || priceRange.max || selectedSubcategory) && (
+                      <button onClick={() => {setSelectedBrands([]); setPriceRange({min:'', max:''}); setSelectedSubcategory(null)}} className="w-full mt-4 text-xs font-bold text-red-500 hover:bg-red-50 py-3 rounded-lg border border-transparent hover:border-red-100 transition-all uppercase">
                           Limpar Filtros
                       </button>
                   )}
@@ -231,7 +318,7 @@ export default function CategoryPage() {
                   <div className="py-20 text-center bg-white rounded-2xl border border-gray-200 shadow-sm">
                       <Package size={48} className="mx-auto text-gray-200 mb-4"/>
                       <p className="text-gray-500 font-medium">Nenhum produto encontrado nesta categoria.</p>
-                      <button onClick={() => {setSelectedBrands([]); setPriceRange({min:'', max:''})}} className="text-orange-600 font-bold mt-4 text-sm hover:underline">
+                      <button onClick={() => {setSelectedBrands([]); setPriceRange({min:'', max:''}); setSelectedSubcategory(null)}} className="text-orange-600 font-bold mt-4 text-sm hover:underline">
                           Limpar filtros
                       </button>
                   </div>

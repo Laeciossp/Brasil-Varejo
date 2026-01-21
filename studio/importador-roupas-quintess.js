@@ -1,6 +1,5 @@
-// importador-roupas-quintess-v38.js
-// VERSÃO: O CIRURGIÃO (Baseado no HTML fornecido)
-// Alvo: Classes 'ui-pdp-outside_variations' encontradas no código fonte.
+// importador-roupas-quintess-v49.js
+// VERSÃO: RAIO-X CALIBRADO (Adaptado para a estrutura de pickers do HTML fornecido)
 
 const { createClient } = require('@sanity/client');
 const puppeteer = require('puppeteer-extra');
@@ -20,7 +19,7 @@ const client = createClient({
 });
 const generateKey = () => Math.random().toString(36).substring(2, 15);
 
-// ... (Categorias igual) ...
+// ... (Categorias mantidas) ...
 const CATEGORIES_MAP = {
     'MACAQUINHO': '9ca0fcfe-9f06-44db-8c84-f8d395b610ea',
     'MACAC':      '9ca0fcfe-9f06-44db-8c84-f8d395b610ea', 
@@ -56,80 +55,133 @@ async function uploadMediaToSanity(mediaUrl) {
 }
 
 async function startScraper() {
-  console.log('🔌 Conectando (V38 - O Cirurgião)...');
+  console.log('🔌 Conectando (V49 - Raio-X Calibrado)...');
   const browser = await puppeteer.connect({ browserURL: 'http://127.0.0.1:9222', defaultViewport: null });
   const page = (await browser.pages())[0];
 
   const data = await page.evaluate(() => {
       const title = document.querySelector('h1')?.innerText || 'Roupa Quintess';
       
-      // Preço
-      let price = 0;
-      const meta = document.querySelector('meta[property="product:price:amount"]');
-      if(meta) price = parseFloat(meta.content);
-      if(!price) {
-          const el = document.querySelector('.andes-money-amount__fraction');
-          if(el) price = parseFloat(el.innerText.replace(/\./g,'').replace(',','.'));
-      }
-      
-      // Descrição
-      let desc = document.querySelector('.ui-pdp-description__content')?.innerText;
-      if (!desc || desc.trim().length === 0) desc = "Descrição detalhada indisponível.";
+      // --- CAPTURA DE COR ---
+      let color = 'Cor Principal';
+      const knownColors = ['AZUL', 'ROSA', 'PRETO', 'BRANCO', 'VERDE', 'AMARELO', 'VERMELHO', 'LARANJA', 'BEGE', 'MARROM', 'ROXO', 'LILÁS', 'CINZA', 'ESTAMPADO', 'OFF-WHITE', 'VINHO'];
+      const titleUpper = title.toUpperCase();
+      for (const c of knownColors) { if (titleUpper.includes(c)) { color = c.charAt(0) + c.slice(1).toLowerCase(); break; } }
 
-      // Imagens
+      let rawSizes = [];
+      let jsonPrice = null;
+      let jsonColor = null;
+      let debugLogs = [];
+      
+      try {
+          const scriptEl = document.getElementById('__PRELOADED_STATE__');
+          if (scriptEl && scriptEl.textContent) {
+              const state = JSON.parse(scriptEl.textContent); 
+              
+              // 1. PREÇO (No initialState)
+              if (state.pageState?.initialState?.price) {
+                 jsonPrice = state.pageState.initialState.price;
+              } else {
+                 // Tenta achar nos componentes
+                 const comps = state.pageState?.initialState?.components;
+                 // Lógica de busca profunda...
+              }
+
+              // 2. TAMANHOS E COR (NOVA LÓGICA BASEADA NO SEU HTML)
+              const analytics = state.pageState?.initialState?.analytics_event;
+              if (analytics && analytics.custom_dimensions && analytics.custom_dimensions.customDimensions) {
+                  const pickers = JSON.parse(analytics.custom_dimensions.customDimensions.pickers || "{}");
+                  
+                  // A. Tamanhos
+                  if (pickers.SIZE && Array.isArray(pickers.SIZE)) {
+                      rawSizes = pickers.SIZE.map(s => s.value); // Pega "38", "40", etc.
+                      debugLogs.push("Tamanhos encontrados no Analytics Pickers");
+                  }
+                  
+                  // B. Cor
+                  if (pickers.COLOR_SECONDARY_COLOR && Array.isArray(pickers.COLOR_SECONDARY_COLOR)) {
+                      if(pickers.COLOR_SECONDARY_COLOR.length > 0) {
+                          jsonColor = pickers.COLOR_SECONDARY_COLOR[0].value;
+                      }
+                  }
+              }
+              
+              // SE NÃO ACHOU NO ANALYTICS, TENTA NOS COMPONENTES (FALLBACK DE ESTRUTURA)
+              if (rawSizes.length === 0) {
+                   const components = state.pageState?.initialState?.components;
+                   const findPickers = (obj) => {
+                      if (!obj) return [];
+                      if (Array.isArray(obj)) return obj.flatMap(findPickers);
+                      if (typeof obj === 'object') {
+                          // Nova estrutura encontrada no seu HTML: type 'outside_variations'
+                          if (obj.type === 'outside_variations' && Array.isArray(obj.pickers)) {
+                              return obj.pickers;
+                          }
+                          return Object.values(obj).flatMap(findPickers);
+                      }
+                      return [];
+                   };
+
+                   if (components) {
+                      const pickers = findPickers(components);
+                      const sizePicker = pickers.find(p => p.id === 'SIZE');
+                      if (sizePicker && sizePicker.products) {
+                          rawSizes = sizePicker.products.map(p => p.label.text);
+                          debugLogs.push("Tamanhos encontrados nos Componentes Outside");
+                      }
+                   }
+              }
+
+          }
+      } catch(e) { debugLogs.push("Erro JSON: " + e.message); }
+
+      // --- FALLBACKS VISUAIS ---
+      
+      let price = jsonPrice;
+      if (!price) {
+          const priceContainer = document.querySelector('.ui-pdp-price__second-line .andes-money-amount__fraction');
+          if (priceContainer) {
+              price = parseFloat(priceContainer.innerText.replace(/\./g,'').replace(',','.'));
+          } else {
+              const meta = document.querySelector('meta[property="product:price:amount"]');
+              if(meta) price = parseFloat(meta.content);
+          }
+      }
+
+      // Cor
+      let finalColor = jsonColor || color;
+      
+      // Descrição e Imagens
+      let desc = document.querySelector('.ui-pdp-description__content')?.innerText || "Descrição indisponível.";
       const imgs = [];
       document.querySelectorAll('.ui-pdp-gallery__figure img').forEach(i => {
           let src = i.getAttribute('data-zoom') || i.getAttribute('src');
           if(src) imgs.push(src);
       });
 
-      // --- ESTRATÉGIA COR (Via Título) ---
-      let color = 'Cor Principal';
-      const knownColors = ['AZUL', 'ROSA', 'PRETO', 'BRANCO', 'VERDE', 'AMARELO', 'VERMELHO', 'LARANJA', 'BEGE', 'MARROM', 'ROXO', 'LILÁS', 'CINZA', 'ESTAMPADO'];
-      const titleUpper = title.toUpperCase();
-      for (const c of knownColors) {
-          if (titleUpper.includes(c)) {
-              color = c.charAt(0) + c.slice(1).toLowerCase(); 
-              break; 
-          }
-      }
-
-      // --- ESTRATÉGIA DE TAMANHO (BASEADA NO SEU HTML) ---
-      let rawSizes = [];
-      
-      // 1. Procura os containers de variação "Outside" (Onde o HTML mostrou que está)
-      const pickers = document.querySelectorAll('.ui-pdp-outside_variations__picker');
-      
-      pickers.forEach(picker => {
-          // Pega o título do picker (Ex: "Tamanho:")
-          const pickerTitle = picker.querySelector('.ui-pdp-outside_variations__title__label')?.innerText || '';
-          
-          // Se for o picker de Tamanho
-          if (pickerTitle.toUpperCase().includes('TAMANHO')) {
-              // Pega os itens dentro dele (P, XXG, etc)
-              const items = picker.querySelectorAll('.ui-pdp-outside_variations__thumbnails__item__label span');
-              items.forEach(item => {
-                  const sizeText = item.innerText.trim();
-                  if (sizeText) rawSizes.push(sizeText);
-              });
-          }
-      });
-
-      // 2. Fallback: Se não achou na estrutura nova, tenta a antiga (padrão ML)
-      if (rawSizes.length === 0) {
-          document.querySelectorAll('.ui-pdp-variations__option-label').forEach(el => {
-              const txt = el.innerText.trim();
-              if (txt && !txt.toUpperCase().includes('ESCOLHA') && txt.length < 5) {
-                  rawSizes.push(txt);
-              }
-          });
-      }
-
-      return { title, price, desc, imgs, color, rawSizes: [...new Set(rawSizes)] };
+      return { 
+          title, price, desc, imgs, color: finalColor, 
+          rawSizes: [...new Set(rawSizes)],
+          logs: debugLogs
+      };
   });
 
-  // Limpeza final para garantir
-  let cleanSizes = data.rawSizes.filter(s => s !== '');
+  if(data.logs) console.log("🔍 Logs:", data.logs);
+
+  // --- FILTRAGEM RIGOROSA ---
+  const invalidWords = ['ESCOLHA', 'SELECIONE', 'OPÇÕES', 'TAMANHO', 'COR', 'VERIFIQUE', 'GUIA'];
+  
+  let cleanSizes = data.rawSizes.filter(s => {
+      if (!s) return false;
+      const upperS = s.toString().toUpperCase(); // Garante que é string
+      const upperColor = data.color.toUpperCase();
+      
+      if (upperS === upperColor) return false;
+      if (invalidWords.some(word => upperS.includes(word))) return false;
+      
+      return true;
+  });
+  
   if (cleanSizes.length === 0) cleanSizes = ['Único'];
 
   const categoryId = detectCategory(data.title);
@@ -142,9 +194,10 @@ async function startScraper() {
       const res = await uploadMediaToSanity(url);
       if (res) uploadedAssets.push(res);
   }
-  if (uploadedAssets.length === 0) { console.log("Sem imagens"); return; }
+  
+  if (uploadedAssets.length === 0) { console.log("❌ Sem imagens."); return; }
 
-  // --- ESTRUTURA FERRARI (V38) ---
+  // --- ESTRUTURA ---
   const variantsStructure = [
       {
           _key: generateKey(),
@@ -187,9 +240,10 @@ async function startScraper() {
 
   try {
       const res = await client.create(doc);
-      console.log(`✅ SUCESSO! Produto Importado (V38 - HTML Confirmado).`);
+      console.log(`✅ SUCESSO! Produto Importado.`);
       console.log(`🎨 Cor: ${data.color}`);
-      console.log(`📏 Tamanhos Capturados: ${cleanSizes.join(', ')}`);
+      console.log(`📏 Tamanhos: ${cleanSizes.join(', ')}`);
+      console.log(`💰 Preço Base: R$ ${costPrice}`);
       console.log(`📄 SKU: ${doc.slug.current}`);
   } catch (err) { console.error("❌ Erro:", err.message); }
   process.exit(0);
