@@ -25,7 +25,7 @@ export default {
       initialValue: true, // Já nasce ativado por padrão
       validation: Rule => Rule.required()
     },
-    // --- NOVO CAMPO: LOTE DE IMPORTAÇÃO (PARA ORGANIZAÇÃO) ---
+    // --- LOTE DE IMPORTAÇÃO ---
     {
       name: 'lote',
       title: 'Lote de Importação',
@@ -68,7 +68,7 @@ export default {
       group: 'main',
       of: [{ type: 'image', options: { hotspot: true } }]
     },
-    // --- NOVO CAMPO DE VÍDEO (SOLICITADO) ---
+    // --- CAMPO DE VÍDEO ---
     {
       name: 'videoFile',
       title: 'Vídeo do Produto',
@@ -101,7 +101,7 @@ export default {
         }
       ]
     },
-    // --- NOVOS CAMPOS: PREÇO NA RAIZ (PARA PRODUTOS SEM VARIAÇÃO) ---
+    // --- PREÇO NA RAIZ ---
     {
       name: 'price',
       title: 'Preço Base (R$)',
@@ -138,7 +138,7 @@ export default {
       }
     },
 
- // --- 3. VARIAÇÕES (ESTRUTURA HIERÁRQUICA - V31) ---
+ // --- 3. VARIAÇÕES (ESTRUTURA HIERÁRQUICA) ---
     {
       name: 'variants',
       title: 'Variações (Cores -> Tamanhos)',
@@ -151,9 +151,16 @@ export default {
           fields: [
             { name: 'colorName', title: 'Nome da Cor', type: 'string' },
             { name: 'variantImage', title: 'Foto da Cor', type: 'image' },
+            // NOVO CAMPO PARA ELETRO: Variante sem tamanho (Item Único)
+            { name: 'variantName', title: 'Nome da Variante (Eletro)', type: 'string', description: 'Use este campo se não houver tamanhos (ex: 110V)' },
+            { name: 'price', title: 'Preço (Item Único)', type: 'number' },
+            { name: 'oldPrice', title: 'Preço Antigo (Item Único)', type: 'number' },
+            { name: 'stock', title: 'Estoque (Item Único)', type: 'number' },
+            { name: 'sku', title: 'SKU (Item Único)', type: 'string' },
+
             {
               name: 'sizes',
-              title: 'Tamanhos desta Cor',
+              title: 'Tamanhos desta Cor (Moda)',
               type: 'array', // Tamanhos (Filhos)
               of: [
                 {
@@ -162,7 +169,6 @@ export default {
                   fields: [
                     { name: 'size', title: 'Tamanho', type: 'string' },
                     { name: 'price', title: 'Preço', type: 'number' },
-                    // SEM oldPrice AQUI
                     { name: 'stock', title: 'Estoque', type: 'number' },
                     { name: 'sku', title: 'SKU', type: 'string' }
                   ],
@@ -177,7 +183,13 @@ export default {
             }
           ],
           preview: {
-            select: { title: 'colorName', media: 'variantImage' }
+            select: { title: 'colorName', subtitle: 'variantName', media: 'variantImage' },
+            prepare({ title, subtitle, media }) {
+               return { 
+                 title: title || subtitle || 'Variante',
+                 media: media
+               }
+            }
           }
         }
       ]
@@ -244,19 +256,20 @@ export default {
       ]
     },
 
+    // --- CORREÇÃO AQUI: RENOMEADO DE customSpecs PARA specifications ---
     // 📋 GERAL / TABELA LIVRE
     {
-      name: 'customSpecs',
-      title: 'Outras Características (Tabela Livre)',
+      name: 'specifications', // <-- AGORA O NOME BATE COM O IMPORTADOR
+      title: 'Especificações Técnicas (Lista)',
       type: 'array',
       group: 'specs',
-      description: 'Use para características que não estão nos campos acima.',
+      description: 'Use para características que não estão nos campos acima (Ex: Voltagem, Consumo, etc).',
       of: [
         {
           type: 'object',
           fields: [
-            {name: 'label', type: 'string', title: 'Característica (Ex: Material da Sola)'},
-            {name: 'value', type: 'string', title: 'Valor (Ex: Borracha)'}
+            {name: 'label', type: 'string', title: 'Característica (Ex: Potência)'},
+            {name: 'value', type: 'string', title: 'Valor (Ex: 2000W)'}
           ],
           preview: { 
             select: { title: 'label', subtitle: 'value' } 
@@ -294,35 +307,27 @@ export default {
     }
   ],
 
-  // --- VISUALIZAÇÃO PODEROSA NA LISTA (O SEGREDO PARA NÃO SE PERDER) ---
+  // --- VISUALIZAÇÃO ---
   preview: {
     select: {
       title: 'title',
       media: 'images.0',
       type: 'productType',
-      active: 'isActive', // Pega se está ativo
-      lote: 'lote',       // Pega o nome do Lote
-      price: 'price'      // Pega o preço
+      active: 'isActive', 
+      lote: 'lote',       
+      price: 'price'      
     },
     prepare({ title, media, type, active, lote, price }) {
-      // Ícones por categoria
       const icons = {
-        tech: '📱',
-        energy: '⚡',
-        fashion: '👗',
-        home: '🏠',
-        beauty: '💄',
-        general: '📦'
+        tech: '📱', energy: '⚡', fashion: '👗', home: '🏠', beauty: '💄', general: '📦'
       };
       
-      // Lógica Visual
-      const statusSymbol = active ? '🟢' : '🔴'; // Verde = Ativo, Vermelho = Oculto
-      const loteTag = lote ? `[${lote}]` : '[S/ LOTE]'; // Mostra o lote ou avisa que está sem
-      const priceTag = price ? ` | R$ ${price.toFixed(2)}` : ''; // Mostra preço formatado
+      const statusSymbol = active ? '🟢' : '🔴'; 
+      const loteTag = lote ? `[${lote}]` : '[S/ LOTE]'; 
+      const priceTag = price ? ` | R$ ${price.toFixed(2)}` : ''; 
 
       return {
         title: title,
-        // Ex: "🟢 [Super Lote 12] | 📱 Tech | R$ 1500.00"
         subtitle: `${statusSymbol} ${loteTag} | ${icons[type] || '📦'}${priceTag}`,
         media: media
       }

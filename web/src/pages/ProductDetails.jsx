@@ -3,8 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { client, urlFor } from '../lib/sanity';
 import { PortableText } from '@portabletext/react'; 
 import { 
-  Truck, ShieldCheck, ArrowRight, Heart, 
-  ChevronRight, ChevronLeft, Package, CheckCircle, Lock
+  Truck, Heart, ChevronRight, ChevronLeft, Package, CheckCircle, Lock, ArrowRight
 } from 'lucide-react'; 
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
@@ -116,40 +115,54 @@ export default function ProductDetails() {
   const [touchEnd, setTouchEnd] = useState(null);
   const minSwipeDistance = 50; 
 
-  // --- FUNÇÃO DE PROCESSAMENTO (CORRIGIDA E MELHORADA) ---
+  // --- FUNÇÃO DE PROCESSAMENTO HÍBRIDA (MODA + ELETRO) ---
   const processVariants = (rawVariants, productOldPrice) => {
     if (!rawVariants || !Array.isArray(rawVariants)) return [];
     
     const flatList = [];
     
-    rawVariants.forEach(colorGroup => {
-        // Pega a imagem da COR (Pai)
-        // OBS: Aqui corrigimos o bug. O Sanity já entregou o asset, não precisa de .asset de novo.
-        const groupImage = colorGroup.variantImage; 
+    rawVariants.forEach(item => {
+        // Cenario 1: MODA (Tem lista de sizes dentro da variante)
+        if (item.sizes && Array.isArray(item.sizes) && item.sizes.length > 0) {
+            const groupImage = item.variantImage; 
 
-        if (colorGroup.sizes && Array.isArray(colorGroup.sizes)) {
-            colorGroup.sizes.forEach(sizeObj => {
+            item.sizes.forEach(sizeObj => {
                 flatList.push({
                     _key: sizeObj.sku || Math.random().toString(36),
-                    variantName: `${colorGroup.colorName} - ${sizeObj.size}`,
+                    variantName: `${item.colorName || 'Opção'} - ${sizeObj.size}`,
                     price: sizeObj.price,
                     oldPrice: productOldPrice,
                     stock: sizeObj.stock,
                     sku: sizeObj.sku,
-                    color: colorGroup.colorName, // Importante para ordenação
+                    color: item.colorName, 
                     size: sizeObj.size,
-                    variantImage: groupImage // Passa a imagem correta para o filho
+                    variantImage: groupImage
                 });
+            });
+        } 
+        // Cenario 2: TECH/ELETRO (A variante é única, ex: Voltagem 110V)
+        else {
+            flatList.push({
+                _key: item._key,
+                // Tenta usar variantName, se não tiver usa size, color ou genérico
+                variantName: item.variantName || item.size || item.colorName || "Padrão",
+                price: item.price,
+                oldPrice: item.oldPrice || productOldPrice,
+                stock: item.stock,
+                sku: item.sku,
+                // Define propriedades para manter compatibilidade
+                color: item.colorName, 
+                size: item.size || item.variantName, // Importante para o botão mostrar o texto
+                variantImage: item.variantImage
             });
         }
     });
 
-    // --- ORDENAÇÃO (FIM DA LISTA MISTURADA) ---
-    // Ordena por Cor (A-Z) e depois por Tamanho
+    // Ordenação alfabética simples
     return flatList.sort((a, b) => {
-        if (a.color < b.color) return -1;
-        if (a.color > b.color) return 1;
-        return 0; 
+        const nameA = a.variantName || "";
+        const nameB = b.variantName || "";
+        return nameA.localeCompare(nameB);
     });
   };
 
@@ -157,16 +170,21 @@ export default function ProductDetails() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // --- QUERY ATUALIZADA PARA HÍBRIDO ---
         const query = `*[_type == "product" && slug.current == $slug][0]{
           _id, title, brand, description, specifications, "slug": slug,
           categories[]->{_id, title},
           price, oldPrice,
           "images": images[]{ _key, _type, asset->{_id, url, mimeType} },
           
-          // Busca Bruta: Cor + Imagem da Cor + Tamanhos
           "rawVariants": variants[] {
+            _key, 
+            variantName, // Fundamental para Eletro
+            price, oldPrice, stock, sku, 
             colorName,
             "variantImage": variantImage.asset->{_id, url, mimeType},
+            
+            // Lista de tamanhos (Moda)
             sizes[] {
                 size, price, sku, stock
             }
@@ -179,7 +197,7 @@ export default function ProductDetails() {
         const data = await client.fetch(query, { slug });
         
         if (data) {
-          // Processa e Ordena
+          // Processa variants com a lógica híbrida
           const processedVariants = processVariants(data.rawVariants, data.oldPrice);
           data.variants = processedVariants;
 
@@ -196,7 +214,6 @@ export default function ProductDetails() {
             setCurrentPrice(safePrice || 0);
             setCurrentOldPrice(safeOldPrice || 0);
 
-            // SE TIVER FOTO NA VARIANTE, USA ELA. SE NÃO, USA A DA GALERIA.
             if (firstVar.variantImage) {
               setActiveMedia({ _key: `var-${firstVar._key}`, asset: firstVar.variantImage });
             } else if (data.images?.length > 0) {
@@ -240,11 +257,9 @@ export default function ProductDetails() {
     setCurrentPrice(safePrice || 0);
     setCurrentOldPrice(safeOldPrice || 0);
 
-    // --- CORREÇÃO DA TROCA DE FOTO ---
-    // Atualiza o activeMedia usando a imagem que processamos (vinda do Pai/Cor)
     if (variant.variantImage) {
       setActiveMedia({ 
-          _key: `var-${variant._key}`, // Cria uma chave única para forçar o React a atualizar
+          _key: `var-${variant._key}`, 
           asset: variant.variantImage 
       });
     }
@@ -459,6 +474,7 @@ export default function ProductDetails() {
                 </div>
             )}
 
+            {/* SEÇÃO DE VARIANTES CORRIGIDA */}
             {product.variants && product.variants.length > 0 && (
               <div className="mb-6">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Opção Selecionada: <span className="text-black ml-1">{selectedVariant?.variantName}</span></span>
@@ -474,9 +490,9 @@ export default function ProductDetails() {
                           isSelected 
                             ? 'border-blue-600 ring-1 ring-blue-600' 
                             : 'border-gray-200 hover:border-gray-400'
-                        } ${variant.variantImage ? 'w-12 h-12 p-0' : 'px-3 py-2 text-xs font-bold text-gray-600'}`}
+                        } ${variant.variantImage ? 'w-12 h-12 p-0' : 'px-3 py-2 text-xs font-bold text-gray-600 min-w-[3rem]'}`}
                       >
-                          {/* SE TIVER FOTO, MOSTRA FOTO. SE NÃO, MOSTRA TEXTO */}
+                          {/* EXIBIÇÃO INTELIGENTE: IMAGEM OU TEXTO */}
                           {variant.variantImage ? (
                             <img 
                                 src={urlFor(variant.variantImage).width(100).url()} 
@@ -484,7 +500,10 @@ export default function ProductDetails() {
                                 alt={variant.variantName}
                             />
                           ) : (
-                              variant.variantName
+                              // Se não tem imagem, mostra o Texto (ex: 127V, P, G)
+                              <span className="uppercase block text-center">
+                                {variant.size || variant.variantName || "Opção"}
+                              </span>
                           )}
                         
                         {isSelected && !variant.variantImage && <div className="absolute -top-1 -right-1 text-blue-600 bg-white rounded-full"><CheckCircle size={12} fill="white"/></div>}
