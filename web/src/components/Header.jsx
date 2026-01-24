@@ -38,10 +38,14 @@ export default function Header() {
   const cartCount = items.reduce((acc, item) => acc + item.quantity, 0);
   const favCount = favorites?.length || 0;
 
+  // --- LÓGICA DE SALVAR CEP ATUALIZADA ---
   const handleSaveCep = (e) => {
     e.preventDefault();
-    if (tempCep.length === 8) {
-      setGlobalCep(tempCep); 
+    // Remove tudo que não é número para validar
+    const cleanCep = tempCep.replace(/\D/g, '');
+    
+    if (cleanCep.length === 8) {
+      setGlobalCep(tempCep); // Salva com a formatação (ex: 12345-678) para ficar bonito no topo
       setIsCepModalOpen(false);
     } else {
       alert("Por favor, digite um CEP válido com 8 números.");
@@ -164,7 +168,6 @@ export default function Header() {
       </div>
 
       {/* 3. MENU / BARRA DE DEPARTAMENTOS */}
-      {/* ATUALIZADO: text-crocus-deep para cor do tema */}
       <div className={`bg-white text-crocus-deep shadow-sm relative ${isMenuOpen ? 'block' : 'hidden'} lg:block`}>
         
         <div className={gradientClass}></div>
@@ -274,7 +277,22 @@ export default function Header() {
                  <h3 className="text-2xl font-black uppercase tracking-tighter italic mb-2">Onde você está?</h3>
                  <p className="text-gray-500 text-sm font-medium mb-8">Informe seu CEP para calcularmos frete e prazos de entrega exclusivos.</p>
                  <form onSubmit={handleSaveCep} className="w-full space-y-4">
-                   <input autoFocus type="text" maxLength={8} placeholder="00000000" className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-center text-xl font-black tracking-widest focus:border-orange-500 outline-none transition-all placeholder:text-gray-300" value={tempCep} onChange={(e) => setTempCep(e.target.value.replace(/\D/g, ''))} />
+                   <input 
+                    autoFocus 
+                    type="text" 
+                    maxLength={9} // AUMENTADO PARA 9 (8 NUMEROS + 1 TRAÇO)
+                    placeholder="00000-000" 
+                    className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-center text-xl font-black tracking-widest focus:border-orange-500 outline-none transition-all placeholder:text-gray-300" 
+                    value={tempCep} 
+                    onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, ''); 
+                        let formatted = raw;
+                        if (raw.length > 5) {
+                           formatted = raw.slice(0, 5) + '-' + raw.slice(5, 8); 
+                        }
+                        setTempCep(formatted);
+                    }} 
+                   />
                    <button type="submit" className="w-full bg-crocus-deep text-white py-5 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-crocus-vivid transition-all shadow-xl shadow-crocus-deep/20">Confirmar Localização <ArrowRight size={16}/></button>
                  </form>
                </div>

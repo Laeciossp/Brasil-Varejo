@@ -108,6 +108,10 @@ export default function ProductDetails() {
   const [calculating, setCalculating] = useState(false);
   const [shippingOptions, setShippingOptions] = useState(null);
 
+  // --- ESTADOS PARA FRETE ---
+  const [handlingDays, setHandlingDays] = useState(0);
+  const [carrierRules, setCarrierRules] = useState([]);
+
   const carouselRef = useRef(null);
 
   // Estados para Swipe Mobile
@@ -115,17 +119,15 @@ export default function ProductDetails() {
   const [touchEnd, setTouchEnd] = useState(null);
   const minSwipeDistance = 50; 
 
-  // --- FUNÇÃO DE PROCESSAMENTO HÍBRIDA (MODA + ELETRO) ---
+  // --- FUNÇÃO DE PROCESSAMENTO HÍBRIDA ---
   const processVariants = (rawVariants, productOldPrice) => {
     if (!rawVariants || !Array.isArray(rawVariants)) return [];
     
     const flatList = [];
     
     rawVariants.forEach(item => {
-        // Cenario 1: MODA (Tem lista de sizes dentro da variante)
         if (item.sizes && Array.isArray(item.sizes) && item.sizes.length > 0) {
             const groupImage = item.variantImage; 
-
             item.sizes.forEach(sizeObj => {
                 flatList.push({
                     _key: sizeObj.sku || Math.random().toString(36),
@@ -140,25 +142,21 @@ export default function ProductDetails() {
                 });
             });
         } 
-        // Cenario 2: TECH/ELETRO (A variante é única, ex: Voltagem 110V)
         else {
             flatList.push({
                 _key: item._key,
-                // Tenta usar variantName, se não tiver usa size, color ou genérico
                 variantName: item.variantName || item.size || item.colorName || "Padrão",
                 price: item.price,
                 oldPrice: item.oldPrice || productOldPrice,
                 stock: item.stock,
                 sku: item.sku,
-                // Define propriedades para manter compatibilidade
                 color: item.colorName, 
-                size: item.size || item.variantName, // Importante para o botão mostrar o texto
+                size: item.size || item.variantName, 
                 variantImage: item.variantImage
             });
         }
     });
 
-    // Ordenação alfabética simples
     return flatList.sort((a, b) => {
         const nameA = a.variantName || "";
         const nameB = b.variantName || "";
@@ -170,70 +168,74 @@ export default function ProductDetails() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // --- QUERY ATUALIZADA PARA HÍBRIDO ---
-        const query = `*[_type == "product" && slug.current == $slug][0]{
-          _id, title, brand, description, specifications, "slug": slug,
-          categories[]->{_id, title},
-          price, oldPrice,
-          "images": images[]{ _key, _type, asset->{_id, url, mimeType} },
-          
-          "rawVariants": variants[] {
-            _key, 
-            variantName, // Fundamental para Eletro
-            price, oldPrice, stock, sku, 
-            colorName,
-            "variantImage": variantImage.asset->{_id, url, mimeType},
+        const query = `{
+          "product": *[_type == "product" && slug.current == $slug][0]{
+            _id, title, brand, description, specifications, "slug": slug,
+            categories[]->{_id, title},
+            price, oldPrice,
+            "images": images[]{ _key, _type, asset->{_id, url, mimeType} },
             
-            // Lista de tamanhos (Moda)
-            sizes[] {
-                size, price, sku, stock
-            }
-          },
+            "rawVariants": variants[] {
+              _key, variantName, price, oldPrice, stock, sku, colorName,
+              "variantImage": variantImage.asset->{_id, url, mimeType},
+              sizes[] { size, price, sku, stock }
+            },
 
-          freeShipping,
-          logistics { width, height, length, weight }
+            freeShipping,
+            logistics { width, height, length, weight }
+          },
+          "settings": *[_type == "shippingSettings"][0]{
+            handlingTime
+          },
+          // AQUI: BUSCAMOS LOGO E SERVICE NAME
+          "carrierConfig": *[_type == "carrierConfig"][0]{
+            carriers[]{ name, serviceName, additionalDays, isActive, logoUrl }
+          }
         }`;
 
         const data = await client.fetch(query, { slug });
-        
-        if (data) {
-          // Processa variants com a lógica híbrida
-          const processedVariants = processVariants(data.rawVariants, data.oldPrice);
-          data.variants = processedVariants;
 
-          setProduct(data);
+        if (data && data.product) {
+          setHandlingDays(data.settings?.handlingTime || 0);
+          setCarrierRules(data.carrierConfig?.carriers || []);
+
+          const productData = data.product;
+          const processedVariants = processVariants(productData.rawVariants, productData.oldPrice);
+          productData.variants = processedVariants;
+
+          setProduct(productData);
           
-          // Seleciona a primeira variante e define a foto inicial
-          if (data.variants && data.variants.length > 0) {
-            const firstVar = data.variants[0];
+          if (productData.variants && productData.variants.length > 0) {
+            const firstVar = productData.variants[0];
             setSelectedVariant(firstVar);
             
-            const safePrice = firstVar.price && firstVar.price > 0 ? firstVar.price : data.price;
-            const safeOldPrice = firstVar.oldPrice && firstVar.oldPrice > 0 ? firstVar.oldPrice : data.oldPrice;
+            const safePrice = firstVar.price && firstVar.price > 0 ? firstVar.price : productData.price;
+            const safeOldPrice = firstVar.oldPrice && firstVar.oldPrice > 0 ? firstVar.oldPrice : productData.oldPrice;
 
             setCurrentPrice(safePrice || 0);
             setCurrentOldPrice(safeOldPrice || 0);
 
             if (firstVar.variantImage) {
               setActiveMedia({ _key: `var-${firstVar._key}`, asset: firstVar.variantImage });
-            } else if (data.images?.length > 0) {
-              setActiveMedia(data.images[0]);
+            } else if (productData.images?.length > 0) {
+              setActiveMedia(productData.images[0]);
             }
           } else {
-            setCurrentPrice(data.price || 0);
-            setCurrentOldPrice(data.oldPrice || 0);
-            if (data.images?.length > 0) setActiveMedia(data.images[0]);
+            setCurrentPrice(productData.price || 0);
+            setCurrentOldPrice(productData.oldPrice || 0);
+            if (productData.images?.length > 0) setActiveMedia(productData.images[0]);
           }
 
-          if (data.categories && data.categories.length > 0) {
-            const catId = data.categories[0]._id;
+          // --- CARROSSEL AMPLO (50 ITENS) ---
+          if (productData.categories && productData.categories.length > 0) {
+            const catId = productData.categories[0]._id;
             const relatedQuery = `
-              *[_type == "product" && references($catId) && _id != $id][0...10] {
+              *[_type == "product" && references($catId) && _id != $id][0...50] {
                 _id, title, slug, price, oldPrice,
                 "imageUrl": images[0].asset->url
               }
             `;
-            const related = await client.fetch(relatedQuery, { catId, id: data._id });
+            const related = await client.fetch(relatedQuery, { catId, id: productData._id });
             setRelatedProducts(related || []);
           }
         }
@@ -248,20 +250,13 @@ export default function ProductDetails() {
 
   const handleVariantChange = (variant) => {
     if (!variant) return;
-
     setSelectedVariant(variant);
-    
     const safePrice = variant.price && variant.price > 0 ? variant.price : product.price;
     const safeOldPrice = variant.oldPrice && variant.oldPrice > 0 ? variant.oldPrice : product.oldPrice;
-
     setCurrentPrice(safePrice || 0);
     setCurrentOldPrice(safeOldPrice || 0);
-
     if (variant.variantImage) {
-      setActiveMedia({ 
-          _key: `var-${variant._key}`, 
-          asset: variant.variantImage 
-      });
+      setActiveMedia({ _key: `var-${variant._key}`, asset: variant.variantImage });
     }
   };
 
@@ -339,10 +334,8 @@ export default function ProductDetails() {
   const navigateImage = (direction) => {
       const allImages = product?.images || [];
       if (allImages.length <= 1) return;
-
       const currentIndex = allImages.findIndex(img => img._key === activeMedia?._key);
       const safeIndex = currentIndex === -1 ? 0 : currentIndex; 
-
       if (direction === 'next') {
           const nextIndex = (safeIndex + 1) % allImages.length;
           setActiveMedia(allImages[nextIndex]);
@@ -364,6 +357,10 @@ export default function ProductDetails() {
     if (distance < -minSwipeDistance) navigateImage('prev');
   }
 
+  const normalize = (str) => {
+      return (str || "").toLowerCase().trim(); 
+  };
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-orange-500 rounded-full animate-spin"></div></div>;
   if (!product) return <div className="p-10 text-center">Produto não encontrado.</div>;
 
@@ -373,7 +370,6 @@ export default function ProductDetails() {
 
   return (
     <div className="bg-gray-50 min-h-screen py-8 font-sans">
-      
       <div className="container mx-auto px-4 max-w-6xl mb-6">
          <div className="flex items-center text-xs text-gray-400 gap-1">
             <Link to="/" className="hover:text-orange-600 hover:underline">Home</Link>
@@ -383,11 +379,9 @@ export default function ProductDetails() {
       </div>
 
       <div className="container mx-auto px-4 max-w-6xl">
-        
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col lg:flex-row mb-10">
           
           <div className="lg:w-3/5 p-6 border-r border-gray-50 bg-white group relative">
-            
             <div 
                 className="aspect-square w-full flex items-center justify-center mb-4 relative overflow-hidden rounded-lg border border-gray-50 select-none"
                 onTouchStart={onTouchStart}
@@ -416,7 +410,6 @@ export default function ProductDetails() {
                         >
                             <ChevronLeft size={20} strokeWidth={3} />
                         </button>
-
                         <button 
                             onClick={(e) => { e.stopPropagation(); navigateImage('next'); }}
                             className="hidden lg:flex absolute right-4 top-1/2 -translate-y-1/2 z-20 
@@ -428,14 +421,12 @@ export default function ProductDetails() {
                         </button>
                     </>
                 )}
-
                 <div className="lg:hidden absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
                       {product.images?.map((_, idx) => (
                           <div key={idx} className={`h-1.5 rounded-full transition-all ${activeMedia?._key === product.images[idx]._key ? 'w-4 bg-orange-500' : 'w-1.5 bg-gray-300'}`}></div>
                       ))}
                 </div>
             </div>
-
             <div className="flex gap-2 overflow-x-auto justify-center pb-2">
                 {product.images?.map((media) => (
                 <button 
@@ -474,7 +465,6 @@ export default function ProductDetails() {
                 </div>
             )}
 
-            {/* SEÇÃO DE VARIANTES CORRIGIDA */}
             {product.variants && product.variants.length > 0 && (
               <div className="mb-6">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Opção Selecionada: <span className="text-black ml-1">{selectedVariant?.variantName}</span></span>
@@ -492,20 +482,13 @@ export default function ProductDetails() {
                             : 'border-gray-200 hover:border-gray-400'
                         } ${variant.variantImage ? 'w-12 h-12 p-0' : 'px-3 py-2 text-xs font-bold text-gray-600 min-w-[3rem]'}`}
                       >
-                          {/* EXIBIÇÃO INTELIGENTE: IMAGEM OU TEXTO */}
                           {variant.variantImage ? (
-                            <img 
-                                src={urlFor(variant.variantImage).width(100).url()} 
-                                className="w-full h-full object-cover" 
-                                alt={variant.variantName}
-                            />
+                            <img src={urlFor(variant.variantImage).width(100).url()} className="w-full h-full object-cover" alt={variant.variantName} />
                           ) : (
-                              // Se não tem imagem, mostra o Texto (ex: 127V, P, G)
                               <span className="uppercase block text-center">
                                 {variant.size || variant.variantName || "Opção"}
                               </span>
                           )}
-                        
                         {isSelected && !variant.variantImage && <div className="absolute -top-1 -right-1 text-blue-600 bg-white rounded-full"><CheckCircle size={12} fill="white"/></div>}
                       </button>
                     )
@@ -518,14 +501,11 @@ export default function ProductDetails() {
                 {currentOldPrice > currentPrice && (
                     <span className="text-gray-400 line-through text-xs block mb-1">De: {formatCurrency(currentOldPrice)}</span>
                 )}
-                
                 <span className="text-4xl font-black text-gray-900 tracking-tighter block">{formatCurrency(currentPrice)}</span>
-                
                 <p className="text-xs text-green-700 mt-2 font-bold flex items-center gap-2">
                     <span className="bg-green-100 px-2 py-0.5 rounded">10% OFF no Pix</span>
                     <span className="text-gray-400 font-normal">ou em até 12x</span>
                 </p>
-
                 {isFreeShipping && (
                     <div className="mt-3 flex items-center gap-2 text-xs font-bold text-purple-700">
                         <Truck size={14} /> Frete Grátis disponível
@@ -537,10 +517,17 @@ export default function ProductDetails() {
                 <div className="flex gap-2 mb-3">
                   <input 
                     type="text" 
-                    placeholder="Seu CEP" 
+                    placeholder="00000-000"
                     maxLength={9} 
                     value={cep} 
-                    onChange={(e) => setCep(e.target.value)}
+                    onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, ''); 
+                        let formatted = raw;
+                        if (raw.length > 5) {
+                           formatted = raw.slice(0, 5) + '-' + raw.slice(5, 8); 
+                        }
+                        setCep(formatted);
+                    }}
                     className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-gray-900 focus:border-orange-500 outline-none"
                   />
                   <button onClick={() => handleCalculateShipping()} disabled={calculating} className="bg-gray-900 text-white px-4 rounded-lg font-bold text-xs uppercase">
@@ -549,17 +536,109 @@ export default function ProductDetails() {
                 </div>
                 {shippingOptions && shippingOptions.length > 0 && (
                     <div className="space-y-1">
-                        {shippingOptions.filter(o => !o.error).map((opt, idx) => {
+                        {shippingOptions.filter(o => !o.error).filter(opt => {
+                            const apiNameNormal = normalize(opt.name);
+                            const apiCompanyNormal = normalize(opt.company?.name);
+
+                            // --- FILTRO INTELIGENTE (WHITELIST + MATCH) ---
+                            // Verifica se existe alguma regra ATIVA que bata com essa opção
+                            const hasActiveRule = carrierRules.some(r => {
+                                const configName = normalize(r.name);
+                                const configService = normalize(r.serviceName);
+
+                                // Match por nome da empresa (ex: "jadlog" em "jadlog")
+                                const nameMatch = apiNameNormal.includes(configName) || apiCompanyNormal.includes(configName);
+                                // Match por serviço (ex: "pac" em "correios pac")
+                                const serviceMatch = configService.includes(apiNameNormal) || apiNameNormal.includes(configService);
+
+                                // A regra tem que dar match E estar ativa
+                                return (nameMatch || serviceMatch) && r.isActive === true;
+                            });
+
+                            return hasActiveRule;
+
+                        }).map((opt, idx) => {
                             const isSelected = selectedShipping?.name === opt.name && selectedShipping?.price === opt.price;
-                            
+                            const apiNameNormal = normalize(opt.name);
+                            const apiCompanyNormal = normalize(opt.company?.name);
+
+                            // --- TENTATIVA DE ACHAR REGRA (PARA PEGAR O LOGO) ---
+                            let bestRule = carrierRules.find(r => {
+                                const configService = normalize(r.serviceName);
+                                return configService.includes(apiNameNormal) || apiNameNormal.includes(configService);
+                            });
+
+                            if (!bestRule) {
+                                bestRule = carrierRules.find(r => {
+                                    const configName = normalize(r.name);
+                                    return apiNameNormal.includes(configName) || apiCompanyNormal.includes(configName);
+                                });
+                            }
+
+                            // --- DEFINIÇÃO DO NOME ---
+                            let displayName = opt.name;
+                            let logoUrl = bestRule?.logoUrl;
+
+                            // 1. FORÇA PAC SE TIVER NA STRING ORIGINAL
+                            if (apiNameNormal.includes("pac")) {
+                                displayName = "PAC (Econômico)";
+                            }
+                            // 2. FORÇA SEDEX SE TIVER NA STRING ORIGINAL
+                            else if (apiNameNormal.includes("sedex")) {
+                                displayName = "SEDEX (Expresso)";
+                            }
+                            // 3. SE FOR CORREIOS GENÉRICO (SEM PAC/SEDEX NO NOME)
+                            else if (apiCompanyNormal.includes("correios")) {
+                                if (!logoUrl) {
+                                    const anyCorreiosRule = carrierRules.find(r => normalize(r.name).includes("correios"));
+                                    if (anyCorreiosRule) logoUrl = anyCorreiosRule.logoUrl;
+                                }
+                            }
+                            // 4. PARA OUTRAS, USA O NOME BONITO
+                            else if (bestRule) {
+                                displayName = bestRule.serviceName;
+                            }
+
+                            // --- CÁLCULO DE DIAS ---
+                            let additionalDays = 0;
+                            const ruleForDays = carrierRules.find(r => {
+                                const configService = normalize(r.serviceName);
+                                if (apiNameNormal.includes("pac") && configService.includes("pac")) return true;
+                                if (apiNameNormal.includes("sedex") && configService.includes("sedex")) return true;
+                                return configService.includes(apiNameNormal) || apiNameNormal.includes(configService);
+                            });
+                            if (ruleForDays) additionalDays = ruleForDays.additionalDays || 0;
+
+                            let finalDays = parseInt(opt.delivery_time) || 0;
+                            finalDays += handlingDays;
+                            finalDays += additionalDays;
+
                             return (
                                 <div 
                                     key={idx} 
-                                    onClick={() => setShipping(opt)} 
-                                    className={`flex justify-between p-2 px-3 border rounded-lg cursor-pointer text-xs ${isSelected ? 'border-blue-500 bg-blue-50/50' : 'border-gray-100'}`}
+                                    onClick={() => setShipping({...opt, delivery_time: finalDays})} 
+                                    className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer text-xs ${isSelected ? 'border-blue-500 bg-blue-50/50' : 'border-gray-100'}`}
                                 >
-                                    <span className="font-bold text-gray-700">{opt.name} <span className="text-gray-400 font-normal">({opt.delivery_time} dias)</span></span>
-                                    <span className="font-black text-gray-900">{parseFloat(opt.price) === 0 ? 'Grátis' : formatCurrency(opt.price)}</span>
+                                    {/* --- EXIBIÇÃO DO LOGO --- */}
+                                    {logoUrl ? (
+                                        <img src={logoUrl} alt={displayName} className="w-8 h-8 object-contain mix-blend-multiply" />
+                                    ) : (
+                                        <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
+                                            <Truck size={16} className="text-gray-400" />
+                                        </div>
+                                    )}
+
+                                    <div className="flex flex-col flex-1">
+                                        <span className="font-bold text-gray-700 uppercase">
+                                            {displayName}
+                                        </span>
+                                        <span className="text-[10px] text-gray-400 font-medium">
+                                            Em até {finalDays} dias úteis
+                                        </span>
+                                    </div>
+                                    <span className="font-black text-gray-900 self-center">
+                                        {parseFloat(opt.price) === 0 ? 'Grátis' : formatCurrency(opt.price)}
+                                    </span>
                                 </div>
                             );
                         })}
@@ -570,7 +649,6 @@ export default function ProductDetails() {
             <button onClick={handleBuyNow} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2">
                 Comprar Agora <ArrowRight size={18} />
             </button>
-            
             <MercadoPagoTrust />
           </div>
         </div>
@@ -581,7 +659,6 @@ export default function ProductDetails() {
                <div className="prose prose-sm max-w-none text-gray-600">
                  {product.description ? <PortableText value={product.description} components={myPortableTextComponents} /> : <p>Sem descrição.</p>}
                </div>
-               
                {product.specifications && (
                  <div className="mt-8 pt-6 border-t border-gray-100">
                    <h4 className="text-xs font-black uppercase text-gray-400 mb-4">Especificações</h4>
@@ -596,7 +673,6 @@ export default function ProductDetails() {
                  </div>
                )}
            </div>
-
           {relatedProducts.length > 0 && (
           <div className="mt-8">
             <div className="flex items-center justify-between mb-4">
@@ -606,12 +682,10 @@ export default function ProductDetails() {
                     <button onClick={() => scrollCarousel('right')} className="p-2 rounded-full border hover:bg-gray-100"><ChevronRight size={16}/></button>
                 </div>
             </div>
-            
             <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-6 snap-x scrollbar-hide scroll-smooth px-1">
               {relatedProducts.map((rel) => {
                 const relPrice = rel.price;
                 const relOldPrice = rel.oldPrice;
-
                 return (
                   <Link 
                     to={`/product/${rel.slug.current}`} 
@@ -623,11 +697,9 @@ export default function ProductDetails() {
                         <img src={`${rel.imageUrl}?w=300`} alt={rel.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-300" />
                       ) : <Package className="text-gray-200"/>}
                     </div>
-                    
                     <h4 className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" title={rel.title}>
                       {rel.title}
                     </h4>
-                    
                     <div className="mt-auto pt-2 border-t border-gray-50">
                         {relOldPrice > relPrice && (
                              <span className="text-[10px] text-gray-400 line-through block mb-0.5">
