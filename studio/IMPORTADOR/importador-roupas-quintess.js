@@ -1,5 +1,5 @@
-// importador-roupas-quintess-v44.js
-// VERSÃO: RAIO-X COMPLETO (Preço, Tamanho e COR extraídos do sistema)
+// importador-roupas-quintess-v49.js
+// VERSÃO: RAIO-X CALIBRADO (Adaptado para a estrutura de pickers do HTML fornecido)
 
 const { createClient } = require('@sanity/client');
 const puppeteer = require('puppeteer-extra');
@@ -55,88 +55,88 @@ async function uploadMediaToSanity(mediaUrl) {
 }
 
 async function startScraper() {
-  console.log('🔌 Conectando (V44 - Raio-X Cor/Tamanho/Preço)...');
+  console.log('🔌 Conectando (V49 - Raio-X Calibrado)...');
   const browser = await puppeteer.connect({ browserURL: 'http://127.0.0.1:9222', defaultViewport: null });
   const page = (await browser.pages())[0];
 
   const data = await page.evaluate(() => {
       const title = document.querySelector('h1')?.innerText || 'Roupa Quintess';
       
-      // Variáveis alvo
+      // --- CAPTURA DE COR ---
+      let color = 'Cor Principal';
+      const knownColors = ['AZUL', 'ROSA', 'PRETO', 'BRANCO', 'VERDE', 'AMARELO', 'VERMELHO', 'LARANJA', 'BEGE', 'MARROM', 'ROXO', 'LILÁS', 'CINZA', 'ESTAMPADO', 'OFF-WHITE', 'VINHO'];
+      const titleUpper = title.toUpperCase();
+      for (const c of knownColors) { if (titleUpper.includes(c)) { color = c.charAt(0) + c.slice(1).toLowerCase(); break; } }
+
       let rawSizes = [];
       let jsonPrice = null;
-      let jsonColor = null; // Nova variável para Cor Real
+      let jsonColor = null;
+      let debugLogs = [];
       
       try {
           const scriptEl = document.getElementById('__PRELOADED_STATE__');
           if (scriptEl && scriptEl.textContent) {
               const state = JSON.parse(scriptEl.textContent); 
               
-              // Helper de busca recursiva
-              const findInComponents = (obj, keyToFind) => {
-                  if (!obj) return [];
-                  if (Array.isArray(obj)) return obj.flatMap(i => findInComponents(i, keyToFind));
-                  if (typeof obj === 'object') {
-                      if (obj[keyToFind]) return obj;
-                      return Object.values(obj).flatMap(i => findInComponents(i, keyToFind));
-                  }
-                  return [];
-              };
-
-              const components = state.pageState?.initialState?.components;
-              
-              // 1. PREÇO (JSON)
-              if (components) {
-                  const priceComponent = components.find(c => c.type === 'price' || (c.price && c.price.value));
-                  if (priceComponent && priceComponent.price) {
-                      jsonPrice = priceComponent.price.value;
-                  }
+              // 1. PREÇO (No initialState)
+              if (state.pageState?.initialState?.price) {
+                 jsonPrice = state.pageState.initialState.price;
+              } else {
+                 // Tenta achar nos componentes
+                 const comps = state.pageState?.initialState?.components;
+                 // Lógica de busca profunda...
               }
 
-              // 2. TAMANHOS E COR (JSON)
-              // Função específica para achar os "Pickers" (Seletores)
-              const findPickers = (obj) => {
-                  if (!obj) return [];
-                  if (Array.isArray(obj)) return obj.flatMap(findPickers);
-                  if (typeof obj === 'object') {
-                      if (obj.type === 'outside_variations' && Array.isArray(obj.pickers)) {
-                          return obj.pickers;
-                      }
-                      return Object.values(obj).flatMap(findPickers);
-                  }
-                  return [];
-              };
-
-              if (components) {
-                  const pickers = findPickers(components);
+              // 2. TAMANHOS E COR (NOVA LÓGICA BASEADA NO SEU HTML)
+              const analytics = state.pageState?.initialState?.analytics_event;
+              if (analytics && analytics.custom_dimensions && analytics.custom_dimensions.customDimensions) {
+                  const pickers = JSON.parse(analytics.custom_dimensions.customDimensions.pickers || "{}");
                   
-                  // A. Busca Tamanhos
-                  const sizePicker = pickers.find(p => 
-                      p.id === 'SIZE' || 
-                      (p.label && p.label.text && p.label.text.toUpperCase().includes('TAMANHO'))
-                  );
-                  if (sizePicker && sizePicker.products) {
-                      rawSizes = sizePicker.products.map(p => p.label.text);
+                  // A. Tamanhos
+                  if (pickers.SIZE && Array.isArray(pickers.SIZE)) {
+                      rawSizes = pickers.SIZE.map(s => s.value); // Pega "38", "40", etc.
+                      debugLogs.push("Tamanhos encontrados no Analytics Pickers");
                   }
-
-                  // B. Busca COR (Novidade V44)
-                  const colorPicker = pickers.find(p => 
-                      p.id === 'COLOR_SECONDARY_COLOR' || 
-                      (p.label && p.label.text && p.label.text.toUpperCase().includes('COR'))
-                  );
-                  // Se achou o seletor de cor, pega a opção selecionada atualmente
-                  if (colorPicker && colorPicker.selected_option) {
-                      jsonColor = colorPicker.selected_option.text;
+                  
+                  // B. Cor
+                  if (pickers.COLOR_SECONDARY_COLOR && Array.isArray(pickers.COLOR_SECONDARY_COLOR)) {
+                      if(pickers.COLOR_SECONDARY_COLOR.length > 0) {
+                          jsonColor = pickers.COLOR_SECONDARY_COLOR[0].value;
+                      }
                   }
               }
-          }
-      } catch(e) {
-          console.log("⚠️ Erro no Raio-X JSON:", e);
-      }
+              
+              // SE NÃO ACHOU NO ANALYTICS, TENTA NOS COMPONENTES (FALLBACK DE ESTRUTURA)
+              if (rawSizes.length === 0) {
+                   const components = state.pageState?.initialState?.components;
+                   const findPickers = (obj) => {
+                      if (!obj) return [];
+                      if (Array.isArray(obj)) return obj.flatMap(findPickers);
+                      if (typeof obj === 'object') {
+                          // Nova estrutura encontrada no seu HTML: type 'outside_variations'
+                          if (obj.type === 'outside_variations' && Array.isArray(obj.pickers)) {
+                              return obj.pickers;
+                          }
+                          return Object.values(obj).flatMap(findPickers);
+                      }
+                      return [];
+                   };
 
-      // --- FALLBACKS VISUAIS (PLANO B) ---
+                   if (components) {
+                      const pickers = findPickers(components);
+                      const sizePicker = pickers.find(p => p.id === 'SIZE');
+                      if (sizePicker && sizePicker.products) {
+                          rawSizes = sizePicker.products.map(p => p.label.text);
+                          debugLogs.push("Tamanhos encontrados nos Componentes Outside");
+                      }
+                   }
+              }
+
+          }
+      } catch(e) { debugLogs.push("Erro JSON: " + e.message); }
+
+      // --- FALLBACKS VISUAIS ---
       
-      // Preço
       let price = jsonPrice;
       if (!price) {
           const priceContainer = document.querySelector('.ui-pdp-price__second-line .andes-money-amount__fraction');
@@ -148,73 +148,40 @@ async function startScraper() {
           }
       }
 
-      // Cor (Fallback Visual: Procura o texto "Cor: Azul" na tela)
-      let color = jsonColor;
-      if (!color) {
-          const pickers = document.querySelectorAll('.ui-pdp-outside_variations__picker');
-          pickers.forEach(picker => {
-              const titleEl = picker.querySelector('.ui-pdp-outside_variations__title__label');
-              const valueEl = picker.querySelector('.ui-pdp-outside_variations__title__value');
-              if (titleEl && valueEl && titleEl.innerText.toUpperCase().includes('COR')) {
-                  color = valueEl.innerText.trim();
-              }
-          });
-      }
-      // Último recurso para cor (Adivinhar pelo título - Só se tudo falhar)
-      if (!color) {
-          const knownColors = ['AZUL', 'ROSA', 'PRETO', 'BRANCO', 'VERDE', 'AMARELO', 'VERMELHO', 'LARANJA', 'BEGE', 'MARROM', 'ROXO', 'LILÁS', 'CINZA', 'ESTAMPADO', 'DIVERSOS'];
-          const titleUpper = title.toUpperCase();
-          for (const c of knownColors) {
-              if (titleUpper.includes(c)) {
-                  color = c.charAt(0) + c.slice(1).toLowerCase(); 
-                  break; 
-              }
-          }
-      }
-      if (!color) color = "Cor Principal"; // Padrão se nada for achado
-
-      // Tamanhos (Fallback Visual)
-      if (rawSizes.length === 0) {
-          const pickers = document.querySelectorAll('.ui-pdp-outside_variations__picker');
-          pickers.forEach(picker => {
-              const titleEl = picker.querySelector('.ui-pdp-outside_variations__title__label');
-              if (titleEl && titleEl.innerText.toUpperCase().includes('TAMANHO')) {
-                  picker.querySelectorAll('.ui-pdp-outside_variations__thumbnails__item__label span').forEach(item => {
-                      const txt = item.innerText.trim();
-                      if (txt) rawSizes.push(txt);
-                  });
-              }
-          });
-      }
-      if (rawSizes.length === 0) {
-           const variationRows = document.querySelectorAll('.ui-pdp-outside_variations__picker');
-           variationRows.forEach(row => {
-               const titleEl = row.querySelector('.ui-pdp-outside_variations__title__label');
-               const valueEl = row.querySelector('.ui-pdp-outside_variations__title__value');
-               if (titleEl && valueEl && titleEl.innerText.toUpperCase().includes('TAMANHO')) {
-                   rawSizes.push(valueEl.innerText.trim());
-               }
-           });
-      }
-
-      // Descrição
-      let desc = document.querySelector('.ui-pdp-description__content')?.innerText;
-      if (!desc || desc.trim().length === 0) desc = "Descrição detalhada indisponível.";
-
-      // Imagens
+      // Cor
+      let finalColor = jsonColor || color;
+      
+      // Descrição e Imagens
+      let desc = document.querySelector('.ui-pdp-description__content')?.innerText || "Descrição indisponível.";
       const imgs = [];
       document.querySelectorAll('.ui-pdp-gallery__figure img').forEach(i => {
           let src = i.getAttribute('data-zoom') || i.getAttribute('src');
           if(src) imgs.push(src);
       });
 
-      return { title, price, desc, imgs, color, rawSizes: [...new Set(rawSizes)] };
+      return { 
+          title, price, desc, imgs, color: finalColor, 
+          rawSizes: [...new Set(rawSizes)],
+          logs: debugLogs
+      };
   });
 
-  // Filtro de Segurança (Remove cor da lista de tamanhos)
-  let cleanSizes = data.rawSizes.filter(s => 
-      s !== '' && s.toUpperCase() !== data.color.toUpperCase()
-  );
+  if(data.logs) console.log("🔍 Logs:", data.logs);
+
+  // --- FILTRAGEM RIGOROSA ---
+  const invalidWords = ['ESCOLHA', 'SELECIONE', 'OPÇÕES', 'TAMANHO', 'COR', 'VERIFIQUE', 'GUIA'];
+  
+  let cleanSizes = data.rawSizes.filter(s => {
+      if (!s) return false;
+      const upperS = s.toString().toUpperCase(); // Garante que é string
+      const upperColor = data.color.toUpperCase();
+      
+      if (upperS === upperColor) return false;
+      if (invalidWords.some(word => upperS.includes(word))) return false;
+      
+      return true;
+  });
+  
   if (cleanSizes.length === 0) cleanSizes = ['Único'];
 
   const categoryId = detectCategory(data.title);
@@ -228,17 +195,14 @@ async function startScraper() {
       if (res) uploadedAssets.push(res);
   }
   
-  if (uploadedAssets.length === 0) { 
-      console.log("❌ Sem imagens capturadas. Abortando."); 
-      return; 
-  }
+  if (uploadedAssets.length === 0) { console.log("❌ Sem imagens."); return; }
 
   // --- ESTRUTURA ---
   const variantsStructure = [
       {
           _key: generateKey(),
           _type: 'object',
-          colorName: data.color, // Agora usa a cor extraída do sistema
+          colorName: data.color, 
           variantImage: { _type: 'image', asset: { _type: 'reference', _ref: uploadedAssets[0].id } },
           
           sizes: cleanSizes.map(size => ({
@@ -277,9 +241,9 @@ async function startScraper() {
   try {
       const res = await client.create(doc);
       console.log(`✅ SUCESSO! Produto Importado.`);
-      console.log(`🎨 Cor Definida: ${data.color}`); // Deve mostrar a cor real, ex: "Azul"
-      console.log(`💰 Preço Base: R$ ${costPrice} (Venda: R$ ${salePrice.toFixed(2)})`);
+      console.log(`🎨 Cor: ${data.color}`);
       console.log(`📏 Tamanhos: ${cleanSizes.join(', ')}`);
+      console.log(`💰 Preço Base: R$ ${costPrice}`);
       console.log(`📄 SKU: ${doc.slug.current}`);
   } catch (err) { console.error("❌ Erro:", err.message); }
   process.exit(0);
