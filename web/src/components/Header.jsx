@@ -12,6 +12,8 @@ import { useZipCode } from '../context/ZipCodeContext';
 
 import CategoryMenu from "./layout/CategoryMenu";
 import FeaturedMenu from "./layout/FeaturedMenu"; 
+// IMPORTAÇÃO DO NOVO COMPONENTE
+import InstallApp from '../components/InstallApp';
 
 export default function Header() {
   const [isCepModalOpen, setIsCepModalOpen] = useState(false);
@@ -38,14 +40,12 @@ export default function Header() {
   const cartCount = items.reduce((acc, item) => acc + item.quantity, 0);
   const favCount = favorites?.length || 0;
 
-  // --- LÓGICA DE SALVAR CEP ATUALIZADA ---
   const handleSaveCep = (e) => {
     e.preventDefault();
-    // Remove tudo que não é número para validar
     const cleanCep = tempCep.replace(/\D/g, '');
     
     if (cleanCep.length === 8) {
-      setGlobalCep(tempCep); // Salva com a formatação (ex: 12345-678) para ficar bonito no topo
+      setGlobalCep(tempCep); 
       setIsCepModalOpen(false);
     } else {
       alert("Por favor, digite um CEP válido com 8 números.");
@@ -116,6 +116,9 @@ export default function Header() {
 
         {/* ÍCONES DESKTOP */}
         <div className="hidden lg:flex items-center gap-6 text-sm font-medium justify-end">
+           {/* APP INSTALL BUTTON (DESKTOP) */}
+           <InstallApp className="bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl border border-white/10" />
+
            <div onClick={() => setIsCepModalOpen(true)} className="hidden lg:flex items-center gap-2 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors border border-transparent hover:border-white/20">
               <MapPin size={24} className="text-white animate-pulse"/>
               <div className="leading-tight text-white text-left">
@@ -176,6 +179,12 @@ export default function Header() {
           <ul className="flex flex-col lg:flex-row lg:items-center justify-between text-[11px] font-black uppercase tracking-tight py-2 lg:py-0 gap-4 lg:gap-0">
             
             <li className="lg:hidden flex flex-col gap-2 border-b border-gray-100 pb-4 mb-2">
+                
+                {/* APP INSTALL BUTTON (MOBILE - DESTAQUE) */}
+                <div className="mb-2">
+                   <InstallApp className="w-full bg-crocus-deep text-white py-3 rounded-xl justify-center shadow-lg shadow-crocus-deep/20" />
+                </div>
+
                 <div 
                     onClick={() => { setIsMenuOpen(false); setIsCepModalOpen(true); }}
                     className="flex items-center gap-3 bg-orange-50 p-3 rounded-xl border border-orange-100 active:scale-95 transition-transform cursor-pointer"
@@ -280,7 +289,7 @@ export default function Header() {
                    <input 
                     autoFocus 
                     type="text" 
-                    maxLength={9} // AUMENTADO PARA 9 (8 NUMEROS + 1 TRAÇO)
+                    maxLength={9} 
                     placeholder="00000-000" 
                     className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-center text-xl font-black tracking-widest focus:border-orange-500 outline-none transition-all placeholder:text-gray-300" 
                     value={tempCep} 
