@@ -12,7 +12,6 @@ import { useZipCode } from '../context/ZipCodeContext';
 
 import CategoryMenu from "./layout/CategoryMenu";
 import FeaturedMenu from "./layout/FeaturedMenu"; 
-// IMPORTAÇÃO DO NOVO COMPONENTE
 import InstallApp from '../components/InstallApp';
 
 export default function Header() {
@@ -69,9 +68,9 @@ export default function Header() {
       {/* 2. BARRA PRINCIPAL */}
       <div className="container mx-auto px-4 py-4 flex flex-col lg:flex-row gap-4 items-center justify-between">
         
-        {/* LOGO + BOTÃO MOBILE */}
+        {/* HEADER MOBILE (LOGO + BOTÕES) */}
         <div className="flex items-center justify-between w-full lg:w-auto">
-            {/* Botão Menu Mobile */}
+            {/* Botão Menu Mobile (Esquerda) */}
             <button 
                 onClick={() => setIsMenuOpen(!isMenuOpen)} 
                 className="lg:hidden text-white p-2 hover:bg-white/10 rounded-lg mr-2 transition-colors"
@@ -79,29 +78,36 @@ export default function Header() {
                 {isMenuOpen ? <X size={28}/> : <Menu size={28}/>}
             </button>
 
-            {/* LOGO */}
+            {/* LOGO (Centro/Esquerda) */}
             <Link to="/" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 group mr-auto lg:mr-0 select-none">
                 <img 
                     src="/logo-p.png" 
                     alt="P Palastore" 
-                    className="h-10 w-auto object-contain drop-shadow-md" 
+                    className="h-8 w-auto md:h-10 object-contain drop-shadow-md" 
                 />
                 
                 <div className="leading-none drop-shadow-md">
-                    <span className="block font-black text-2xl tracking-tight text-white uppercase italic">Palastore</span>
-                    <span className="block font-medium text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Oficial</span>
+                    <span className="block font-black text-xl md:text-2xl tracking-tight text-white uppercase italic">Palastore</span>
+                    <span className="block font-medium text-[8px] md:text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Oficial</span>
                 </div>
             </Link>
 
-            {/* Carrinho Mobile */}
-            <Link to="/cart" onClick={() => setIsMenuOpen(false)} className="lg:hidden relative text-white p-2">
-                <ShoppingCart size={24}/>
-                {cartCount > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{cartCount}</span>}
-            </Link>
+            {/* ÁREA DIREITA MOBILE: INSTALAR + CARRINHO */}
+            <div className="flex items-center gap-2 lg:hidden">
+                {/* --- AQUI ESTÁ O BOTÃO VISÍVEL NO CELULAR --- */}
+                {/* Reduzi padding e texto para caber bem no topo */}
+                <InstallApp className="bg-white/10 text-white px-2 py-1.5 rounded-lg border border-white/10 text-[10px] whitespace-nowrap" />
+
+                {/* Carrinho Mobile */}
+                <Link to="/cart" onClick={() => setIsMenuOpen(false)} className="relative text-white p-2">
+                    <ShoppingCart size={24}/>
+                    {cartCount > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{cartCount}</span>}
+                </Link>
+            </div>
         </div>
 
         {/* BUSCA */}
-        <form onSubmit={handleSearch} className="flex-1 w-full max-w-3xl relative mx-0 lg:mx-4">
+        <form onSubmit={handleSearch} className="flex-1 w-full max-w-3xl relative mx-0 lg:mx-4 hidden md:block">
           <input 
             type="text" 
             placeholder="O que você procura hoje?" 
@@ -113,6 +119,18 @@ export default function Header() {
             <Search />
           </button>
         </form>
+        {/* Busca Mobile (Aparece embaixo do header em telas pequenas) */}
+        <form onSubmit={handleSearch} className="w-full relative md:hidden">
+           <input 
+            type="text" 
+            placeholder="Buscar produtos..." 
+            className="w-full h-10 pl-4 pr-10 rounded-lg text-gray-900 focus:outline-none shadow-inner bg-white/90 text-sm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <button type="submit" className="absolute right-2 top-2 text-crocus-deep"><Search size={20}/></button>
+        </form>
+
 
         {/* ÍCONES DESKTOP */}
         <div className="hidden lg:flex items-center gap-6 text-sm font-medium justify-end">
@@ -180,10 +198,7 @@ export default function Header() {
             
             <li className="lg:hidden flex flex-col gap-2 border-b border-gray-100 pb-4 mb-2">
                 
-                {/* APP INSTALL BUTTON (MOBILE - DESTAQUE) */}
-                <div className="mb-2">
-                   <InstallApp className="w-full bg-crocus-deep text-white py-3 rounded-xl justify-center shadow-lg shadow-crocus-deep/20" />
-                </div>
+                {/* Removi o botão gigante daqui de dentro, pois já está no topo agora */}
 
                 <div 
                     onClick={() => { setIsMenuOpen(false); setIsCepModalOpen(true); }}
@@ -201,6 +216,7 @@ export default function Header() {
                     <ChevronRight size={16} className="ml-auto text-orange-300"/>
                 </div>
 
+                {/* Resto do menu mantido... */}
                 <div className="flex items-center justify-between mt-2">
                     <span className="text-sm font-bold text-crocus-deep">Minha Conta</span>
                     <Link to="/favoritos" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-1 text-gray-500">
@@ -230,6 +246,7 @@ export default function Header() {
                 </SignedIn>
             </li>
             
+            {/* Itens do Menu Desktop/Mobile */}
             <li className="relative group w-full lg:w-auto">
                <button 
                  onClick={() => setIsMenuOpen(!isMenuOpen)} 
@@ -275,6 +292,7 @@ export default function Header() {
 
       </div>
 
+      {/* Modal CEP (Mantido) */}
       <AnimatePresence>
         {isCepModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
