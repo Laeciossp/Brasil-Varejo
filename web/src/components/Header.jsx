@@ -66,47 +66,45 @@ export default function Header() {
       </div>
 
       {/* 2. BARRA PRINCIPAL */}
-      <div className="container mx-auto px-4 py-4 flex flex-col lg:flex-row gap-4 items-center justify-between">
+      <div className="container mx-auto px-4 py-3 lg:py-4 flex flex-col lg:flex-row gap-3 lg:gap-4 items-center justify-between">
         
         {/* HEADER MOBILE (LOGO + BOTÕES) */}
         <div className="flex items-center justify-between w-full lg:w-auto">
-            {/* Botão Menu Mobile (Esquerda) */}
-            <button 
-                onClick={() => setIsMenuOpen(!isMenuOpen)} 
-                className="lg:hidden text-white p-2 hover:bg-white/10 rounded-lg mr-2 transition-colors"
-            >
-                {isMenuOpen ? <X size={28}/> : <Menu size={28}/>}
-            </button>
+            {/* Esquerda: Menu + Logo */}
+            <div className="flex items-center gap-1 md:gap-2">
+                {/* Botão Menu Mobile */}
+                <button 
+                    onClick={() => setIsMenuOpen(!isMenuOpen)} 
+                    className="lg:hidden text-white p-1 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                    {isMenuOpen ? <X size={26}/> : <Menu size={26}/>}
+                </button>
 
-            {/* LOGO (Centro/Esquerda) */}
-            <Link to="/" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 group mr-auto lg:mr-0 select-none">
-                <img 
-                    src="/logo-p.png" 
-                    alt="P Palastore" 
-                    className="h-8 w-auto md:h-10 object-contain drop-shadow-md" 
-                />
-                
-                <div className="leading-none drop-shadow-md">
-                    <span className="block font-black text-xl md:text-2xl tracking-tight text-white uppercase italic">Palastore</span>
-                    <span className="block font-medium text-[8px] md:text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Oficial</span>
-                </div>
-            </Link>
+                {/* LOGO */}
+                <Link to="/" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-1.5 group select-none">
+                    <img 
+                        src="/logo-p.png" 
+                        alt="P Palastore" 
+                        className="h-8 w-auto md:h-10 object-contain drop-shadow-md" 
+                    />
+                    
+                    <div className="leading-none drop-shadow-md">
+                        <span className="block font-black text-xl md:text-2xl tracking-tight text-white uppercase italic">Palastore</span>
+                        <span className="block font-medium text-[8px] md:text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Oficial</span>
+                    </div>
+                </Link>
+            </div>
 
-            {/* ÁREA DIREITA MOBILE: INSTALAR + CARRINHO */}
-            <div className="flex items-center gap-2 lg:hidden">
-                {/* --- AQUI ESTÁ O BOTÃO VISÍVEL NO CELULAR --- */}
-                {/* Reduzi padding e texto para caber bem no topo */}
-                <InstallApp className="bg-white/10 text-white px-2 py-1.5 rounded-lg border border-white/10 text-[10px] whitespace-nowrap" />
-
-                {/* Carrinho Mobile */}
-                <Link to="/cart" onClick={() => setIsMenuOpen(false)} className="relative text-white p-2">
+            {/* Direita: APENAS Carrinho (Removi o InstallApp daqui) */}
+            <div className="flex items-center gap-1.5 lg:hidden">
+                <Link to="/cart" onClick={() => setIsMenuOpen(false)} className="relative text-white p-2 hover:bg-white/10 rounded-lg transition-colors">
                     <ShoppingCart size={24}/>
-                    {cartCount > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{cartCount}</span>}
+                    {cartCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-orange-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold shadow-sm">{cartCount}</span>}
                 </Link>
             </div>
         </div>
 
-        {/* BUSCA */}
+        {/* BUSCA DESKTOP (Invisível no mobile) */}
         <form onSubmit={handleSearch} className="flex-1 w-full max-w-3xl relative mx-0 lg:mx-4 hidden md:block">
           <input 
             type="text" 
@@ -119,20 +117,27 @@ export default function Header() {
             <Search />
           </button>
         </form>
-        {/* Busca Mobile (Aparece embaixo do header em telas pequenas) */}
-        <form onSubmit={handleSearch} className="w-full relative md:hidden">
-           <input 
-            type="text" 
-            placeholder="Buscar produtos..." 
-            className="w-full h-10 pl-4 pr-10 rounded-lg text-gray-900 focus:outline-none shadow-inner bg-white/90 text-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <button type="submit" className="absolute right-2 top-2 text-crocus-deep"><Search size={20}/></button>
-        </form>
+
+        {/* --- NOVA ÁREA MOBILE: BUSCA + BOTÃO INSTALAR --- */}
+        <div className="w-full flex gap-2 items-center md:hidden">
+            {/* Campo de Busca (flex-1 faz ele ocupar o espaço que sobrar) */}
+            <form onSubmit={handleSearch} className="flex-1 relative">
+              <input 
+                type="text" 
+                placeholder="Buscar produtos..." 
+                className="w-full h-10 pl-3 pr-9 rounded-lg text-gray-900 focus:outline-none shadow-inner bg-white/95 text-sm font-medium"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <button type="submit" className="absolute right-2 top-2 text-crocus-deep"><Search size={20}/></button>
+            </form>
+
+            {/* Botão Instalar (Ao lado da busca) */}
+            <InstallApp className="h-10 bg-white/10 text-white px-3 rounded-lg border border-white/20 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap hover:bg-white/20 flex items-center justify-center shadow-sm" showLabel={true} />
+        </div>
 
 
-        {/* ÍCONES DESKTOP */}
+        {/* ÍCONES DESKTOP (Mantidos iguais) */}
         <div className="hidden lg:flex items-center gap-6 text-sm font-medium justify-end">
            {/* APP INSTALL BUTTON (DESKTOP) */}
            <InstallApp className="bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl border border-white/10" />
@@ -198,7 +203,7 @@ export default function Header() {
             
             <li className="lg:hidden flex flex-col gap-2 border-b border-gray-100 pb-4 mb-2">
                 
-                {/* Removi o botão gigante daqui de dentro, pois já está no topo agora */}
+                {/* Removi o botão de instalar daqui também para não duplicar */}
 
                 <div 
                     onClick={() => { setIsMenuOpen(false); setIsCepModalOpen(true); }}
@@ -216,7 +221,6 @@ export default function Header() {
                     <ChevronRight size={16} className="ml-auto text-orange-300"/>
                 </div>
 
-                {/* Resto do menu mantido... */}
                 <div className="flex items-center justify-between mt-2">
                     <span className="text-sm font-bold text-crocus-deep">Minha Conta</span>
                     <Link to="/favoritos" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-1 text-gray-500">
@@ -246,7 +250,6 @@ export default function Header() {
                 </SignedIn>
             </li>
             
-            {/* Itens do Menu Desktop/Mobile */}
             <li className="relative group w-full lg:w-auto">
                <button 
                  onClick={() => setIsMenuOpen(!isMenuOpen)} 
@@ -289,8 +292,6 @@ export default function Header() {
         </div>
 
         <div className={gradientClass}></div>
-
-      </div>
 
       {/* Modal CEP (Mantido) */}
       <AnimatePresence>
