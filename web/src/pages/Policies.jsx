@@ -133,13 +133,19 @@ export default function Policies() {
             </p>
           </section>
 
-          {/* Rodapé de Contato */}
+          {/* Rodapé de Contato Atualizado */}
           <div className="mt-8 pt-8 border-t border-gray-200 text-center">
             <p className="font-bold text-gray-900">Ficou com dúvidas?</p>
             <p className="text-gray-600 mb-4">Entre em contato com a nossa Central de Relacionamento</p>
-            <button className="bg-green-600 text-white px-6 py-3 rounded-full font-bold hover:bg-green-700 transition-colors">
-              Falar no WhatsApp
-            </button>
+            
+            <a 
+              href="https://wa.me/5571983810420" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center bg-green-600 text-white px-8 py-4 rounded-full font-bold hover:bg-green-700 transition-colors shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+            >
+              WhatsApp (71) 98381-0420
+            </a>
           </div>
 
         </div>
