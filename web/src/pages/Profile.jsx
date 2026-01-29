@@ -78,21 +78,44 @@ export default function Profile() {
       paymentMethod,
       shippingAddress,
       
-      // --- BUSCA INTELIGENTE DE RASTREIO ---
-      // Procura na raiz (novo) OU dentro de logistics (antigo)
+      // --- QUERY CORRIGIDA (Rastreio Novo + Fotos Antigas) ---
+    const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
+      _id, 
+      orderNumber, 
+      _createdAt, 
+      status, 
+      totalAmount, 
+      paymentMethod,
+      shippingAddress,
+      
+      // RASTREIO (Mantido da versão nova)
       "trackingCode": coalesce(trackingCode, logistics.trackingCode),
       "trackingUrl": coalesce(trackingUrl, logistics.trackingUrl),
       "carrier": coalesce(carrier, logistics.selectedCarrier, logistics.carrier),
       "shippedAt": coalesce(shippedAt, logistics.shippedAt),
       "deliveryEstimate": coalesce(deliveryEstimate, logistics.shippingMethod, shippingMethod), 
 
+      // ITENS (Restaurada a lógica robusta que busca por nome se o link falhar)
       "items": items[]{ 
         productName, 
         quantity, 
         price,
-        "productSlug": coalesce(product->slug.current, productSlug), 
-        "imageUrl": coalesce(imageUrl, product->images[0].asset->url)
+        
+        // Tenta pegar o slug do produto linkado -> se falhar, busca pelo nome -> se falhar, usa o salvo
+        "productSlug": coalesce(
+            product->slug.current, 
+            *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].slug.current,
+            productSlug
+        ), 
+        
+        // Tenta pegar a imagem do produto linkado -> se falhar, busca pelo nome -> se falhar, usa a salva
+        "imageUrl": coalesce(
+            product->images[0].asset->url, 
+            *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].images[0].asset->url,
+            imageUrl
+        )
       },
+      
       messages[]{
         text,
         user,
@@ -101,16 +124,6 @@ export default function Profile() {
         "staffImage": staff->avatar.asset->url
       }
     }`;
-
-    try {
-      const ordersResult = await writeClient.fetch(ordersQuery, { email });
-      setOrders(ordersResult);
-      setLoading(false);
-    } catch (err) { 
-      console.error("Erro busca:", err); 
-      setLoading(false); 
-    }
-  };
 
   useEffect(() => { if (isLoaded && user) fetchData(); }, [isLoaded, user]);
 
