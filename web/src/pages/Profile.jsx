@@ -67,57 +67,43 @@ export default function Profile() {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-    // Substitua APENAS a constante ordersQuery dentro do seu Profile.jsx
+    // --- QUERY BLINDADA V3 (FUSÃO: RASTREIO + FOTOS INTELIGENTES) ---
+    const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
+      _id, 
+      orderNumber, 
+      _createdAt, 
+      status, 
+      totalAmount, 
+      cancellationReason,
+      paymentMethod,
+      shippingAddress,
 
-    const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
-      _id, 
-      orderNumber, 
-      _createdAt, 
-      status, 
-      totalAmount, 
-      paymentMethod,
-      shippingAddress,
-      
-      // --- QUERY CORRIGIDA (Rastreio Novo + Fotos Antigas) ---
-    const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
-      _id, 
-      orderNumber, 
-      _createdAt, 
-      status, 
-      totalAmount, 
-      paymentMethod,
-      shippingAddress,
-      
-      // --- QUERY CORRIGIDA E SIMPLIFICADA (Volta ao Padrão) ---
-    const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
-      _id, 
-      orderNumber, 
-      _createdAt, 
-      status, 
-      totalAmount, 
-      paymentMethod,
-      shippingAddress,
-      
-      // RASTREIO (Mantido)
+      // --- RASTREIO (Adicionado) ---
       "trackingCode": coalesce(trackingCode, logistics.trackingCode),
       "trackingUrl": coalesce(trackingUrl, logistics.trackingUrl),
       "carrier": coalesce(carrier, logistics.selectedCarrier, logistics.carrier),
       "shippedAt": coalesce(shippedAt, logistics.shippedAt),
       "deliveryEstimate": coalesce(deliveryEstimate, logistics.shippingMethod, shippingMethod), 
-
-      // ITENS (Voltando ao simples que funciona)
+      
+      // --- PRODUTOS (Lógica robusta restaurada do seu arquivo original) ---
       "items": items[]{ 
         productName, 
         quantity, 
         price,
         
-        // Pega o slug direto do produto original
-        "productSlug": product->slug.current, 
+        // Tenta link direto. Se falhar, busca pelo NOME (match) ignorando rascunhos.
+        "productSlug": coalesce(
+            product->slug.current, 
+            *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].slug.current
+        ), 
         
-        // Pega a foto do produto original OU a foto salva no item (snapshot)
-        "imageUrl": coalesce(product->images[0].asset->url, imageUrl)
+        // Tenta imagem direta. Se falhar, busca pelo NOME.
+        "imageUrl": coalesce(
+            product->images[0].asset->url, 
+            *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].images[0].asset->url,
+            imageUrl
+        )
       },
-      
       messages[]{
         text,
         user,
@@ -126,18 +112,20 @@ export default function Profile() {
         "staffImage": staff->avatar.asset->url
       }
     }`;
-      
-      messages[]{
-        text,
-        user,
-        date,
-        "staffName": staff->name,
-        "staffImage": staff->avatar.asset->url
-      }
-    }`;
+
+    try {
+      const ordersResult = await writeClient.fetch(ordersQuery, { email });
+      setOrders(ordersResult);
+      setLoading(false);
+    } catch (err) { 
+      console.error("Erro busca:", err); 
+      setLoading(false); 
+    }
+  };
 
   useEffect(() => { if (isLoaded && user) fetchData(); }, [isLoaded, user]);
 
+  // Listener Real-Time
   useEffect(() => {
     if (!activeChatOrder) return;
     const subscription = writeClient
