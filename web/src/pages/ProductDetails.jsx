@@ -232,7 +232,7 @@ export default function ProductDetails() {
           if (productData.categories && productData.categories.length > 0) {
             const catId = productData.categories[0]._id;
             const relatedQuery = `
-              *[_type == "product" && references($catId) && _id != $id][0...50] {
+  *[_type == "product" && references($catId) && _id != $id && isActive == true][0...50] {
                 _id, title, slug, price, oldPrice,
                 "imageUrl": images[0].asset->url
               }
