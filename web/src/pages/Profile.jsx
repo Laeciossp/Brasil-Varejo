@@ -67,37 +67,31 @@ export default function Profile() {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-    // --- QUERY ATUALIZADA PARA TRAZER O RASTREIO ---
+    // Substitua APENAS a constante ordersQuery dentro do seu Profile.jsx
+
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, 
       orderNumber, 
       _createdAt, 
       status, 
       totalAmount, 
-      cancellationReason,
       paymentMethod,
       shippingAddress,
       
-      // NOVOS CAMPOS DE RASTREIO
-      trackingCode,
-      trackingUrl,
-      carrier,
-      shippedAt,
+      // --- BUSCA INTELIGENTE DE RASTREIO ---
+      // Procura na raiz (novo) OU dentro de logistics (antigo)
+      "trackingCode": coalesce(trackingCode, logistics.trackingCode),
+      "trackingUrl": coalesce(trackingUrl, logistics.trackingUrl),
+      "carrier": coalesce(carrier, logistics.selectedCarrier, logistics.carrier),
+      "shippedAt": coalesce(shippedAt, logistics.shippedAt),
+      "deliveryEstimate": coalesce(deliveryEstimate, logistics.shippingMethod, shippingMethod), 
 
-      "deliveryEstimate": shippingMethod, 
       "items": items[]{ 
         productName, 
         quantity, 
         price,
-        "productSlug": coalesce(
-            product->slug.current, 
-            *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].slug.current
-        ), 
-        "imageUrl": coalesce(
-            product->images[0].asset->url, 
-            *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].images[0].asset->url,
-            imageUrl
-        )
+        "productSlug": coalesce(product->slug.current, productSlug), 
+        "imageUrl": coalesce(imageUrl, product->images[0].asset->url)
       },
       messages[]{
         text,

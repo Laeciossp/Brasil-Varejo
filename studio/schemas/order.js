@@ -1,27 +1,28 @@
+// schemas/order.js (Substitua tudo)
+
 export default {
   name: 'order',
   title: '📦 Pedidos',
   type: 'document',
+  groups: [
+    { name: 'details', title: 'Detalhes' },
+    { name: 'logistics', title: 'Logística' },
+    { name: 'admin', title: 'Admin' }
+  ],
   fields: [
     // --- IDENTIFICAÇÃO ---
     {
       name: 'orderNumber',
       title: 'Número do Pedido',
       type: 'string',
-      readOnly: true
-    },
-    // --- NOTIFICAÇÃO DE SUPORTE ---
-    {
-      name: 'hasUnreadMessage',
-      title: '🔴 Mensagem Não Lida (Cliente)',
-      type: 'boolean',
-      initialValue: false,
-      description: 'Marcado automaticamente quando o cliente envia mensagem. Desmarque ao responder.'
+      readOnly: true,
+      group: 'details'
     },
     {
       name: 'status',
       title: 'Status Atual',
       type: 'string',
+      group: 'details',
       options: {
         list: [
           { title: '🟡 Aguardando Pagamento', value: 'pending' },
@@ -36,25 +37,55 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- DADOS DE CONTATO (RAIZ) ---
+    // --- CAMPOS DE RASTREIO (AGORA NA RAIZ) ---
+    // Isso corrige o erro "Unknown field found"
     {
-      name: 'customerEmail',
-      title: 'E-mail do Cliente (Principal)',
+      name: 'trackingCode',
+      title: 'Código de Rastreio',
       type: 'string',
-      readOnly: true
+      description: 'Ex: AA123456789BR',
+      group: 'logistics'
     },
     {
-      name: 'customerDocument',
-      title: 'CPF/CNPJ do Cliente (Principal)',
+      name: 'trackingUrl',
+      title: 'Link de Rastreio',
+      type: 'url',
+      description: 'Link direto para o site da transportadora',
+      group: 'logistics'
+    },
+    {
+      name: 'carrier',
+      title: 'Transportadora',
       type: 'string',
-      readOnly: true
+      description: 'Ex: Correios, Jadlog',
+      group: 'logistics'
+    },
+    {
+      name: 'shippedAt',
+      title: 'Data do Envio',
+      type: 'datetime',
+      group: 'logistics'
+    },
+    {
+      name: 'deliveryEstimate', // Mantendo compatibilidade com seu código antigo
+      title: 'Prazo / Serviço',
+      type: 'string',
+      group: 'logistics'
     },
 
-    // --- DADOS DO CLIENTE (OBJETO LEGADO) ---
+    // --- CLIENTE ---
+    {
+      name: 'customerEmail',
+      title: 'E-mail do Cliente',
+      type: 'string',
+      readOnly: true,
+      group: 'details'
+    },
     {
       name: 'customer',
-      title: 'Dados do Cliente (Objeto)',
+      title: 'Dados do Cliente',
       type: 'object',
+      group: 'details',
       fields: [
         { name: 'name', type: 'string', title: 'Nome' },
         { name: 'email', type: 'string', title: 'E-mail' },
@@ -62,200 +93,104 @@ export default {
       ]
     },
 
-    // --- ENDEREÇO DE ENTREGA ---
+    // --- ENDEREÇO ---
     {
       name: 'shippingAddress',
-      title: '📍 Endereço de Entrega',
+      title: 'Endereço de Entrega',
       type: 'object',
-      options: { collapsible: true, collapsed: false },
+      group: 'details',
+      options: { collapsible: true, collapsed: true },
       fields: [
-        { name: 'alias', title: 'Apelido do Endereço', type: 'string' },
-        { name: 'name', title: 'Nome do Destinatário', type: 'string' },
-        { name: 'document', title: 'CPF na Nota (Endereço)', type: 'string' },
-        { name: 'cpf', title: 'CPF (Campo Legado)', type: 'string', hidden: true },
-        { name: 'id', title: 'ID Interno', type: 'string', readOnly: true },
-
+        { name: 'alias', title: 'Apelido', type: 'string' },
         { name: 'zip', type: 'string', title: 'CEP' },
         { name: 'street', type: 'string', title: 'Rua' },
         { name: 'number', type: 'string', title: 'Número' },
         { name: 'neighborhood', type: 'string', title: 'Bairro' },
         { name: 'city', type: 'string', title: 'Cidade' },
-        { name: 'state', type: 'string', title: 'Estado (UF)' },
-        { name: 'complement', type: 'string', title: 'Complemento' }
+        { name: 'state', type: 'string', title: 'Estado' }
       ]
     },
 
-    // --- CARRINHO DE COMPRAS ---
+    // --- ITENS ---
     {
       name: 'items',
       title: 'Itens do Pedido',
       type: 'array',
+      group: 'details',
       of: [
         {
           type: 'object',
           fields: [
-            { name: 'productName', type: 'string', title: 'Nome do Produto' },
-            { name: 'quantity', type: 'number', title: 'Quantidade' },
-            { name: 'price', type: 'number', title: 'Preço Unitário' },
-            { 
-              name: 'product', 
-              type: 'reference', 
-              to: [{type: 'product'}], 
-              title: 'Produto Original (Link)' 
-            },
-            { name: 'imageUrl', type: 'url', title: 'Foto do Produto (Snapshot)' },
-            // Novos campos para variantes (opcional, mas bom ter)
-            { name: 'productSlug', type: 'string', title: 'Slug (Link)' },
-            { name: 'sku', type: 'string', title: 'SKU' }
+            { name: 'productName', type: 'string' },
+            { name: 'quantity', type: 'number' },
+            { name: 'price', type: 'number' },
+            { name: 'imageUrl', type: 'url' },
+            { name: 'product', type: 'reference', to: [{type: 'product'}] },
+            { name: 'productSlug', type: 'string' }
           ],
           preview: {
-            select: {
-              title: 'productName',
-              subtitle: 'quantity',
-              media: 'imageUrl'
-            },
+            select: { title: 'productName', subtitle: 'quantity', media: 'imageUrl' },
             prepare({title, subtitle, media}) {
-              return {
-                title: title,
-                subtitle: `${subtitle}x unidades`,
-                media: media
-              }
+              return { title, subtitle: `${subtitle}x unid.`, media }
             }
           }
         }
       ]
     },
 
-    // --- PAGAMENTO E TOTAIS ---
+    // --- PAGAMENTO ---
     {
       name: 'totalAmount',
-      title: 'Valor Total (R$)',
-      type: 'number'
+      title: 'Valor Total',
+      type: 'number',
+      group: 'details'
     },
     {
       name: 'paymentMethod',
-      title: '💳 Método de Pagamento',
+      title: 'Método Pagamento',
       type: 'string',
-      options: {
-        list: [
-          { title: 'Pix', value: 'pix' },
-          { title: 'Cartão de Crédito', value: 'credit_card' },
-          { title: 'Boleto', value: 'ticket' }
-        ]
-      }
+      group: 'details'
     },
 
-    // --- LOGÍSTICA E RASTREIO (CORRIGIDO: NA RAIZ) ---
-    // Estes campos agora estão na raiz para casar com o frontend e corrigir o erro
+    // --- SAC / MENSAGENS ---
     {
-      name: 'carrier', // Mudei de 'selectedCarrier' para 'carrier' para padronizar
-      title: 'Transportadora',
-      type: 'string',
-      description: 'Ex: Correios, Jadlog'
+      name: 'hasUnreadMessage',
+      title: 'Mensagem Não Lida',
+      type: 'boolean',
+      initialValue: false,
+      group: 'admin'
     },
-    {
-      name: 'shippingMethod',
-      title: 'Prazo / Serviço',
-      type: 'string',
-      description: 'Ex: SEDEX - 2 dias'
-    },
-    {
-      name: 'trackingCode',
-      title: 'Código de Rastreio',
-      type: 'string'
-    },
-    {
-      name: 'trackingUrl',
-      title: 'Link de Rastreio',
-      type: 'url'
-    },
-    {
-      name: 'shippedAt',
-      title: 'Data do Envio',
-      type: 'datetime'
-    },
-
-    // --- CANCELAMENTO ---
-    {
-      name: 'cancellationReason',
-      title: 'Motivo do Cancelamento',
-      type: 'text',
-      hidden: ({document}) => document?.status !== 'cancelled'
-    },
-
-    // --- CHAT (SAC) ---
     {
       name: 'messages',
-      title: '💬 Histórico de Mensagens (SAC)',
+      title: 'Histórico de Mensagens',
       type: 'array',
+      group: 'admin',
       of: [
         {
           type: 'object',
-          title: 'Mensagem',
           fields: [
-            { 
-              name: 'user', 
-              title: 'Autor', 
-              type: 'string', 
-              options: { list: [
-                { title: '👤 Cliente', value: 'cliente' }, 
-                { title: '🛡️ Suporte', value: 'admin' }
-              ]} 
-            },
-            {
-              name: 'staff',
-              title: 'Atendente (Se for Suporte)',
-              type: 'reference',
-              to: [{ type: 'staff' }],
-              hidden: ({ parent }) => parent?.user === 'cliente'
-            },
-            { name: 'text', title: 'Texto', type: 'text' },
-            { 
-              name: 'date', 
-              title: 'Data/Hora', 
-              type: 'datetime', 
-              initialValue: () => new Date().toISOString() 
-            }
-          ],
-          preview: {
-            select: { title: 'text', subtitle: 'user', date: 'date', staffName: 'staff.name' },
-            prepare({title, subtitle, date, staffName}) {
-              const isSupport = subtitle === 'admin';
-              return {
-                title: `${isSupport ? '🛡️' : '👤'} ${title}`,
-                subtitle: `${isSupport && staffName ? staffName : subtitle} - ${new Date(date).toLocaleString()}`
-              }
-            }
-          }
+            { name: 'user', type: 'string' },
+            { name: 'text', type: 'text' },
+            { name: 'date', type: 'datetime' },
+            { name: 'staff', type: 'reference', to: [{type: 'staff'}] }
+          ]
         }
+      ]
+    },
+    
+    // --- LEGADO (Para evitar perda de dados antigos) ---
+    {
+      name: 'logistics',
+      title: 'Logística (Legado)',
+      type: 'object',
+      hidden: true, // Esconde do painel, mas mantém os dados salvos
+      fields: [
+        { name: 'trackingCode', type: 'string' },
+        { name: 'trackingUrl', type: 'url' }
       ]
     }
   ],
-  
   preview: {
-    select: {
-      title: 'orderNumber',
-      subtitle: 'customerEmail',
-      status: 'status',
-      total: 'totalAmount',
-      unread: 'hasUnreadMessage'
-    },
-    prepare({title, subtitle, status, total, unread}) {
-      const statusMap = { 
-        pending: '🟡', 
-        paid: '🟢', 
-        invoiced: '📄',
-        shipped: '🚚', 
-        delivered: '🏠', 
-        cancelled: '❌' 
-      };
-      
-      const unreadAlert = unread ? '🔴 ' : '';
-      
-      return {
-        title: `${unreadAlert}${statusMap[status] || '⚪'} Pedido #${title || 'Sem Número'}`,
-        subtitle: `${subtitle || 'Cliente'} | R$ ${total ? total.toFixed(2) : '0.00'}`
-      }
-    }
+    select: { title: 'orderNumber', subtitle: 'status' }
   }
 }
