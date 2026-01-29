@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { 
   Package, User, MapPin, LogOut, MessageSquare, Send, 
   ShoppingBag, CheckCircle2, Trash2, CreditCard, Truck,
-  XCircle, ChevronRight, AlertCircle
+  XCircle, ChevronRight, AlertCircle, Edit2, ExternalLink // Adicionei ExternalLink
 } from 'lucide-react';
 import { useUser, SignOutButton } from "@clerk/clerk-react";
 import useCartStore from '../store/useCartStore';
@@ -32,6 +32,7 @@ export default function Profile() {
 
   // Estados Endereço
   const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingId, setEditingId] = useState(null); 
   const [newAddr, setNewAddr] = useState({ 
     alias: '', zip: '', street: '', number: '', 
     neighborhood: '', city: '', state: '', document: ''
@@ -66,9 +67,7 @@ export default function Profile() {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-    // --- QUERY BLINDADA V2 (CORREÇÃO DE LINK) ---
-    // 1. match: Busca case-insensitive (ignora maiúsculas/minúsculas)
-    // 2. !(_id in path("drafts.**")): Garante que não pega rascunho, só produto publicado
+    // --- QUERY ATUALIZADA PARA TRAZER O RASTREIO ---
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, 
       orderNumber, 
@@ -78,19 +77,22 @@ export default function Profile() {
       cancellationReason,
       paymentMethod,
       shippingAddress,
+      
+      // NOVOS CAMPOS DE RASTREIO
+      trackingCode,
+      trackingUrl,
+      carrier,
+      shippedAt,
+
       "deliveryEstimate": shippingMethod, 
       "items": items[]{ 
         productName, 
         quantity, 
         price,
-        
-        // Tenta link direto. Se falhar, busca pelo NOME (match) ignorando rascunhos.
         "productSlug": coalesce(
             product->slug.current, 
             *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].slug.current
         ), 
-        
-        // Tenta imagem direta. Se falhar, busca pelo NOME.
         "imageUrl": coalesce(
             product->images[0].asset->url, 
             *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].images[0].asset->url,
@@ -118,7 +120,6 @@ export default function Profile() {
 
   useEffect(() => { if (isLoaded && user) fetchData(); }, [isLoaded, user]);
 
-  // Listener Real-Time
   useEffect(() => {
     if (!activeChatOrder) return;
     const subscription = writeClient
@@ -170,14 +171,48 @@ export default function Profile() {
     finally { setProcessing(false); }
   };
 
-  const handleSaveAddress = () => {
-    if (!newAddr.zip) return;
-    addAddress({ 
-        ...newAddr, 
-        id: Math.random().toString(36).substr(2, 9),
-        name: user.firstName + ' ' + user.lastName 
+  const handleEditAddress = (addr) => {
+    setNewAddr({
+        alias: addr.alias || '',
+        zip: addr.zip || '',
+        street: addr.street || '',
+        number: addr.number || '',
+        neighborhood: addr.neighborhood || '',
+        city: addr.city || '',
+        state: addr.state || '',
+        document: addr.document || ''
     });
+    setEditingId(addr.id);
+    setShowAddressForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' }); 
+  };
+
+  const handleSaveAddress = () => {
+    if (!newAddr.zip) return alert("CEP é obrigatório");
+
+    if (editingId) {
+        removeAddress(editingId);
+        addAddress({ 
+            ...newAddr, 
+            id: editingId, 
+            name: user.firstName + ' ' + user.lastName 
+        });
+    } else {
+        addAddress({ 
+            ...newAddr, 
+            id: Math.random().toString(36).substr(2, 9),
+            name: user.firstName + ' ' + user.lastName 
+        });
+    }
+
     setShowAddressForm(false);
+    setEditingId(null);
+    setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', document: '' });
+  };
+
+  const handleCancelEdit = () => {
+    setShowAddressForm(false);
+    setEditingId(null);
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', document: '' });
   };
 
@@ -292,7 +327,6 @@ export default function Profile() {
                                             {order.items?.map((item, i) => {
                                                 const hasSlug = item.productSlug && item.productSlug !== '';
                                                 const ItemWrapper = hasSlug ? Link : 'div';
-                                                // Link Seguro: Adicionei encodeURIComponent para evitar erros com caracteres especiais
                                                 const wrapperProps = hasSlug ? { to: `/produto/${encodeURIComponent(item.productSlug)}`, title: `Ver produto: ${item.productSlug}` } : {};
                                                 const cursorClass = hasSlug ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default opacity-90';
 
@@ -302,7 +336,6 @@ export default function Profile() {
                                                         {...wrapperProps}
                                                         className={`flex gap-4 items-start py-3 border-b border-dashed border-gray-100 last:border-0 group/item transition-colors p-2 -mx-2 rounded-lg ${cursorClass}`}
                                                     >
-                                                        {/* IMAGEM */}
                                                         <div className="w-20 h-20 bg-white border border-gray-200 rounded-lg p-1 flex-shrink-0 relative overflow-hidden flex items-center justify-center">
                                                             {item.imageUrl ? (
                                                                 <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-contain" />
@@ -332,9 +365,8 @@ export default function Profile() {
                                             })}
                                         </div>
 
-                                        {/* COLUNA 2: INFO */}
+                                        {/* COLUNA 2: INFO e RASTREIO */}
                                         <div className="lg:w-1/3 space-y-6 lg:border-l lg:border-gray-100 lg:pl-6">
-                                            {/* Endereço */}
                                             <div>
                                                 <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2 flex items-center gap-1">
                                                     <MapPin size={12}/> Entrega em:
@@ -349,7 +381,6 @@ export default function Profile() {
                                                 ) : <p className="text-xs text-gray-400 italic bg-gray-50 p-2 rounded">Endereço não registrado.</p>}
                                             </div>
 
-                                            {/* Pagamento e Prazo */}
                                             <div className="space-y-3">
                                                 <div>
                                                     <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-1 flex items-center gap-1"><CreditCard size={12}/> Pagamento:</h4>
@@ -359,7 +390,26 @@ export default function Profile() {
                                                     <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-1 flex items-center gap-1"><Truck size={12}/> Prazo Estimado:</h4>
                                                     <p className="text-sm font-medium text-green-700">{order.deliveryEstimate || '5 a 12 dias úteis'}</p>
                                                 </div>
-                                                {/* Botão Cancelar */}
+
+                                                {/* --- ÁREA DE RASTREIO ADICIONADA --- */}
+                                                {order.trackingCode && (
+                                                    <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg mt-2">
+                                                        <h4 className="text-xs font-black uppercase text-blue-800 tracking-wider mb-2 flex items-center gap-1">
+                                                            <Truck size={12}/> Rastreamento:
+                                                        </h4>
+                                                        <p className="text-sm font-bold text-gray-800 mb-1 font-mono tracking-wider bg-white p-1 rounded border border-blue-100 inline-block">
+                                                            {order.trackingCode}
+                                                        </p>
+                                                        {order.carrier && <p className="text-xs text-gray-600 mb-2">Transportadora: {order.carrier}</p>}
+                                                        {order.trackingUrl && (
+                                                            <a href={order.trackingUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 mt-1">
+                                                                Acompanhar Entrega <ExternalLink size={10}/>
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {/* ---------------------------------- */}
+
                                                 <div className="border-t border-gray-200 pt-3 mt-2">
                                                     <div className="flex justify-between items-center mb-4">
                                                         <span className="text-gray-500 font-bold text-xs uppercase">Total</span>
@@ -375,7 +425,6 @@ export default function Profile() {
                                         </div>
                                     </div>
 
-                                    {/* CHAT */}
                                     <div className="border-t border-gray-100 pt-4 mt-4">
                                         <button onClick={() => setActiveChatOrder(activeChatOrder === order._id ? null : order._id)} className="text-gray-600 text-sm font-bold flex items-center gap-2 hover:text-orange-600 transition-colors">
                                             <MessageSquare size={16}/> {activeChatOrder === order._id ? 'Ocultar Chat' : 'Precisa de ajuda com este pedido?'}
@@ -409,17 +458,20 @@ export default function Profile() {
                         ))}
                     </div>
                 )}
-                {/* ABA ENDEREÇOS - Mantido igual */}
+
+                {/* ABA ENDEREÇOS - COM EDIÇÃO */}
                 {activeTab === 'address' && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                          <div className="flex justify-between items-center mb-6">
                             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><MapPin className="text-orange-500" /> Gerenciar Endereços</h2>
-                            <button onClick={() => setShowAddressForm(!showAddressForm)} className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide hover:bg-black transition-all shadow-lg shadow-gray-200 flex items-center gap-2"><CheckCircle2 size={16}/> Cadastrar Novo Endereço</button>
+                            {!showAddressForm && (
+                                <button onClick={() => { setEditingId(null); setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', document: '' }); setShowAddressForm(true); }} className="bg-gray-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide hover:bg-black transition-all shadow-lg shadow-gray-200 flex items-center gap-2"><CheckCircle2 size={16}/> Cadastrar Novo</button>
+                            )}
                         </div>
                         {showAddressForm && (
-                            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xl mb-8 relative">
-                                <button onClick={() => setShowAddressForm(false)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500"><Trash2 size={18}/></button>
-                                <h3 className="font-bold mb-4 text-gray-800 text-sm uppercase tracking-wide">Preencha os dados</h3>
+                            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xl mb-8 relative border-l-4 border-l-orange-500">
+                                <button onClick={handleCancelEdit} className="absolute top-4 right-4 text-gray-300 hover:text-red-500"><Trash2 size={18}/></button>
+                                <h3 className="font-bold mb-4 text-gray-800 text-sm uppercase tracking-wide">{editingId ? 'Editar Endereço' : 'Novo Endereço'}</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                     <input placeholder="Apelido (ex: Casa 2, Trabalho)" className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})}/>
                                     <input placeholder="CEP" maxLength={9} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none" value={newAddr.zip} onChange={e => setNewAddr({...newAddr, zip: e.target.value})}/>
@@ -429,7 +481,10 @@ export default function Profile() {
                                     <input placeholder="Cidade" className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none" value={newAddr.city} onChange={e => setNewAddr({...newAddr, city: e.target.value})}/>
                                     <input placeholder="CPF/CNPJ para Faturamento" className="border-2 border-gray-100 p-3 rounded-xl md:col-span-2 focus:border-blue-500 outline-none bg-blue-50/50" value={newAddr.document} onChange={e => setNewAddr({...newAddr, document: e.target.value})}/>
                                 </div>
-                                <button onClick={handleSaveAddress} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-600/20 transition-all">Salvar Endereço</button>
+                                <div className="flex gap-2">
+                                    <button onClick={handleCancelEdit} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-4 rounded-xl transition-all">Cancelar</button>
+                                    <button onClick={handleSaveAddress} className="flex-[2] bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-600/20 transition-all">{editingId ? 'Atualizar' : 'Salvar'}</button>
+                                </div>
                             </div>
                         )}
                         <div className="space-y-4">
@@ -437,7 +492,10 @@ export default function Profile() {
                                 const isActive = addr.id === customer.activeAddressId;
                                 return (
                                 <div key={addr.id} className={`p-6 rounded-2xl border-2 transition-all relative group ${isActive ? 'bg-white border-green-500 shadow-xl shadow-green-500/10' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
-                                    <button onClick={() => removeAddress(addr.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-full"><Trash2 size={16} /></button>
+                                    <div className="absolute top-4 right-4 flex gap-2">
+                                        <button onClick={() => handleEditAddress(addr)} className="text-gray-300 hover:text-blue-500 transition-colors p-2 hover:bg-blue-50 rounded-full" title="Editar"><Edit2 size={16} /></button>
+                                        <button onClick={() => removeAddress(addr.id)} className="text-gray-300 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-full" title="Excluir"><Trash2 size={16} /></button>
+                                    </div>
                                     <div className="flex items-center gap-3 mb-3">
                                         <h4 className="font-black text-gray-800 text-lg uppercase tracking-tight">{addr.alias || 'Local'}</h4>
                                         {isActive && (<span className="text-[10px] font-black text-green-700 bg-green-100 px-2 py-0.5 rounded-full uppercase tracking-wide flex items-center gap-1"><CheckCircle2 size={10}/> Ativo</span>)}
