@@ -36,8 +36,7 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- CAMPOS DE RAIZ (CORREÇÃO DE ERROS) ---
-    // Estes campos estavam aparecendo como "Unknown" no log
+    // --- DADOS DE CONTATO (RAIZ) ---
     {
       name: 'customerEmail',
       title: 'E-mail do Cliente (Principal)',
@@ -63,21 +62,19 @@ export default {
       ]
     },
 
-    // --- ENDEREÇO DE ENTREGA (ATUALIZADO) ---
+    // --- ENDEREÇO DE ENTREGA ---
     {
       name: 'shippingAddress',
       title: '📍 Endereço de Entrega',
       type: 'object',
       options: { collapsible: true, collapsed: false },
       fields: [
-        // Novos campos para parar os avisos "Unknown fields"
         { name: 'alias', title: 'Apelido do Endereço', type: 'string' },
         { name: 'name', title: 'Nome do Destinatário', type: 'string' },
         { name: 'document', title: 'CPF na Nota (Endereço)', type: 'string' },
         { name: 'cpf', title: 'CPF (Campo Legado)', type: 'string', hidden: true },
         { name: 'id', title: 'ID Interno', type: 'string', readOnly: true },
 
-        // Campos Originais
         { name: 'zip', type: 'string', title: 'CEP' },
         { name: 'street', type: 'string', title: 'Rua' },
         { name: 'number', type: 'string', title: 'Número' },
@@ -106,14 +103,16 @@ export default {
               to: [{type: 'product'}], 
               title: 'Produto Original (Link)' 
             },
-            // Adicionado para garantir que a foto apareça mesmo se o produto mudar
-            { name: 'imageUrl', type: 'url', title: 'Foto do Produto (Snapshot)' }
+            { name: 'imageUrl', type: 'url', title: 'Foto do Produto (Snapshot)' },
+            // Novos campos para variantes (opcional, mas bom ter)
+            { name: 'productSlug', type: 'string', title: 'Slug (Link)' },
+            { name: 'sku', type: 'string', title: 'SKU' }
           ],
           preview: {
             select: {
               title: 'productName',
               subtitle: 'quantity',
-              media: 'imageUrl' // Prioriza a imagem salva no pedido
+              media: 'imageUrl'
             },
             prepare({title, subtitle, media}) {
               return {
@@ -146,18 +145,34 @@ export default {
       }
     },
 
-    // --- LOGÍSTICA ---
+    // --- LOGÍSTICA E RASTREIO (CORRIGIDO: NA RAIZ) ---
+    // Estes campos agora estão na raiz para casar com o frontend e corrigir o erro
     {
-      name: 'logistics',
-      title: 'Operação e Logística',
-      type: 'object',
-      fields: [
-        { name: 'selectedCarrier', title: 'Transportadora', type: 'string' },
-        { name: 'shippingMethod', title: 'Prazo / Serviço', type: 'string' }, 
-        { name: 'trackingCode', title: 'Código de Rastreio', type: 'string' },
-        { name: 'trackingUrl', title: 'Link de Rastreio', type: 'url' },
-        { name: 'shippedAt', title: 'Data do Envio', type: 'datetime' }
-      ]
+      name: 'carrier', // Mudei de 'selectedCarrier' para 'carrier' para padronizar
+      title: 'Transportadora',
+      type: 'string',
+      description: 'Ex: Correios, Jadlog'
+    },
+    {
+      name: 'shippingMethod',
+      title: 'Prazo / Serviço',
+      type: 'string',
+      description: 'Ex: SEDEX - 2 dias'
+    },
+    {
+      name: 'trackingCode',
+      title: 'Código de Rastreio',
+      type: 'string'
+    },
+    {
+      name: 'trackingUrl',
+      title: 'Link de Rastreio',
+      type: 'url'
+    },
+    {
+      name: 'shippedAt',
+      title: 'Data do Envio',
+      type: 'datetime'
     },
 
     // --- CANCELAMENTO ---
@@ -220,7 +235,7 @@ export default {
   preview: {
     select: {
       title: 'orderNumber',
-      subtitle: 'customerEmail', // Usa o email da raiz que é mais confiável
+      subtitle: 'customerEmail',
       status: 'status',
       total: 'totalAmount',
       unread: 'hasUnreadMessage'
