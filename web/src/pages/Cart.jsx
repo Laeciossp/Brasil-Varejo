@@ -68,12 +68,26 @@ export default function Cart() {
             }))
           })
         });
-        const options = await response.json();
-        if (Array.isArray(options) && options.length > 0) {
-          const currentName = selectedShipping?.name;
-          const sameOption = options.find(o => o.name === currentName);
-          setShipping(sameOption || options[0]);
-        }
+        // ... dentro do useEffect ...
+const options = await response.json();
+
+if (Array.isArray(options) && options.length > 0) {
+  // --- CORREÇÃO: ADICIONAR PRAZO DE MANUSEIO ---
+  const PRAZO_MANUSEIO = 5; // Seus 5 dias de preparação
+
+  const optionsAdjusted = options.map(opt => ({
+    ...opt,
+    // Pega o prazo da transportadora e soma seus 5 dias
+    delivery_time: (parseInt(opt.delivery_time) || 0) + PRAZO_MANUSEIO
+  }));
+  // ----------------------------------------------
+
+  const currentName = selectedShipping?.name;
+  // Agora buscamos na lista ajustada (optionsAdjusted)
+  const sameOption = optionsAdjusted.find(o => o.name === currentName);
+  
+  setShipping(sameOption || optionsAdjusted[0]);
+}
       } catch (error) {
         console.error("Erro frete", error);
       } finally {
@@ -295,8 +309,10 @@ export default function Cart() {
                         }
                     </div>
                     {selectedShipping && (
-                        <div className="text-xs text-right text-gray-400">Via {selectedShipping.name} ({selectedShipping.delivery_time} dias)</div>
-                    )}
+    <div className="text-xs text-right text-gray-400">
+        Via {selectedShipping.name} ({selectedShipping.delivery_time} dias úteis)
+    </div>
+)}
                 </div>
 
                 <div className="border-t border-gray-100 pt-4 mb-6">
