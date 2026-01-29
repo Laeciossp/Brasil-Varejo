@@ -84,7 +84,8 @@ export default function CategoryPage() {
           "subcategories": *[_type == "category" && parent->slug.current == $slug] | order(title asc) {
             _id, title, slug
           },
-          "products": *[_type == "product" && references(*[_type == "category" && (slug.current == $slug || parent->slug.current == $slug)]._id)] {
+          // --- CORREÇÃO AQUI: Adicionado && isActive == true ---
+          "products": *[_type == "product" && references(*[_type == "category" && (slug.current == $slug || parent->slug.current == $slug)]._id) && isActive == true] {
             _id, title, price, oldPrice,
             "imageUrl": images[0].asset->url,
             slug,

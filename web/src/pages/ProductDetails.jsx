@@ -171,7 +171,7 @@ export default function ProductDetails() {
       setLoading(true);
       try {
         const query = `{
-          "product": *[_type == "product" && slug.current == $slug][0]{
+  "product": *[_type == "product" && slug.current == $slug && isActive == true][0]{
             _id, title, brand, description, specifications, "slug": slug,
             categories[]->{_id, title},
             price, oldPrice,
