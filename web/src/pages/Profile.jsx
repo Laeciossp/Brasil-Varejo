@@ -88,33 +88,44 @@ export default function Profile() {
       paymentMethod,
       shippingAddress,
       
-      // RASTREIO (Mantido da versão nova)
+      // --- QUERY CORRIGIDA E SIMPLIFICADA (Volta ao Padrão) ---
+    const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
+      _id, 
+      orderNumber, 
+      _createdAt, 
+      status, 
+      totalAmount, 
+      paymentMethod,
+      shippingAddress,
+      
+      // RASTREIO (Mantido)
       "trackingCode": coalesce(trackingCode, logistics.trackingCode),
       "trackingUrl": coalesce(trackingUrl, logistics.trackingUrl),
       "carrier": coalesce(carrier, logistics.selectedCarrier, logistics.carrier),
       "shippedAt": coalesce(shippedAt, logistics.shippedAt),
       "deliveryEstimate": coalesce(deliveryEstimate, logistics.shippingMethod, shippingMethod), 
 
-      // ITENS (Restaurada a lógica robusta que busca por nome se o link falhar)
+      // ITENS (Voltando ao simples que funciona)
       "items": items[]{ 
         productName, 
         quantity, 
         price,
         
-        // Tenta pegar o slug do produto linkado -> se falhar, busca pelo nome -> se falhar, usa o salvo
-        "productSlug": coalesce(
-            product->slug.current, 
-            *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].slug.current,
-            productSlug
-        ), 
+        // Pega o slug direto do produto original
+        "productSlug": product->slug.current, 
         
-        // Tenta pegar a imagem do produto linkado -> se falhar, busca pelo nome -> se falhar, usa a salva
-        "imageUrl": coalesce(
-            product->images[0].asset->url, 
-            *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].images[0].asset->url,
-            imageUrl
-        )
+        // Pega a foto do produto original OU a foto salva no item (snapshot)
+        "imageUrl": coalesce(product->images[0].asset->url, imageUrl)
       },
+      
+      messages[]{
+        text,
+        user,
+        date,
+        "staffName": staff->name,
+        "staffImage": staff->avatar.asset->url
+      }
+    }`;
       
       messages[]{
         text,
