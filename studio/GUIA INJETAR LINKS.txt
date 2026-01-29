@@ -1,0 +1,22 @@
+Como usar essa dupla dinâmica:
+Navegue e Capture:
+
+Abra a página de categoria no Chrome (onde tem vários produtos).
+
+Rode node capturador-nomes-v2.js.
+
+Vá para a página 2, rode de novo. Vá para a página 3, rode de novo.
+
+O arquivo mapa-links.json vai crescendo e guardando tudo.
+
+Injete no Sanity:
+
+Quando achar que capturou o suficiente, rode node injetor-links-massivo.js.
+
+Ele vai ler o JSON, procurar os nomes no seu Sanity e preencher o campo sourceUrl magicamente.
+
+Resultado:
+
+Seus produtos agora têm o "cordão umbilical" (o link) ligado ao fornecedor.
+
+Você pode rodar o Robô de Atualização (Full Sync) e ele vai funcionar.

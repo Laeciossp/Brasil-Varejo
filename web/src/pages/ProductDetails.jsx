@@ -8,42 +8,8 @@ import {
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
 import { useZipCode } from '../context/ZipCodeContext';
-
-// --- COMPONENTE DE ZOOM NATIVO ---
-const ZoomImage = ({ src, alt }) => {
-  const [zoomParams, setZoomParams] = useState({ show: false, x: 0, y: 0 });
-  const imgRef = useRef(null);
-
-  const handleMouseMove = (e) => {
-    const { left, top, width, height } = e.target.getBoundingClientRect();
-    const x = ((e.pageX - left) / width) * 100;
-    const y = ((e.pageY - top) / height) * 100;
-    setZoomParams({ show: true, x, y });
-  };
-
-  return (
-    <div 
-      className="relative w-full h-full overflow-hidden rounded-lg bg-white cursor-crosshair group touch-pan-y"
-      onMouseMove={handleMouseMove}
-      onMouseLeave={() => setZoomParams({ ...zoomParams, show: false })}
-    >
-      <img
-        ref={imgRef}
-        src={src}
-        alt={alt}
-        className="w-full h-full object-contain transition-transform duration-200 ease-out origin-center select-none"
-        style={{
-          transformOrigin: `${zoomParams.x}% ${zoomParams.y}%`,
-          transform: zoomParams.show ? "scale(2.5)" : "scale(1)", 
-        }}
-        draggable="false" 
-      />
-      <div className={`hidden lg:block absolute bottom-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-gray-400 border border-gray-200 pointer-events-none transition-opacity duration-300 ${zoomParams.show ? 'opacity-0' : 'opacity-100'}`}>
-        Passe o mouse para ampliar
-      </div>
-    </div>
-  );
-};
+// Importação da biblioteca de zoom
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 // --- SELO MERCADO PAGO ---
 const MercadoPagoTrust = () => (
@@ -392,10 +358,38 @@ export default function ProductDetails() {
                 isVideo ? (
                     <video src={activeMedia.asset.url} controls className="w-full h-full object-contain" />
                 ) : (
-                    <ZoomImage
-                        src={urlFor(activeMedia.asset).width(1200).quality(100).fit('max').bg('ffffff').url()}
-                        alt={product.title}
-                    />
+                    /* --- BLOCO DO NOVO ZOOM (PINCH) --- */
+                    <div className="w-full h-full flex items-center justify-center bg-white overflow-hidden">
+                        <TransformWrapper
+                            initialScale={1}
+                            minScale={1}
+                            maxScale={4}
+                            centerOnInit={true}
+                            wheel={{ step: 0.2 }}
+                        >
+                            {({ zoomIn, zoomOut, resetTransform }) => (
+                                <React.Fragment>
+                                    <TransformComponent
+                                        wrapperClass="w-full h-full flex items-center justify-center"
+                                        contentStyle={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                    >
+                                        <img
+                                            src={urlFor(activeMedia.asset).width(1200).quality(100).fit('max').bg('ffffff').url()}
+                                            alt={product.title}
+                                            className="max-h-full max-w-full object-contain"
+                                        />
+                                    </TransformComponent>
+
+                                    {/* Botões de controle para Desktop (Opcional) */}
+                                    <div className="hidden lg:flex absolute bottom-4 right-4 gap-2 z-10">
+                                        <button onClick={() => zoomIn()} className="bg-white/90 p-2 rounded-full shadow-lg hover:bg-white text-gray-700 font-bold w-8 h-8 flex items-center justify-center transition-transform active:scale-95" title="Aumentar">+</button>
+                                        <button onClick={() => zoomOut()} className="bg-white/90 p-2 rounded-full shadow-lg hover:bg-white text-gray-700 font-bold w-8 h-8 flex items-center justify-center transition-transform active:scale-95" title="Diminuir">-</button>
+                                        <button onClick={() => resetTransform()} className="bg-white/90 p-2 rounded-full shadow-lg hover:bg-white text-gray-700 font-bold w-8 h-8 flex items-center justify-center transition-transform active:scale-95" title="Resetar">x</button>
+                                    </div>
+                                </React.Fragment>
+                            )}
+                        </TransformWrapper>
+                    </div>
                 )
                 )}
 

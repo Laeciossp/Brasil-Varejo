@@ -28,7 +28,7 @@ const CATEGORY_MAP = [
         id: '2c2a840e-6a86-47e1-9276-3a3993946c26',
         rules: [
             /CONJUNTO.*SAIA/i,      
-            /CJ.*SAIA/i,            
+            /CJ.*SAIA/i,      
             /SAIA.*CROPPED/i,       
             /SAIA.*BLUSA/i,
             /SAIA.*TOP/i
@@ -49,6 +49,7 @@ const CATEGORY_MAP = [
         ]
     },
 
+  
     // 1.3 Conjuntos CALÇAS (ID ANTIGO - Fica exclusivo para calças)
     {
         id: '25aa9265-d05b-4fc0-be64-8f41a20b780a',
@@ -68,26 +69,26 @@ const CATEGORY_MAP = [
     { id: '26077718-39db-4055-b32a-bc91b4be36d4', rules: ['CAMISA', 'CAMISETE'] },
     { id: '2a346772-2540-4da4-b29a-35d8155d8d90', rules: ['SAIA'] },
     { id: '0b5f498b-3f74-4818-9f16-604b11e26f05', rules: ['CALÇA', 'JEANS', 'PANTALONA', 'LEGGING', 'CALCA'] },
-    { id: 'dc0d33a3-9165-4d57-8cc2-830f9311d26b', rules: ['VESTIDO', 'LONGO', 'MIDI', 'CURTO'] },
+    { id: 'dc0d33a3-9165-4d57-8cc2-830f9311d26b', rules: ['VESTIDO', 'LONGO', 'MIDI', 'CURTO'] 
+},
     { id: '7ef4bb1b-a674-41cc-b38e-dd3daa2f19ac', rules: ['BLUSA', 'TOP', 'CROPPED', 'REGATA', 'BODY', 'T-SHIRT', 'TRICOT'] },
     { id: '9ca0fcfe-9f06-44db-8c84-f8d395b610ea', rules: ['MACACÃO', 'MACAQUINHO', 'JARDINEIRA'] }
 ];
-
 const DEFAULT_CATEGORY_ID = '7ef4bb1b-a674-41cc-b38e-dd3daa2f19ac'; // Padrão: Blusas
 
 // --- FUNÇÃO DE MAPEAMENTO INTELIGENTE (Com URL) ---
 function getFixedCategoryId(detectedName, productTitle, productDescription, productUrl) {
-    const cleanUrl = productUrl ? productUrl.replace(/-/g, ' ').replace(/\//g, ' ') : '';
+    const cleanUrl = productUrl ?
+productUrl.replace(/-/g, ' ').replace(/\//g, ' ') : '';
     const textToScan = (detectedName + ' ' + productTitle + ' ' + (productDescription || '') + ' ' + cleanUrl).toUpperCase();
-    
-    for (const category of CATEGORY_MAP) {
+for (const category of CATEGORY_MAP) {
         for (const rule of category.rules) {
             if (rule instanceof RegExp) {
                 if (rule.test(textToScan)) return category.id;
-            } 
+} 
             else if (typeof rule === 'string') {
                 if (textToScan.includes(rule)) return category.id;
-            }
+}
         }
     }
     return DEFAULT_CATEGORY_ID;
@@ -96,19 +97,19 @@ function getFixedCategoryId(detectedName, productTitle, productDescription, prod
 // --- UPLOAD ---
 async function uploadMediaToSanity(mediaUrl) {
   if (!mediaUrl) return null;
-  try {
+try {
     const response = await axios.get(mediaUrl, { responseType: 'arraybuffer', timeout: 30000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-    const buffer = Buffer.from(response.data, 'binary');
+const buffer = Buffer.from(response.data, 'binary');
     const asset = await client.assets.upload('image', buffer, { filename: mediaUrl.split('/').pop() });
-    return { _type: 'image', asset: { _type: 'reference', _ref: asset._id }, _key: generateKey() };
-  } catch (error) { return null; }
+return { _type: 'image', asset: { _type: 'reference', _ref: asset._id }, _key: generateKey() };
+  } catch (error) { return null;
+}
 }
 
 async function processSingleProduct(page, url) {
     console.log(`\n🔗 Acessando: ${url}`);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    const mainData = await page.evaluate(() => {
+const mainData = await page.evaluate(() => {
         const title = document.querySelector('.product-name h1')?.innerText.trim() || 'Produto Sem Título';
         
         // --- CORREÇÃO DE PREÇO ---
@@ -117,7 +118,8 @@ async function processSingleProduct(page, url) {
         if (!priceElement) priceElement = document.querySelector('.price-box .price:not(.old-price .price)');
 
         let priceText = priceElement ? priceElement.innerText.trim() : '0';
-        let rawPrice = parseFloat(
+   
+     let rawPrice = parseFloat(
             priceText.replace(/[^\d,.]/g, '').replace(/\./g, '').replace(',', '.')
         ) || 0;
 
@@ -126,35 +128,32 @@ async function processSingleProduct(page, url) {
         const combinedDescription = [shortDesc, fullDesc].filter(t => t).join('\n\n');
 
         let mainColor = 'Única';
-        const tds = Array.from(document.querySelectorAll('#product-attribute-specs-table tr'));
+const tds = Array.from(document.querySelectorAll('#product-attribute-specs-table tr'));
         const colorRow = tds.find(tr => tr.innerText.includes('Cor'));
         if (colorRow) mainColor = colorRow.querySelector('.data')?.innerText.trim();
-
-        let mainImages = Array.from(document.querySelectorAll('.MagicToolboxSelectorsContainer a'))
+let mainImages = Array.from(document.querySelectorAll('.MagicToolboxSelectorsContainer a'))
             .map(a => a.getAttribute('href')).filter(src => src);
-        
-        if (mainImages.length === 0) {
+if (mainImages.length === 0) {
             const singleImg = document.querySelector('.MagicToolboxMainContainer a')?.getAttribute('href');
-            if (singleImg) mainImages.push(singleImg);
+if (singleImg) mainImages.push(singleImg);
         }
         mainImages = [...new Set(mainImages)];
 
         let sizes = [];
-        try {
+try {
             const scripts = Array.from(document.querySelectorAll('script'));
-            const configScript = scripts.find(s => s.innerText.includes('var spConfig'));
+const configScript = scripts.find(s => s.innerText.includes('var spConfig'));
             if (configScript) {
                 const match = configScript.innerText.match(/var spConfig = new Product.Config\((.*)\);/);
-                if (match && match[1]) {
+if (match && match[1]) {
                     const json = JSON.parse(match[1]);
-                    const sizeAttr = Object.values(json.attributes).find(a => a.label === 'Tamanho' || a.code === 'magework_tamanhos');
+const sizeAttr = Object.values(json.attributes).find(a => a.label === 'Tamanho' || a.code === 'magework_tamanhos');
                     if (sizeAttr) sizes = sizeAttr.options.map(o => o.label);
-                }
+}
             }
         } catch (e) { }
         if (sizes.length === 0) sizes = ['Único'];
-
-        const variantLinks = [];
+const variantLinks = [];
         const relatedItems = document.querySelectorAll('#block-related .item');
         relatedItems.forEach(item => {
             const linkEl = item.querySelector('a.product-image');
@@ -163,38 +162,35 @@ async function processSingleProduct(page, url) {
                 variantLinks.push({ url: linkEl.href, tempName: nameEl.innerText.trim() });
             }
         });
-
-        let detectedCategory = '';
+let detectedCategory = '';
         const breadcrumbs = Array.from(document.querySelectorAll('.breadcrumbs li'));
         if (breadcrumbs.length > 0) {
             const validCrumbs = breadcrumbs.map(li => li.innerText.trim())
                 .filter(t => !t.includes('Início') && !t.includes('Home') && t !== '/');
-            if (validCrumbs.length > 0) detectedCategory = validCrumbs[validCrumbs.length - 1]; 
+if (validCrumbs.length > 0) detectedCategory = validCrumbs[validCrumbs.length - 1]; 
         }
 
         return { title, rawPrice, description: combinedDescription, mainColor, mainImages, sizes, variantLinks, detectedCategory };
-    });
+});
 
     const finalPrice = parseFloat(((mainData.rawPrice * 1.30) + 15.00).toFixed(2));
     
     // --- LÓGICA DE CATEGORIA (Passando a URL) ---
     const targetCategoryId = getFixedCategoryId(mainData.detectedCategory, mainData.title, mainData.description, url);
-    
-    console.log(`   📦 ${mainData.title}`);
+console.log(`   📦 ${mainData.title}`);
     console.log(`   🔗 Link analisado para categoria.`);
-    console.log(`   📂 ID Categoria Definido: ${targetCategoryId}`);
+console.log(`   📂 ID Categoria Definido: ${targetCategoryId}`);
 
     const categoryRef = [{ _type: 'reference', _ref: targetCategoryId, _key: generateKey() }];
-
-    console.log(`   ⬆️ Uploading imagens...`);
+console.log(`   ⬆️ Uploading imagens...`);
     const mainImageAssets = [];
-    for (const imgUrl of mainData.mainImages) {
+for (const imgUrl of mainData.mainImages) {
         const asset = await uploadMediaToSanity(imgUrl);
-        if (asset) mainImageAssets.push(asset);
+if (asset) mainImageAssets.push(asset);
     }
 
     const sanityVariants = [];
-    if (mainImageAssets.length > 0) {
+if (mainImageAssets.length > 0) {
         sanityVariants.push({
             _key: generateKey(),
             _type: 'object',
@@ -202,46 +198,50 @@ async function processSingleProduct(page, url) {
             variantImage: mainImageAssets[0],
             images: mainImageAssets,
             sizes: mainData.sizes.map(s => ({
-                _key: generateKey(),
+        
+        _key: generateKey(),
                 size: s,
                 price: finalPrice,
                 stock: 10,
                 sku: `${slugify(mainData.title).substring(0,10)}-${mainData.mainColor}-${s}`.toUpperCase()
             }))
         });
-    }
+}
 
     if (mainData.variantLinks.length > 0) {
         console.log(`   🔄 Visitando variantes...`);
-        for (const variant of mainData.variantLinks) {
+for (const variant of mainData.variantLinks) {
             try {
                 await page.goto(variant.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-                const variantPageData = await page.evaluate(() => {
+const variantPageData = await page.evaluate(() => {
                     let hdImage = document.querySelector('.MagicToolboxMainContainer a')?.getAttribute('href');
                     let specificColor = 'Variante';
                     const tds = Array.from(document.querySelectorAll('#product-attribute-specs-table tr'));
-                    const colorRow = tds.find(tr => tr.innerText.includes('Cor'));
+                    const colorRow = 
+tds.find(tr => tr.innerText.includes('Cor'));
                     if (colorRow) specificColor = colorRow.querySelector('.data')?.innerText.trim();
                     return { hdImage, specificColor };
                 });
-
-                if (variantPageData.hdImage) {
+if (variantPageData.hdImage) {
                     const variantAsset = await uploadMediaToSanity(variantPageData.hdImage);
-                    if (variantAsset) {
+if (variantAsset) {
                         sanityVariants.push({
                             _key: generateKey(),
                             _type: 'object',
-                            colorName: variantPageData.specificColor,
+                
+            colorName: variantPageData.specificColor,
                             variantImage: variantAsset,
                             sizes: mainData.sizes.map(s => ({
-                                _key: generateKey(),
+                           
+     _key: generateKey(),
                                 size: s,
                                 price: finalPrice,
-                                stock: 5,
+                            
+    stock: 5,
                                 sku: `${slugify(mainData.title).substring(0,10)}-${variantPageData.specificColor}-${s}`.toUpperCase()
                             }))
                         });
-                    }
+}
                 }
             } catch (err) { }
         }
@@ -250,6 +250,11 @@ async function processSingleProduct(page, url) {
     const doc = {
         _type: 'product',
         title: mainData.title,
+        
+        // --- CAMPO ADICIONADO AQUI ---
+        sourceUrl: url,
+        // ----------------------------
+        
         slug: { _type: 'slug', current: slugify(mainData.title, { lower: true, strict: true }) + `-${Date.now().toString().slice(-4)}` },
         isActive: true,
         price: finalPrice,
@@ -260,41 +265,40 @@ async function processSingleProduct(page, url) {
         variants: sanityVariants,
         productType: 'fashion', 
         fashionSpecs: { gender: 'Fem', material: 'Padrão', model: 'Padrão' },
-        logistics: { weight: 0.3, width: 20, height: 5, length: 20 }
+   
+     logistics: { weight: 0.3, width: 20, height: 5, length: 20 }
     };
-
-    try {
+try {
         const res = await client.create(doc);
-        console.log(`   ✅ SUCESSO! Criado ID: ${res._id}`);
+console.log(`   ✅ SUCESSO! Criado ID: ${res._id}`);
     } catch (err) { 
         console.error("   ❌ Erro Sanity:", err.message);
-    }
+}
 }
 
 async function startMassScraper() {
   console.log('🚀 Iniciando Importador V11 (Separação Total de Conjuntos)...');
   let links = [];
-  try {
+try {
       const fileContent = fs.readFileSync('links.txt', 'utf-8');
-      links = fileContent.split('\n').map(l => l.trim()).filter(l => l.length > 0 && l.startsWith('http'));
+links = fileContent.split('\n').map(l => l.trim()).filter(l => l.length > 0 && l.startsWith('http'));
       console.log(`📋 Lista carregada: ${links.length} produtos.`);
-  } catch (e) {
+} catch (e) {
       console.error('❌ Erro: Arquivo links.txt não encontrado.');
       return;
-  }
+}
 
   const browser = await puppeteer.connect({ browserURL: 'http://127.0.0.1:9222', defaultViewport: null });
   const page = (await browser.pages())[0];
-
-  for (const [index, link] of links.entries()) {
+for (const [index, link] of links.entries()) {
       console.log(`\n========================================`);
       console.log(`PRODUTO ${index + 1} de ${links.length}`);
       console.log(`========================================`);
-      try {
+try {
           await processSingleProduct(page, link);
-      } catch (err) {
+} catch (err) {
           console.error(`❌ ERRO CRÍTICO no link:`, err.message);
-      }
+}
   }
 
   console.log('\n🏁 Finalizado!');

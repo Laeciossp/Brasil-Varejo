@@ -33,6 +33,16 @@ export default {
       group: 'main',
       description: 'Ex: "Super Lote 12", "Lote 40". Ajuda a filtrar e identificar a origem do produto.',
     },
+    // --- NOVO CAMPO: LINK ORIGINAL ---
+    {
+      name: 'sourceUrl',
+      title: 'Link Original (Robô)',
+      type: 'url',
+      group: 'main',
+      readOnly: false, 
+      description: 'Link salvo automaticamente pelo importador. Usado para atualização de estoque.',
+    },
+    // ---------------------------------
     {
       name: 'title',
       title: 'Nome do Produto',
