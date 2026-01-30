@@ -595,6 +595,11 @@ export default function ProductDetails() {
                             const apiNameNormal = normalize(opt.name);
                             const apiCompanyNormal = normalize(opt.company?.name);
 
+                            // --- LÓGICA PALASTORE (CEP LOCAL) ---
+                            // Verifica se o CEP atual é o de São Sebastião do Passé
+                            const cleanCurrentCep = cep.replace(/\D/g, '');
+                            const isLocal = cleanCurrentCep === '43850000';
+
                             // --- TENTATIVA DE ACHAR REGRA (PARA PEGAR O LOGO) ---
                             let bestRule = carrierRules.find(r => {
                                 const configService = normalize(r.serviceName);
@@ -612,22 +617,22 @@ export default function ProductDetails() {
                             let displayName = opt.name;
                             let logoUrl = bestRule?.logoUrl;
 
-                            // 1. FORÇA PAC SE TIVER NA STRING ORIGINAL
-                            if (apiNameNormal.includes("pac")) {
+                            if (isLocal) {
+                                // SE FOR LOCAL: Nome fixo "Expresso Palastore"
+                                displayName = "Expresso Palastore ⚡";
+                            } 
+                            else if (apiNameNormal.includes("pac")) {
                                 displayName = "PAC (Econômico)";
                             }
-                            // 2. FORÇA SEDEX SE TIVER NA STRING ORIGINAL
                             else if (apiNameNormal.includes("sedex")) {
                                 displayName = "SEDEX (Expresso)";
                             }
-                            // 3. SE FOR CORREIOS GENÉRICO (SEM PAC/SEDEX NO NOME)
                             else if (apiCompanyNormal.includes("correios")) {
                                 if (!logoUrl) {
                                     const anyCorreiosRule = carrierRules.find(r => normalize(r.name).includes("correios"));
                                     if (anyCorreiosRule) logoUrl = anyCorreiosRule.logoUrl;
                                 }
                             }
-                            // 4. PARA OUTRAS, USA O NOME BONITO
                             else if (bestRule) {
                                 displayName = bestRule.serviceName;
                             }
@@ -643,7 +648,13 @@ export default function ProductDetails() {
                             if (ruleForDays) additionalDays = ruleForDays.additionalDays || 0;
 
                             let finalDays = parseInt(opt.delivery_time) || 0;
-                            finalDays += handlingDays;
+                            
+                            // LÓGICA DE MANUSEIO:
+                            // Só soma handlingDays se NÃO for local.
+                            if (!isLocal) {
+                                finalDays += handlingDays;
+                            }
+                            
                             finalDays += additionalDays;
 
                             return (

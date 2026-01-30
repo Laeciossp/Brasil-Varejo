@@ -68,26 +68,55 @@ export default function Cart() {
             }))
           })
         });
-        // ... dentro do useEffect ...
-const options = await response.json();
+        
+        const options = await response.json();
 
-if (Array.isArray(options) && options.length > 0) {
-  // --- CORREÇÃO: ADICIONAR PRAZO DE MANUSEIO ---
-  const PRAZO_MANUSEIO = 5; // Seus 5 dias de preparação
+        if (Array.isArray(options) && options.length > 0) {
+          // === LÓGICA DE FRETE AJUSTADA (Igual ProductDetails) ===
+          const PRAZO_MANUSEIO_PADRAO = 5; // Seus 5 dias de preparação padrão
+          
+          // Limpa o CEP para verificar se é local
+          const cleanZip = targetZip.replace(/\D/g, '');
+          const isLocal = cleanZip === '43850000'; // CEP DE SÃO SEBASTIÃO DO PASSÉ
 
-  const optionsAdjusted = options.map(opt => ({
-    ...opt,
-    // Pega o prazo da transportadora e soma seus 5 dias
-    delivery_time: (parseInt(opt.delivery_time) || 0) + PRAZO_MANUSEIO
-  }));
-  // ----------------------------------------------
+          const optionsAdjusted = options.map(opt => {
+            let finalName = opt.name;
+            let finalDays = parseInt(opt.delivery_time) || 0;
+            const lowerName = (opt.name || '').toLowerCase();
 
-  const currentName = selectedShipping?.name;
-  // Agora buscamos na lista ajustada (optionsAdjusted)
-  const sameOption = optionsAdjusted.find(o => o.name === currentName);
-  
-  setShipping(sameOption || optionsAdjusted[0]);
-}
+            // 1. Padronização de Nomes
+            if (isLocal) {
+                finalName = "Expresso Palastore ⚡";
+            } else if (lowerName.includes('pac')) {
+                finalName = "PAC (Econômico)";
+            } else if (lowerName.includes('sedex')) {
+                finalName = "SEDEX (Expresso)";
+            }
+
+            // 2. Lógica de Dias (Manuseio)
+            if (!isLocal) {
+                // Se NÃO for local, adiciona os 5 dias de separação
+                finalDays += PRAZO_MANUSEIO_PADRAO;
+            } else {
+                // Se FOR local, manuseio é zero (entrega rápida)
+                // Opcional: Se quiser forçar 1 dia, descomente abaixo:
+                // if (finalDays === 0) finalDays = 1;
+            }
+
+            return {
+                ...opt,
+                name: finalName,
+                delivery_time: finalDays
+            };
+          });
+
+          // Tenta manter a opção selecionada pelo nome
+          const currentName = selectedShipping?.name;
+          const sameOption = optionsAdjusted.find(o => o.name === currentName);
+          
+          // Se não achar a mesma, pega a primeira (que geralmente é a mais barata/rápida dependendo da API)
+          setShipping(sameOption || optionsAdjusted[0]);
+        }
       } catch (error) {
         console.error("Erro frete", error);
       } finally {
