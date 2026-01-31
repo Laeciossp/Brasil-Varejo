@@ -117,7 +117,7 @@ export default function ProductDetails() {
 
   const carouselRef = useRef(null);
 
-  // Estados para Swipe Mobile (Mantidos caso queira reativar no futuro, mas desligados no JSX)
+  // Estados para Swipe Mobile 
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const minSwipeDistance = 50; 
@@ -190,7 +190,6 @@ export default function ProductDetails() {
           "settings": *[_type == "shippingSettings"][0]{
             handlingTime
           },
-          // AQUI: BUSCAMOS LOGO E SERVICE NAME
           "carrierConfig": *[_type == "carrierConfig"][0]{
             carriers[]{ name, serviceName, additionalDays, isActive, logoUrl }
           }
@@ -236,7 +235,7 @@ export default function ProductDetails() {
   *[_type == "product" && references($catId) && _id != $id && isActive == true][0...50] {
                 _id, title, slug, price, oldPrice,
                 "imageUrl": images[0].asset->url,
-                variants // ADICIONADO PARA SABER SE TEM VARIAÇÕES
+                variants 
               }
             `;
             const related = await client.fetch(relatedQuery, { catId, id: productData._id });
@@ -342,7 +341,7 @@ export default function ProductDetails() {
       sku: selectedVariant ? selectedVariant._key : product._id
     };
     addItem(cartItem);
-    alert("Produto adicionado ao carrinho!"); // Pode trocar por um Toast se preferir
+    alert("Produto adicionado ao carrinho!"); 
   };
 
   // --- FUNÇÃO QUICK ADD PARA O CARROSSEL (Lógica inteligente) ---
@@ -390,7 +389,6 @@ export default function ProductDetails() {
       }
   };
 
-  // Funções de swipe mantidas
   const onTouchStart = (e) => {
     if (e.targetTouches.length > 1) return; 
     setTouchEnd(null);
@@ -614,7 +612,6 @@ export default function ProductDetails() {
                             const apiNameNormal = normalize(opt.name);
                             const apiCompanyNormal = normalize(opt.company?.name);
 
-                            // --- FILTRO INTELIGENTE ---
                             const hasActiveRule = carrierRules.some(r => {
                                 const configName = normalize(r.name);
                                 const configService = normalize(r.serviceName);
@@ -753,14 +750,34 @@ export default function ProductDetails() {
                       {rel.imageUrl ? (
                         <img src={`${rel.imageUrl}?w=300`} alt={rel.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-300" />
                       ) : <Package className="text-gray-200"/>}
+                    </div>
 
-                      {/* --- BOTÃO QUICK ADD (Mobile Fixed / Desktop Hover) --- */}
-                       <button 
+                    <h4 className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" title={rel.title}>
+                      {rel.title}
+                    </h4>
+                    
+                    {/* AQUI ESTÁ A CORREÇÃO DO CARD */}
+                    <div className="mt-auto pt-2 border-t border-gray-50 flex justify-between items-end">
+                        <div className="flex flex-col">
+                            {relOldPrice > relPrice && (
+                                <span className="text-[10px] text-gray-400 line-through block mb-0.5">
+                                de {formatCurrency(relOldPrice)}
+                                </span>
+                            )}
+                            <span className="text-base font-black text-green-700 block tracking-tight leading-none">
+                            {formatCurrency(relPrice)}
+                            </span>
+                            <div className="mt-1 flex flex-col gap-0.5">
+                                <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span>
+                                {/* --- RECUPERADO: EM ATÉ 12X --- */}
+                                <span className="text-[10px] text-gray-400 font-medium">Em até 12x</span>
+                            </div>
+                        </div>
+
+                        {/* --- BOTÃO QUICK ADD (No Rodapé) --- */}
+                        <button 
                             onClick={(e) => handleQuickAdd(e, rel)}
-                            className="absolute bottom-2 right-2 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg 
-                                       lg:transform lg:translate-y-10 lg:opacity-0 lg:group-hover:translate-y-0 lg:group-hover:opacity-100 
-                                       opacity-100 translate-y-0
-                                       transition-all duration-300 hover:bg-orange-700 z-20"
+                            className="mb-1 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-orange-700 transition-colors flex-shrink-0 ml-2"
                             title="Adicionar ao Carrinho"
                         >
                             <div className="relative">
@@ -768,24 +785,6 @@ export default function ProductDetails() {
                                 <Plus size={8} strokeWidth={4} className="absolute -top-1 -right-1 bg-white text-orange-600 rounded-full" />
                             </div>
                         </button>
-                    </div>
-
-                    <h4 className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" title={rel.title}>
-                      {rel.title}
-                    </h4>
-                    <div className="mt-auto pt-2 border-t border-gray-50">
-                        {relOldPrice > relPrice && (
-                             <span className="text-[10px] text-gray-400 line-through block mb-0.5">
-                               de {formatCurrency(relOldPrice)}
-                             </span>
-                        )}
-                        <span className="text-base font-black text-green-700 block tracking-tight leading-none">
-                          {formatCurrency(relPrice)}
-                        </span>
-                        <div className="mt-1 flex flex-col gap-0.5">
-                            <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span>
-                            <span className="text-[10px] text-gray-400 font-medium">Em até 12x</span>
-                        </div>
                     </div>
                   </Link>
                 )

@@ -2,8 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createClient } from "@sanity/client";
 import imageUrlBuilder from '@sanity/image-url';
-import { Package, ChevronLeft, ChevronRight, ArrowRight, Play, Pause, ShoppingBag, Plus } from 'lucide-react'; // Ícones adicionados
-import useCartStore from '../store/useCartStore'; // Importando a loja
+import { Package, ChevronLeft, ChevronRight, ArrowRight, Play, Pause, ShoppingBag, Plus } from 'lucide-react'; 
+import useCartStore from '../store/useCartStore'; 
 
 const client = createClient({
   projectId: 'o4upb251',
@@ -25,13 +25,12 @@ const formatCurrency = (value) => {
 // 1. COMPONENTES VISUAIS (BLOCOS)
 // ==========================================
 
-// --- Bloco A: Hero (MANTIDO ORIGINAL) ---
+// --- Bloco A: Hero (MANTIDO COMPLETO) ---
 const HeroBlock = ({ data }) => {
   const [current, setCurrent] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true); 
   const slides = data.slides || [];
 
-  // Autoplay
   useEffect(() => {
     if (slides.length <= 1 || !isPlaying) return;
     const timer = setInterval(() => {
@@ -42,12 +41,12 @@ const HeroBlock = ({ data }) => {
 
   const nextSlide = () => {
     setCurrent(c => (c === slides.length - 1 ? 0 : c + 1));
-    setIsPlaying(false); // Pausa ao interagir
+    setIsPlaying(false); 
   };
 
   const prevSlide = () => {
     setCurrent(c => (c === 0 ? slides.length - 1 : c - 1));
-    setIsPlaying(false); // Pausa ao interagir
+    setIsPlaying(false); 
   };
 
   const togglePlay = () => setIsPlaying(!isPlaying);
@@ -56,14 +55,11 @@ const HeroBlock = ({ data }) => {
 
   return (
     <div className="relative w-full h-[350px] md:h-[650px] overflow-hidden group mb-8 bg-gray-100">
-      
-      {/* 1. SLIDES */}
       <div 
         className="flex transition-transform duration-700 ease-out h-full" 
         style={{ transform: `translateX(-${current * 100}%)` }}
       >
         {slides.map((slide, idx) => {
-          // Lógica de Posição do Texto
           let positionClasses = "items-center justify-center text-center"; 
           if (slide.textPosition === 'left') positionClasses = "items-center justify-start text-left pl-10 md:pl-20";
           if (slide.textPosition === 'right') positionClasses = "items-center justify-end text-right pr-10 md:pr-20";
@@ -75,7 +71,6 @@ const HeroBlock = ({ data }) => {
             ? 'bg-gray-900 text-white hover:bg-gray-700' 
             : 'bg-white text-gray-900 hover:bg-gray-100';
 
-          // Conteúdo da Mídia
           const MediaContent = (
             <>
               {slide.mediaType === 'video' && slide.videoUrl ? (
@@ -93,7 +88,6 @@ const HeroBlock = ({ data }) => {
             </>
           );
 
-          // Link na Imagem (Wrapper)
           const Media = slide.link ? (
             <a href={slide.link} className="block w-full h-full cursor-pointer">
               {MediaContent}
@@ -104,7 +98,6 @@ const HeroBlock = ({ data }) => {
             </div>
           );
 
-          // 1. ESTILO CAIXA SEPARADA (SPLIT)
           if (slide.layoutStyle === 'split-left' || slide.layoutStyle === 'split-right') {
             const isTextLeft = slide.layoutStyle === 'split-left';
             return (
@@ -127,13 +120,9 @@ const HeroBlock = ({ data }) => {
             );
           }
 
-          // 2. ESTILO SOBREPOSTO (PADRÃO)
           return (
             <div key={idx} className="min-w-full h-full relative">
-              {/* Mídia de Fundo (Com Link) */}
               <div className="absolute inset-0 w-full h-full">{Media}</div>
-              
-              {/* Texto Sobreposto */}
               {(slide.headline || slide.buttonText) && (
                 <div className={`absolute inset-0 flex p-6 ${positionClasses} pointer-events-none`}>
                   <div className={`max-w-3xl ${textColorClass} animate-in fade-in slide-in-from-bottom-4 duration-700 pointer-events-auto`}>
@@ -152,7 +141,6 @@ const HeroBlock = ({ data }) => {
         })}
       </div>
       
-      {/* 2. CONTROLES DE NAVEGAÇÃO (SETAS) */}
       <button 
         onClick={prevSlide}
         className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/20 hover:bg-white/90 backdrop-blur-md text-white hover:text-purple-900 shadow-lg transition-all opacity-0 group-hover:opacity-100 z-50 cursor-pointer"
@@ -169,7 +157,6 @@ const HeroBlock = ({ data }) => {
         <ChevronRight size={28} />
       </button>
 
-      {/* 3. BARRA DE CONTROLE INFERIOR */}
       <div className="absolute bottom-6 left-0 right-0 flex items-center justify-center gap-4 pointer-events-none z-50">
         <button 
           onClick={togglePlay}
@@ -190,12 +177,11 @@ const HeroBlock = ({ data }) => {
           ))}
         </div>
       </div>
-
     </div>
   );
 };
 
-// --- Bloco B: Departamentos (MANTIDO ORIGINAL) ---
+// --- Bloco B: Departamentos (MANTIDO COMPLETO) ---
 const DepartmentsBlock = ({ data }) => {
   if (!data.items || data.items.length === 0) return null;
   return (
@@ -215,7 +201,7 @@ const DepartmentsBlock = ({ data }) => {
   );
 };
 
-// --- Bloco C: Banners de Destaque (MANTIDO ORIGINAL) ---
+// --- Bloco C: Banners de Destaque (MANTIDO COMPLETO) ---
 const FeaturedBannersBlock = ({ data }) => {
   return (
     <div className="max-w-[1440px] mx-auto px-4">
@@ -235,13 +221,12 @@ const FeaturedBannersBlock = ({ data }) => {
   );
 };
 
-// --- Bloco D: Carrossel de Produtos (ATUALIZADO COM BOTÃO +) ---
+// --- Bloco D: Carrossel de Produtos (ATUALIZADO) ---
 const ProductCarouselBlock = ({ data }) => {
   const rawProducts = data.products || [];
   const products = rawProducts.filter(prod => prod && prod.isActive !== false);
   const carouselRef = useRef(null);
   
-  // --- Hooks para o Botão ---
   const { addItem } = useCartStore();
   const navigate = useNavigate();
 
@@ -261,7 +246,6 @@ const ProductCarouselBlock = ({ data }) => {
     }
   };
 
-  // --- FUNÇÃO QUICK ADD ---
   const handleQuickAdd = (e, prod) => {
     e.preventDefault(); 
     e.stopPropagation();
@@ -272,7 +256,7 @@ const ProductCarouselBlock = ({ data }) => {
         addItem({
             _id: prod._id,
             title: prod.title,
-            slug: { current: prod.slug }, // Ajuste para formato do store
+            slug: { current: prod.slug }, 
             price: prod.price,
             image: prod.imageUrl,
             sku: prod._id,
@@ -298,20 +282,33 @@ const ProductCarouselBlock = ({ data }) => {
       <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-6 scrollbar-hide scroll-smooth px-1 snap-x snap-mandatory">
         {products.map((prod) => (
           <Link to={`/product/${prod.slug}`} key={prod._id} className="min-w-[145px] md:min-w-[180px] w-[145px] md:w-[180px] snap-start bg-white p-3 rounded-lg border border-gray-100 hover:shadow-xl hover:border-gray-300 transition-all group flex flex-col relative">
+            
             <div className="h-32 w-full mb-3 flex items-center justify-center bg-white p-2 rounded relative">
                {prod.imageUrl ? (
                   <img src={prod.imageUrl} alt={prod.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-300" />
                ) : (
                   <span className="text-gray-200"><Package /></span>
                )}
+            </div>
 
-               {/* --- BOTÃO QUICK ADD (NOVO) --- */}
+            <h4 className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" title={prod.title}>{prod.title}</h4>
+            
+            {/* AQUI ESTÁ A CORREÇÃO DO CARD */}
+            <div className="mt-auto pt-2 border-t border-gray-50 flex justify-between items-end">
+               <div className="flex flex-col">
+                  {prod.oldPrice > prod.price && <span className="text-[10px] text-gray-400 line-through block mb-0.5">de {formatCurrency(prod.oldPrice)}</span>}
+                  <span className="text-base font-black text-green-700 block tracking-tight leading-none">{prod.price ? formatCurrency(prod.price) : 'Sob Consulta'}</span>
+                  <div className="mt-1 flex flex-col gap-0.5">
+                      <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span>
+                      {/* --- RECUPERADO: EM ATÉ 12X --- */}
+                      <span className="text-[10px] text-gray-400 font-medium">Em até 12x</span>
+                  </div>
+               </div>
+
+               {/* --- BOTÃO QUICK ADD (No Rodapé) --- */}
                <button 
                   onClick={(e) => handleQuickAdd(e, prod)}
-                  className="absolute bottom-2 right-2 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg 
-                             lg:transform lg:translate-y-10 lg:opacity-0 lg:group-hover:translate-y-0 lg:group-hover:opacity-100 
-                             opacity-100 translate-y-0
-                             transition-all duration-300 hover:bg-orange-700 z-20"
+                  className="mb-1 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-orange-700 transition-colors flex-shrink-0 ml-2"
                   title="Adicionar ao Carrinho"
                >
                   <div className="relative">
@@ -319,16 +316,6 @@ const ProductCarouselBlock = ({ data }) => {
                       <Plus size={8} strokeWidth={4} className="absolute -top-1 -right-1 bg-white text-orange-600 rounded-full" />
                   </div>
                </button>
-            </div>
-
-            <h4 className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" title={prod.title}>{prod.title}</h4>
-            <div className="mt-auto pt-2 border-t border-gray-50">
-               {prod.oldPrice > prod.price && <span className="text-[10px] text-gray-400 line-through block mb-0.5">de {formatCurrency(prod.oldPrice)}</span>}
-               <span className="text-base font-black text-green-700 block tracking-tight leading-none">{prod.price ? formatCurrency(prod.price) : 'Sob Consulta'}</span>
-               <div className="mt-1 flex flex-col gap-0.5">
-                  <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span>
-                  <span className="text-[10px] text-gray-400 font-medium">Em até 12x</span>
-               </div>
             </div>
           </Link>
         ))}
@@ -352,7 +339,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Mantive a query EXATAMENTE como no seu arquivo, apenas adicionei "variants" no fetch de produtos
+    // Query completa incluindo 'variants'
     const query = `*[_type == "homePage"][0]{
       pageBuilder[]{
         _type, _key,

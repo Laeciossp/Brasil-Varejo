@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'; // Adicionado useNavigate
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { createClient } from "@sanity/client";
-import { Frown, Filter, X, Package, Truck, ChevronRight, ShoppingBag, Plus } from 'lucide-react'; // Adicionado ShoppingBag e Plus
+import { Frown, Filter, X, Package, Truck, ChevronRight, ShoppingBag, Plus } from 'lucide-react';
 import CategoryHero from '../components/CategoryHero'; 
-import useCartStore from '../store/useCartStore'; // IMPORTANTE: Importando a loja
+import useCartStore from '../store/useCartStore'; 
 
 const client = createClient({
   projectId: 'o4upb251',
@@ -28,12 +28,10 @@ const ProductSkeleton = () => (
 export default function CategoryPage() {
   const { slug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate(); // Hook de navegação
+  const navigate = useNavigate();
   
-  // Hook do Carrinho
   const { addItem } = useCartStore();
 
-  // REF para controlar o scroll
   const productsTopRef = useRef(null);
   const isFirstRender = useRef(true);
     
@@ -84,7 +82,6 @@ export default function CategoryPage() {
           "subcategories": *[_type == "category" && parent->slug.current == $slug] | order(title asc) {
             _id, title, slug
           },
-          // --- CORREÇÃO AQUI: Trazendo variants para saber se tem tamanho ---
           "products": *[_type == "product" && references(*[_type == "category" && (slug.current == $slug || parent->slug.current == $slug)]._id) && isActive == true] {
             _id, title, price, oldPrice,
             "imageUrl": images[0].asset->url,
@@ -150,14 +147,12 @@ export default function CategoryPage() {
 
   // --- FUNÇÃO "QUICK ADD" ---
   const handleQuickAdd = (e, product) => {
-    e.preventDefault(); // Não abrir o link do produto
+    e.preventDefault(); 
     e.stopPropagation();
 
-    // Se tiver variantes (tamanhos/cores), TEM que ir pro detalhe escolher
     if (product.variants && product.variants.length > 0) {
         navigate(`/product/${product.slug.current}`);
     } else {
-        // Se for único, adiciona direto
         addItem({
             _id: product._id,
             title: product.title,
@@ -167,7 +162,6 @@ export default function CategoryPage() {
             sku: product._id,
             variantName: null
         });
-        // Feedback visual simples (opcional: toast)
         alert("Produto adicionado ao carrinho!"); 
     }
   };
@@ -286,7 +280,6 @@ export default function CategoryPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredProducts.map((product) => {
                       const productLink = product.slug?.current ? `/product/${product.slug.current}` : '#';
-                      // Tenta pegar preço da primeira variante ou do produto base
                       const price = product.variants?.[0]?.price || product.price || 0;
                       const oldPrice = product.variants?.[0]?.oldPrice || product.oldPrice || 0;
 
@@ -296,26 +289,36 @@ export default function CategoryPage() {
                               
                               <div className="h-40 w-full bg-white rounded-lg mb-4 flex items-center justify-center overflow-hidden relative p-2">
                                   {product.imageUrl ? <img src={`${product.imageUrl}?w=300`} alt={product.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" /> : <Package size={32} className="text-gray-200"/>}
-                                  
-                                  {/* --- BOTÃO QUICK ADD --- */}
-                                  <button 
-                                    onClick={(e) => handleQuickAdd(e, product)}
-                                    className="absolute bottom-2 right-2 bg-orange-600 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg transform translate-y-10 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 hover:bg-orange-700 z-20"
-                                    title="Adicionar ao Carrinho"
-                                  >
-                                    <div className="relative">
-                                        <ShoppingBag size={18} />
-                                        <Plus size={10} strokeWidth={4} className="absolute -top-1 -right-1 bg-white text-orange-600 rounded-full" />
-                                    </div>
-                                  </button>
                               </div>
 
                               <div className="mt-auto">
                                   <h3 className="font-medium text-gray-600 text-xs leading-4 line-clamp-3 h-[3rem] mb-2 group-hover:text-blue-600 transition-colors" title={product.title}>{product.title}</h3>
-                                  <div className="border-t border-gray-50 pt-2">
-                                      {oldPrice > price && <p className="text-[10px] text-gray-400 line-through block mb-0.5">de {formatPrice(oldPrice)}</p>}
-                                      <p className="text-lg font-black text-green-700 block tracking-tight leading-none">{price ? formatPrice(price) : 'Consulte'}</p>
-                                      {price > 0 && <div className="mt-1 flex flex-col gap-0.5"><span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span><span className="text-[10px] text-gray-400 font-medium">Em até 12x</span></div>}
+                                  
+                                  {/* AQUI ESTÁ A CORREÇÃO DO CARD: LADO A LADO */}
+                                  <div className="border-t border-gray-50 pt-2 flex justify-between items-end">
+                                      <div className="flex flex-col">
+                                          {oldPrice > price && <p className="text-[10px] text-gray-400 line-through block mb-0.5">de {formatPrice(oldPrice)}</p>}
+                                          <p className="text-lg font-black text-green-700 block tracking-tight leading-none">{price ? formatPrice(price) : 'Consulte'}</p>
+                                          {price > 0 && (
+                                            <div className="mt-1 flex flex-col gap-0.5">
+                                                <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span>
+                                                {/* --- RECUPERADO: EM ATÉ 12X --- */}
+                                                <span className="text-[10px] text-gray-400 font-medium">Em até 12x</span>
+                                            </div>
+                                          )}
+                                      </div>
+
+                                      {/* BOTÃO QUICK ADD (RODAPÉ) */}
+                                      <button 
+                                        onClick={(e) => handleQuickAdd(e, product)}
+                                        className="mb-1 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-orange-700 transition-colors flex-shrink-0 ml-2"
+                                        title="Adicionar ao Carrinho"
+                                      >
+                                        <div className="relative">
+                                            <ShoppingBag size={14} />
+                                            <Plus size={8} strokeWidth={4} className="absolute -top-1 -right-1 bg-white text-orange-600 rounded-full" />
+                                        </div>
+                                      </button>
                                   </div>
                               </div>
                           </Link>
