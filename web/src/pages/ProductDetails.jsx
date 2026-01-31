@@ -348,6 +348,9 @@ export default function ProductDetails() {
   };
 
   const onTouchStart = (e) => {
+    // Se tiver mais de 1 dedo (tentando dar zoom), ignora o swipe
+    if (e.targetTouches.length > 1) return; 
+    
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
   }
@@ -384,11 +387,11 @@ export default function ProductDetails() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col lg:flex-row mb-10">
           
           <div className="lg:w-3/5 p-6 border-r border-gray-50 bg-white group relative">
-            <div 
+           <div 
                 className="aspect-square w-full flex items-center justify-center mb-4 relative overflow-hidden rounded-lg border border-gray-50 select-none"
-                onTouchStart={onTouchStart}
-                onTouchMove={onTouchMove}
-                onTouchEnd={onTouchEnd}
+                onTouchStartCapture={onTouchStart}
+                onTouchMoveCapture={onTouchMove}
+                onTouchEndCapture={onTouchEnd}
             >
                 {activeMedia && (
                 isVideo ? (
