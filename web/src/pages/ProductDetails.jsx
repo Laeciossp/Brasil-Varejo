@@ -598,6 +598,7 @@ export default function ProductDetails() {
                             const apiCompanyNormal = normalize(opt.company?.name);
 
                             // --- FILTRO DE BLINDAGEM (SÓ CORREIOS) ---
+                            // Aceita qualquer coisa que tenha SEDEX, PAC ou CORREIOS no nome/empresa
                             const isSedex = apiNameNormal.includes('sedex');
                             const isPac = apiNameNormal.includes('pac');
                             const isCorreios = apiCompanyNormal.includes('correios');
@@ -611,6 +612,12 @@ export default function ProductDetails() {
                             const cleanCurrentCep = cep.replace(/\D/g, '');
                             const isLocal = cleanCurrentCep === '43850000';
 
+                            // --- REGRA LOCAL: OCULTAR O PAC (O LENTO) ---
+                            // Se for local e o nome for PAC (ou se for o genérico com prazo longo), não renderiza (retorna null)
+                            if (isLocal && (apiNameNormal.includes('pac') || (apiNameNormal.includes('correios') && parseInt(opt.delivery_time) > 7))) {
+                                return null;
+                            }
+
                             // Tenta achar regra SÓ PARA PEGAR O LOGO (Sem filtrar)
                             const anyCorreiosRule = carrierRules.find(r => normalize(r.name).includes("correios"));
                             let logoUrl = anyCorreiosRule?.logoUrl;
@@ -619,6 +626,7 @@ export default function ProductDetails() {
 
                             // --- NOMES PADRONIZADOS ---
                             if (isLocal) {
+                                // Se passou pelo filtro acima, é o SEDEX (ou o mais rápido)
                                 displayName = "Expresso Palastore ⚡";
                             } 
                             else if (apiNameNormal.includes("pac")) {
