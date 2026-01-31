@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { createClient } from "@sanity/client";
 import imageUrlBuilder from '@sanity/image-url';
-import { Package, ChevronLeft, ChevronRight, ArrowRight, Play, Pause } from 'lucide-react'; // Ícones completos
+import { Package, ChevronLeft, ChevronRight, ArrowRight, Play, Pause, ShoppingBag, Plus } from 'lucide-react'; // Ícones adicionados
+import useCartStore from '../store/useCartStore'; // Importando a loja
 
 const client = createClient({
   projectId: 'o4upb251',
@@ -24,7 +25,7 @@ const formatCurrency = (value) => {
 // 1. COMPONENTES VISUAIS (BLOCOS)
 // ==========================================
 
-// --- Bloco A: Hero (VERSÃO DEFINITIVA: Clicável + Controles + Texto Topo) ---
+// --- Bloco A: Hero (MANTIDO ORIGINAL) ---
 const HeroBlock = ({ data }) => {
   const [current, setCurrent] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true); 
@@ -83,7 +84,7 @@ const HeroBlock = ({ data }) => {
                 <img 
                   src={urlFor(slide.image)} 
                   alt={slide.headline} 
-                  className="w-full h-full object-cover object-top" // object-top evita cortar a cabeça da pessoa
+                  className="w-full h-full object-cover object-top" 
                 />
               )}
               {slide.layoutStyle === 'overlay' && slide.textColor === 'white' && (
@@ -132,7 +133,7 @@ const HeroBlock = ({ data }) => {
               {/* Mídia de Fundo (Com Link) */}
               <div className="absolute inset-0 w-full h-full">{Media}</div>
               
-              {/* Texto Sobreposto (Pointer Events None para deixar clicar na imagem) */}
+              {/* Texto Sobreposto */}
               {(slide.headline || slide.buttonText) && (
                 <div className={`absolute inset-0 flex p-6 ${positionClasses} pointer-events-none`}>
                   <div className={`max-w-3xl ${textColorClass} animate-in fade-in slide-in-from-bottom-4 duration-700 pointer-events-auto`}>
@@ -151,7 +152,7 @@ const HeroBlock = ({ data }) => {
         })}
       </div>
       
-      {/* 2. CONTROLES DE NAVEGAÇÃO (SETAS) - Z-Index 50 para garantir clique */}
+      {/* 2. CONTROLES DE NAVEGAÇÃO (SETAS) */}
       <button 
         onClick={prevSlide}
         className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/20 hover:bg-white/90 backdrop-blur-md text-white hover:text-purple-900 shadow-lg transition-all opacity-0 group-hover:opacity-100 z-50 cursor-pointer"
@@ -168,7 +169,7 @@ const HeroBlock = ({ data }) => {
         <ChevronRight size={28} />
       </button>
 
-      {/* 3. BARRA DE CONTROLE INFERIOR (Dots + Pause) - Z-Index 50 */}
+      {/* 3. BARRA DE CONTROLE INFERIOR */}
       <div className="absolute bottom-6 left-0 right-0 flex items-center justify-center gap-4 pointer-events-none z-50">
         <button 
           onClick={togglePlay}
@@ -194,7 +195,7 @@ const HeroBlock = ({ data }) => {
   );
 };
 
-// --- Bloco B: Departamentos ---
+// --- Bloco B: Departamentos (MANTIDO ORIGINAL) ---
 const DepartmentsBlock = ({ data }) => {
   if (!data.items || data.items.length === 0) return null;
   return (
@@ -214,7 +215,7 @@ const DepartmentsBlock = ({ data }) => {
   );
 };
 
-// --- Bloco C: Banners de Destaque ---
+// --- Bloco C: Banners de Destaque (MANTIDO ORIGINAL) ---
 const FeaturedBannersBlock = ({ data }) => {
   return (
     <div className="max-w-[1440px] mx-auto px-4">
@@ -234,11 +235,15 @@ const FeaturedBannersBlock = ({ data }) => {
   );
 };
 
-// --- Bloco D: Carrossel de Produtos ---
+// --- Bloco D: Carrossel de Produtos (ATUALIZADO COM BOTÃO +) ---
 const ProductCarouselBlock = ({ data }) => {
   const rawProducts = data.products || [];
   const products = rawProducts.filter(prod => prod && prod.isActive !== false);
   const carouselRef = useRef(null);
+  
+  // --- Hooks para o Botão ---
+  const { addItem } = useCartStore();
+  const navigate = useNavigate();
 
   if (!products.length) return null;
 
@@ -256,6 +261,27 @@ const ProductCarouselBlock = ({ data }) => {
     }
   };
 
+  // --- FUNÇÃO QUICK ADD ---
+  const handleQuickAdd = (e, prod) => {
+    e.preventDefault(); 
+    e.stopPropagation();
+
+    if (prod.variants && prod.variants.length > 0) {
+        navigate(`/product/${prod.slug}`);
+    } else {
+        addItem({
+            _id: prod._id,
+            title: prod.title,
+            slug: { current: prod.slug }, // Ajuste para formato do store
+            price: prod.price,
+            image: prod.imageUrl,
+            sku: prod._id,
+            variantName: null
+        });
+        alert("Adicionado ao carrinho!"); 
+    }
+  };
+
   return (
     <div className="max-w-[1440px] mx-auto my-10 px-4">
       <div className="flex justify-between items-center mb-4 border-b pb-2">
@@ -268,12 +294,33 @@ const ProductCarouselBlock = ({ data }) => {
           </div>
         </div>
       </div>
+      
       <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-6 scrollbar-hide scroll-smooth px-1 snap-x snap-mandatory">
         {products.map((prod) => (
-          <Link to={`/product/${prod.slug}`} key={prod._id} className="min-w-[145px] md:min-w-[180px] w-[145px] md:w-[180px] snap-start bg-white p-3 rounded-lg border border-gray-100 hover:shadow-xl hover:border-gray-300 transition-all group flex flex-col">
+          <Link to={`/product/${prod.slug}`} key={prod._id} className="min-w-[145px] md:min-w-[180px] w-[145px] md:w-[180px] snap-start bg-white p-3 rounded-lg border border-gray-100 hover:shadow-xl hover:border-gray-300 transition-all group flex flex-col relative">
             <div className="h-32 w-full mb-3 flex items-center justify-center bg-white p-2 rounded relative">
-               {prod.imageUrl ? <img src={prod.imageUrl} alt={prod.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-300" /> : <span className="text-gray-200"><Package /></span>}
+               {prod.imageUrl ? (
+                  <img src={prod.imageUrl} alt={prod.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-300" />
+               ) : (
+                  <span className="text-gray-200"><Package /></span>
+               )}
+
+               {/* --- BOTÃO QUICK ADD (NOVO) --- */}
+               <button 
+                  onClick={(e) => handleQuickAdd(e, prod)}
+                  className="absolute bottom-2 right-2 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg 
+                             lg:transform lg:translate-y-10 lg:opacity-0 lg:group-hover:translate-y-0 lg:group-hover:opacity-100 
+                             opacity-100 translate-y-0
+                             transition-all duration-300 hover:bg-orange-700 z-20"
+                  title="Adicionar ao Carrinho"
+               >
+                  <div className="relative">
+                      <ShoppingBag size={14} />
+                      <Plus size={8} strokeWidth={4} className="absolute -top-1 -right-1 bg-white text-orange-600 rounded-full" />
+                  </div>
+               </button>
             </div>
+
             <h4 className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" title={prod.title}>{prod.title}</h4>
             <div className="mt-auto pt-2 border-t border-gray-50">
                {prod.oldPrice > prod.price && <span className="text-[10px] text-gray-400 line-through block mb-0.5">de {formatCurrency(prod.oldPrice)}</span>}
@@ -305,6 +352,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Mantive a query EXATAMENTE como no seu arquivo, apenas adicionei "variants" no fetch de produtos
     const query = `*[_type == "homePage"][0]{
       pageBuilder[]{
         _type, _key,
@@ -324,10 +372,10 @@ export default function Home() {
           "categorySlug": selectedCategory->slug.current,
           "products": select(
             listingType == 'category' => *[_type == "product" && references(^.selectedCategory._ref) && isActive == true][0..11] {
-              _id, title, "slug": slug.current, "price": price, "oldPrice": oldPrice, "imageUrl": images[0].asset->url, isActive
+              _id, title, "slug": slug.current, "price": price, "oldPrice": oldPrice, "imageUrl": images[0].asset->url, isActive, variants
             },
             listingType == 'manual' => manualProducts[]-> { 
-              _id, title, "slug": slug.current, "price": price, "oldPrice": oldPrice, "imageUrl": images[0].asset->url, isActive
+              _id, title, "slug": slug.current, "price": price, "oldPrice": oldPrice, "imageUrl": images[0].asset->url, isActive, variants
             }
           )
         }

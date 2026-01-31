@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'; // Adicionado useNavigate
 import { createClient } from "@sanity/client";
-import { Frown, Filter, X, Package, Truck, ChevronRight } from 'lucide-react';
+import { Frown, Filter, X, Package, Truck, ChevronRight, ShoppingBag, Plus } from 'lucide-react'; // Adicionado ShoppingBag e Plus
 import CategoryHero from '../components/CategoryHero'; 
+import useCartStore from '../store/useCartStore'; // IMPORTANTE: Importando a loja
 
 const client = createClient({
   projectId: 'o4upb251',
@@ -27,7 +28,11 @@ const ProductSkeleton = () => (
 export default function CategoryPage() {
   const { slug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate(); // Hook de navegação
   
+  // Hook do Carrinho
+  const { addItem } = useCartStore();
+
   // REF para controlar o scroll
   const productsTopRef = useRef(null);
   const isFirstRender = useRef(true);
@@ -50,22 +55,17 @@ export default function CategoryPage() {
   }), [searchParams]);
 
   // --- 1. SCROLL INTELIGENTE ---
-  // Se os filtros mudarem, rola para o topo dos produtos.
-  // Se for a primeira vez (voltando de um produto), NÃO rola.
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
-
-    // Se mudou filtros, rola suavemente para o início da lista
     if (productsTopRef.current) {
-       // O setTimeout garante que o DOM atualizou antes de rolar
        setTimeout(() => {
          productsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
        }, 100);
     }
-  }, [selectedSubcategory, selectedBrands, priceRange]); // Dispara quando qualquer filtro muda
+  }, [selectedSubcategory, selectedBrands, priceRange]); 
 
   // --- 2. BUSCA DE DADOS ---
   useEffect(() => {
@@ -84,14 +84,14 @@ export default function CategoryPage() {
           "subcategories": *[_type == "category" && parent->slug.current == $slug] | order(title asc) {
             _id, title, slug
           },
-          // --- CORREÇÃO AQUI: Adicionado && isActive == true ---
+          // --- CORREÇÃO AQUI: Trazendo variants para saber se tem tamanho ---
           "products": *[_type == "product" && references(*[_type == "category" && (slug.current == $slug || parent->slug.current == $slug)]._id) && isActive == true] {
             _id, title, price, oldPrice,
             "imageUrl": images[0].asset->url,
             slug,
             "brandName": brand,
             categories[]->{ slug },
-            variants[0] { price, oldPrice },
+            variants,
             freeShipping
           }
         }`;
@@ -148,11 +148,35 @@ export default function CategoryPage() {
 
   const clearFilters = () => setSearchParams({});
 
+  // --- FUNÇÃO "QUICK ADD" ---
+  const handleQuickAdd = (e, product) => {
+    e.preventDefault(); // Não abrir o link do produto
+    e.stopPropagation();
+
+    // Se tiver variantes (tamanhos/cores), TEM que ir pro detalhe escolher
+    if (product.variants && product.variants.length > 0) {
+        navigate(`/product/${product.slug.current}`);
+    } else {
+        // Se for único, adiciona direto
+        addItem({
+            _id: product._id,
+            title: product.title,
+            slug: product.slug,
+            price: product.price,
+            image: product.imageUrl,
+            sku: product._id,
+            variantName: null
+        });
+        // Feedback visual simples (opcional: toast)
+        alert("Produto adicionado ao carrinho!"); 
+    }
+  };
+
   // --- FILTRAGEM ---
   const filteredProducts = useMemo(() => {
     if (!data.products) return [];
     return data.products.filter(product => {
-      const finalPrice = product.variants?.price || product.price || 0;
+      const finalPrice = product.variants?.[0]?.price || product.price || 0;
       const matchesBrand = selectedBrands.length === 0 || (product.brandName && selectedBrands.includes(product.brandName));
       const min = priceRange.min ? parseFloat(priceRange.min) : 0;
       const max = priceRange.max ? parseFloat(priceRange.max) : Infinity;
@@ -252,7 +276,6 @@ export default function CategoryPage() {
           </aside>
 
           {/* AREA DE PRODUTOS */}
-          {/* Adicionei 'min-h-[600px]' para garantir que a área sempre seja alta, mesmo com 1 produto */}
           <div className="flex-1 min-h-[600px]" ref={productsTopRef}>
               {loading ? (
                 <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -263,15 +286,30 @@ export default function CategoryPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredProducts.map((product) => {
                       const productLink = product.slug?.current ? `/product/${product.slug.current}` : '#';
-                      const price = product.variants?.price || product.price || 0;
-                      const oldPrice = product.variants?.oldPrice || product.oldPrice || 0;
+                      // Tenta pegar preço da primeira variante ou do produto base
+                      const price = product.variants?.[0]?.price || product.price || 0;
+                      const oldPrice = product.variants?.[0]?.oldPrice || product.oldPrice || 0;
 
                       return (
                           <Link key={product._id} to={productLink} className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-xl hover:border-orange-200 transition-all duration-300 group flex flex-col h-full relative">
                               {product.freeShipping && <div className="absolute top-3 right-3 bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-md z-10"><Truck size={10} /> <span>Frete Grátis</span></div>}
+                              
                               <div className="h-40 w-full bg-white rounded-lg mb-4 flex items-center justify-center overflow-hidden relative p-2">
                                   {product.imageUrl ? <img src={`${product.imageUrl}?w=300`} alt={product.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" /> : <Package size={32} className="text-gray-200"/>}
+                                  
+                                  {/* --- BOTÃO QUICK ADD --- */}
+                                  <button 
+                                    onClick={(e) => handleQuickAdd(e, product)}
+                                    className="absolute bottom-2 right-2 bg-orange-600 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg transform translate-y-10 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 hover:bg-orange-700 z-20"
+                                    title="Adicionar ao Carrinho"
+                                  >
+                                    <div className="relative">
+                                        <ShoppingBag size={18} />
+                                        <Plus size={10} strokeWidth={4} className="absolute -top-1 -right-1 bg-white text-orange-600 rounded-full" />
+                                    </div>
+                                  </button>
                               </div>
+
                               <div className="mt-auto">
                                   <h3 className="font-medium text-gray-600 text-xs leading-4 line-clamp-3 h-[3rem] mb-2 group-hover:text-blue-600 transition-colors" title={product.title}>{product.title}</h3>
                                   <div className="border-t border-gray-50 pt-2">

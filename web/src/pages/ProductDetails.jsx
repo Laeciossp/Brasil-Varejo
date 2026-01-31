@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { client, urlFor } from '../lib/sanity';
 import { PortableText } from '@portabletext/react'; 
 import { 
-  Truck, Heart, ChevronRight, ChevronLeft, Package, CheckCircle, Lock, ArrowRight
+  Truck, Heart, ChevronRight, ChevronLeft, Package, CheckCircle, Lock, ArrowRight, ShoppingBag, Plus, ShoppingCart
 } from 'lucide-react'; 
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
@@ -93,6 +93,7 @@ const myPortableTextComponents = {
 
 export default function ProductDetails() {
   const { slug } = useParams();
+  const navigate = useNavigate();
    
   const { addItem, setShipping, selectedShipping, toggleFavorite, favorites } = useCartStore();
   const { globalCep } = useZipCode(); 
@@ -234,7 +235,8 @@ export default function ProductDetails() {
             const relatedQuery = `
   *[_type == "product" && references($catId) && _id != $id && isActive == true][0...50] {
                 _id, title, slug, price, oldPrice,
-                "imageUrl": images[0].asset->url
+                "imageUrl": images[0].asset->url,
+                variants // ADICIONADO PARA SABER SE TEM VARIAÇÕES
               }
             `;
             const related = await client.fetch(relatedQuery, { catId, id: productData._id });
@@ -325,6 +327,47 @@ export default function ProductDetails() {
     window.location.href = '/cart'; 
   };
 
+  // --- NOVA FUNÇÃO: ADICIONAR AO CARRINHO (Sem sair da tela) ---
+  const handleAddToCart = () => {
+    if (!product) return;
+    if (!selectedShipping) return alert("Por favor, calcule o frete para adicionar.");
+    
+    const cartItem = {
+      _id: product._id,
+      title: product.title,
+      slug: product.slug,
+      price: currentPrice,
+      image: activeMedia ? urlFor(activeMedia.asset).url() : '',
+      variantName: selectedVariant ? selectedVariant.variantName : null,
+      sku: selectedVariant ? selectedVariant._key : product._id
+    };
+    addItem(cartItem);
+    alert("Produto adicionado ao carrinho!"); // Pode trocar por um Toast se preferir
+  };
+
+  // --- FUNÇÃO QUICK ADD PARA O CARROSSEL (Lógica inteligente) ---
+  const handleQuickAdd = (e, prod) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Se tiver variantes, vai pro detalhe
+    if (prod.variants && prod.variants.length > 0) {
+        navigate(`/product/${prod.slug.current}`);
+    } else {
+        // Se for único, adiciona direto
+        addItem({
+            _id: prod._id,
+            title: prod.title,
+            slug: prod.slug,
+            price: prod.price,
+            image: prod.imageUrl,
+            sku: prod._id,
+            variantName: null
+        });
+        alert("Adicionado ao carrinho!");
+    }
+  };
+
   const scrollCarousel = (direction) => {
     if (carouselRef.current) {
       const scrollAmount = 300;
@@ -347,7 +390,7 @@ export default function ProductDetails() {
       }
   };
 
-  // Funções de swipe mantidas no código, mas não vinculadas no JSX abaixo
+  // Funções de swipe mantidas
   const onTouchStart = (e) => {
     if (e.targetTouches.length > 1) return; 
     setTouchEnd(null);
@@ -388,22 +431,18 @@ export default function ProductDetails() {
           <div className="lg:w-3/5 p-6 border-r border-gray-50 bg-white group relative">
            <div 
                 className="aspect-square w-full flex items-center justify-center mb-4 relative overflow-hidden rounded-lg border border-gray-50 select-none"
-                // Handlers de touch removidos para evitar conflito com zoom
             >
                 {activeMedia && (
                 isVideo ? (
                     <video src={activeMedia.asset.url} controls className="w-full h-full object-contain" />
                 ) : (
                     <>
-                        {/* --- 1. VERSÃO PC (LG:BLOCK) - ZOOM ANTIGO --- */}
                         <div className="hidden lg:block w-full h-full">
                             <ZoomImage
                                 src={urlFor(activeMedia.asset).width(1200).quality(100).fit('max').bg('ffffff').url()}
                                 alt={product.title}
                             />
                         </div>
-
-                        {/* --- 2. VERSÃO CELULAR (LG:HIDDEN) - ZOOM PINÇA --- */}
                         <div className="lg:hidden w-full h-full flex items-center justify-center bg-white overflow-hidden">
                             <TransformWrapper
                                 initialScale={1}
@@ -575,34 +614,23 @@ export default function ProductDetails() {
                             const apiNameNormal = normalize(opt.name);
                             const apiCompanyNormal = normalize(opt.company?.name);
 
-                            // --- FILTRO INTELIGENTE (WHITELIST + MATCH) ---
-                            // Verifica se existe alguma regra ATIVA que bata com essa opção
+                            // --- FILTRO INTELIGENTE ---
                             const hasActiveRule = carrierRules.some(r => {
                                 const configName = normalize(r.name);
                                 const configService = normalize(r.serviceName);
-
-                                // Match por nome da empresa (ex: "jadlog" em "jadlog")
                                 const nameMatch = apiNameNormal.includes(configName) || apiCompanyNormal.includes(configName);
-                                // Match por serviço (ex: "pac" em "correios pac")
                                 const serviceMatch = configService.includes(apiNameNormal) || apiNameNormal.includes(configService);
-
-                                // A regra tem que dar match E estar ativa
                                 return (nameMatch || serviceMatch) && r.isActive === true;
                             });
-
                             return hasActiveRule;
 
                         }).map((opt, idx) => {
                             const isSelected = selectedShipping?.name === opt.name && selectedShipping?.price === opt.price;
                             const apiNameNormal = normalize(opt.name);
                             const apiCompanyNormal = normalize(opt.company?.name);
-
-                            // --- LÓGICA PALASTORE (CEP LOCAL) ---
-                            // Verifica se o CEP atual é o de São Sebastião do Passé
                             const cleanCurrentCep = cep.replace(/\D/g, '');
                             const isLocal = cleanCurrentCep === '43850000';
 
-                            // --- TENTATIVA DE ACHAR REGRA (PARA PEGAR O LOGO) ---
                             let bestRule = carrierRules.find(r => {
                                 const configService = normalize(r.serviceName);
                                 return configService.includes(apiNameNormal) || apiNameNormal.includes(configService);
@@ -615,31 +643,18 @@ export default function ProductDetails() {
                                 });
                             }
 
-                            // --- DEFINIÇÃO DO NOME ---
                             let displayName = opt.name;
                             let logoUrl = bestRule?.logoUrl;
 
-                            if (isLocal) {
-                                // SE FOR LOCAL: Nome fixo "Expresso Palastore"
-                                displayName = "Expresso Palastore ⚡";
-                            } 
-                            else if (apiNameNormal.includes("pac")) {
-                                displayName = "PAC (Econômico)";
+                            if (isLocal) { displayName = "Expresso Palastore ⚡"; } 
+                            else if (apiNameNormal.includes("pac")) { displayName = "PAC (Econômico)"; }
+                            else if (apiNameNormal.includes("sedex")) { displayName = "SEDEX (Expresso)"; }
+                            else if (apiCompanyNormal.includes("correios") && !logoUrl) {
+                                const anyCorreiosRule = carrierRules.find(r => normalize(r.name).includes("correios"));
+                                if (anyCorreiosRule) logoUrl = anyCorreiosRule.logoUrl;
                             }
-                            else if (apiNameNormal.includes("sedex")) {
-                                displayName = "SEDEX (Expresso)";
-                            }
-                            else if (apiCompanyNormal.includes("correios")) {
-                                if (!logoUrl) {
-                                    const anyCorreiosRule = carrierRules.find(r => normalize(r.name).includes("correios"));
-                                    if (anyCorreiosRule) logoUrl = anyCorreiosRule.logoUrl;
-                                }
-                            }
-                            else if (bestRule) {
-                                displayName = bestRule.serviceName;
-                            }
+                            else if (bestRule) { displayName = bestRule.serviceName; }
 
-                            // --- CÁLCULO DE DIAS ---
                             let additionalDays = 0;
                             const ruleForDays = carrierRules.find(r => {
                                 const configService = normalize(r.serviceName);
@@ -650,13 +665,7 @@ export default function ProductDetails() {
                             if (ruleForDays) additionalDays = ruleForDays.additionalDays || 0;
 
                             let finalDays = parseInt(opt.delivery_time) || 0;
-                            
-                            // LÓGICA DE MANUSEIO:
-                            // Só soma handlingDays se NÃO for local.
-                            if (!isLocal) {
-                                finalDays += handlingDays;
-                            }
-                            
+                            if (!isLocal) finalDays += handlingDays;
                             finalDays += additionalDays;
 
                             return (
@@ -665,7 +674,6 @@ export default function ProductDetails() {
                                     onClick={() => setShipping({...opt, delivery_time: finalDays})} 
                                     className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer text-xs ${isSelected ? 'border-blue-500 bg-blue-50/50' : 'border-gray-100'}`}
                                 >
-                                    {/* --- EXIBIÇÃO DO LOGO --- */}
                                     {logoUrl ? (
                                         <img src={logoUrl} alt={displayName} className="w-8 h-8 object-contain mix-blend-multiply" />
                                     ) : (
@@ -673,14 +681,9 @@ export default function ProductDetails() {
                                             <Truck size={16} className="text-gray-400" />
                                         </div>
                                     )}
-
                                     <div className="flex flex-col flex-1">
-                                        <span className="font-bold text-gray-700 uppercase">
-                                            {displayName}
-                                        </span>
-                                        <span className="text-[10px] text-gray-400 font-medium">
-                                            Em até {finalDays} dias úteis
-                                        </span>
+                                        <span className="font-bold text-gray-700 uppercase">{displayName}</span>
+                                        <span className="text-[10px] text-gray-400 font-medium">Em até {finalDays} dias úteis</span>
                                     </div>
                                     <span className="font-black text-gray-900 self-center">
                                         {parseFloat(opt.price) === 0 ? 'Grátis' : formatCurrency(opt.price)}
@@ -692,9 +695,17 @@ export default function ProductDetails() {
                 )}
             </div>
 
-            <button onClick={handleBuyNow} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2">
-                Comprar Agora <ArrowRight size={18} />
-            </button>
+            {/* --- ÁREA DE BOTÕES DE AÇÃO --- */}
+            <div className="flex flex-col gap-3">
+                <button onClick={handleBuyNow} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2">
+                    Comprar Agora <ArrowRight size={18} />
+                </button>
+                
+                <button onClick={handleAddToCart} className="w-full bg-white border-2 border-orange-600 text-orange-600 hover:bg-orange-50 py-3 rounded-xl font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+                    Adicionar ao Carrinho <ShoppingCart size={18} />
+                </button>
+            </div>
+            
             <MercadoPagoTrust />
           </div>
         </div>
@@ -736,13 +747,29 @@ export default function ProductDetails() {
                   <Link 
                     to={`/product/${rel.slug.current}`} 
                     key={rel._id} 
-                    className="min-w-[145px] md:min-w-[180px] w-[145px] md:w-[180px] snap-start bg-white p-3 rounded-lg border border-gray-100 hover:shadow-xl hover:border-gray-300 transition-all group flex flex-col"
+                    className="min-w-[145px] md:min-w-[180px] w-[145px] md:w-[180px] snap-start bg-white p-3 rounded-lg border border-gray-100 hover:shadow-xl hover:border-gray-300 transition-all group flex flex-col relative"
                   >
                     <div className="h-32 w-full mb-3 flex items-center justify-center bg-white p-2 rounded relative">
                       {rel.imageUrl ? (
                         <img src={`${rel.imageUrl}?w=300`} alt={rel.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-300" />
                       ) : <Package className="text-gray-200"/>}
+
+                      {/* --- BOTÃO QUICK ADD (Mobile Fixed / Desktop Hover) --- */}
+                       <button 
+                            onClick={(e) => handleQuickAdd(e, rel)}
+                            className="absolute bottom-2 right-2 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg 
+                                       lg:transform lg:translate-y-10 lg:opacity-0 lg:group-hover:translate-y-0 lg:group-hover:opacity-100 
+                                       opacity-100 translate-y-0
+                                       transition-all duration-300 hover:bg-orange-700 z-20"
+                            title="Adicionar ao Carrinho"
+                        >
+                            <div className="relative">
+                                <ShoppingBag size={14} />
+                                <Plus size={8} strokeWidth={4} className="absolute -top-1 -right-1 bg-white text-orange-600 rounded-full" />
+                            </div>
+                        </button>
                     </div>
+
                     <h4 className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" title={rel.title}>
                       {rel.title}
                     </h4>

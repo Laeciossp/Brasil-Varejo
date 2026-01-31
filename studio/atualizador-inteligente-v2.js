@@ -1,7 +1,7 @@
 const { createClient } = require('@sanity/client');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const axios = require('axios'); // Necessário para baixar fotos novas
+const axios = require('axios');
 const slugify = require('slugify');
 
 puppeteer.use(StealthPlugin());
@@ -17,7 +17,6 @@ const client = createClient({
 
 const generateKey = () => Math.random().toString(36).substring(2, 15);
 
-// --- FUNÇÃO DE UPLOAD (Reativada para novas variações) ---
 async function uploadMediaToSanity(mediaUrl) {
   if (!mediaUrl) return null;
   try {
@@ -31,12 +30,24 @@ async function uploadMediaToSanity(mediaUrl) {
   }
 }
 
-// --- FUNÇÃO DE RASPAGEM ---
+// --- FUNÇÃO DE RASPAGEM OTIMIZADA ---
 async function scrapeProductData(page, url) {
-    console.log(`   🔗 Acessando: ${url}`);
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    // console.log(`   🔗 Verificando: ${url}`);
+    try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    } catch (e) {
+        console.log(`      ⚠️ Erro ao carregar página: ${e.message}`);
+        return null;
+    }
 
     const data = await page.evaluate(() => {
+        // 0. DETECTOR DE ESTOQUE (CRÍTICO)
+        const bodyText = document.body.innerText.toUpperCase();
+        // Verifica textos comuns de falta de estoque
+        const isOutOfStock = bodyText.includes('SEM ESTOQUE') || 
+                             bodyText.includes('ESGOTADO') || 
+                             bodyText.includes('INDISPONÍVEL');
+
         // 1. Preço
         let priceElement = document.querySelector('.special-price .price');
         if (!priceElement) priceElement = document.querySelector('.regular-price .price');
@@ -45,17 +56,19 @@ async function scrapeProductData(page, url) {
         let priceText = priceElement ? priceElement.innerText.trim() : '0';
         let rawPrice = parseFloat(priceText.replace(/[^\d,.]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
 
-        // 2. Cor Principal & Imagem Principal (Caso precise criar a cor base)
-        let mainColor = 'Única';
+        // 2. Cor
+        let specificColor = 'Padrão';
         const tds = Array.from(document.querySelectorAll('#product-attribute-specs-table tr'));
         const colorRow = tds.find(tr => tr.innerText.includes('Cor'));
-        if (colorRow) mainColor = colorRow.querySelector('.data')?.innerText.trim();
+        if (colorRow) specificColor = colorRow.querySelector('.data')?.innerText.trim();
 
+        // 3. Imagem
         let mainImage = document.querySelector('.MagicToolboxMainContainer a')?.getAttribute('href');
 
-        // 3. Tamanhos
+        // 4. Tamanhos
         let sizes = [];
         try {
+            // Tenta pegar do JSON da página (mais confiável)
             const scripts = Array.from(document.querySelectorAll('script'));
             const match = scripts.find(s => s.innerText.includes('var spConfig'))?.innerText.match(/var spConfig = new Product.Config\((.*)\);/);
             if (match) {
@@ -64,17 +77,27 @@ async function scrapeProductData(page, url) {
                 if (sizeAttr) sizes = sizeAttr.options.map(o => o.label);
             }
         } catch (e) { }
-        if (sizes.length === 0) sizes = ['Único'];
 
-        // 4. Links de Variantes
+        // LÓGICA DE CORREÇÃO:
+        if (sizes.length === 0) {
+            if (isOutOfStock) {
+                // Se não achou tamanhos E está escrito sem estoque -> É VAZIO MESMO (DESATIVA)
+                sizes = []; 
+            } else {
+                // Se não achou tamanhos MAS NÃO está escrito sem estoque -> É ÚNICO (ATIVA)
+                sizes = ['Único'];
+            }
+        }
+
+        // 5. Links das Outras Cores (Variantes)
         const variantLinks = [];
-        const relatedItems = document.querySelectorAll('#block-related .item');
+        const relatedItems = document.querySelectorAll('#block-related .item'); // "CORES DISPONÍVEIS"
         relatedItems.forEach(item => {
             const linkEl = item.querySelector('a.product-image');
             if (linkEl) variantLinks.push({ url: linkEl.href });
         });
 
-        return { rawPrice, mainColor, mainImage, sizes, variantLinks };
+        return { rawPrice, specificColor, mainImage, sizes, variantLinks, isOutOfStock };
     });
 
     return data;
@@ -86,16 +109,17 @@ function calculatePrice(rawPrice) {
 
 // --- ROBÔ FULL SYNC ---
 async function startFullSync() {
-    console.log('🚀 Iniciando Atualizador (Modo Espelho Total)...');
+    console.log('🚀 Iniciando Atualizador Inteligente (Detector de Cores & Reposição)...');
 
-    const query = `*[_type == "product" && defined(sourceUrl) && isActive == true]{
-        _id, title, sourceUrl, variants, price
+    // QUERY ATUALIZADA: Pega ativos OU produtos da Sangue Latino inativos (para verificar se voltou estoque)
+    const query = `*[_type == "product" && defined(sourceUrl) && (isActive == true || brand match "Sangue Latino")]{
+        _id, title, sourceUrl, variants, price, isActive
     }`;
     
     let sanityProducts = [];
     try {
         sanityProducts = await client.fetch(query);
-        console.log(`📋 Lista: ${sanityProducts.length} produtos.`);
+        console.log(`📋 Lista: ${sanityProducts.length} produtos para verificar.`);
     } catch (e) { console.error(e); return; }
 
     const browser = await puppeteer.connect({ browserURL: 'http://127.0.0.1:9222', defaultViewport: null });
@@ -106,133 +130,114 @@ async function startFullSync() {
         console.log(`🔄 (${index + 1}/${sanityProducts.length}) ${product.title}`);
         
         try {
+            // A. Analisa a URL Principal (que pode ser a Marrom sem estoque)
             const mainData = await scrapeProductData(page, product.sourceUrl);
-            const calculatedPrice = calculatePrice(mainData.rawPrice);
             
+            if (!mainData) continue;
+
+            const calculatedPrice = calculatePrice(mainData.rawPrice);
             if (calculatedPrice <= 15) { 
-                console.log(`   ⛔ Preço inválido. Desativando.`);
+                console.log(`   ⛔ Preço inválido (R$ ${mainData.rawPrice}). Desativando.`);
                 await client.patch(product._id).set({ isActive: false }).commit();
                 continue;
             }
 
-            // --- A. MAPEAMENTO DO SITE (INVENTORY) ---
-            // inventory = { 'AZUL': { sizes: ['P', 'M'], imageUrl: 'http...' } }
+            // B. Mapeamento Geral do Site (Site Inventory)
             let siteInventory = {};
             
-            // Adiciona a cor principal
-            siteInventory[mainData.mainColor.toUpperCase()] = {
-                sizes: mainData.sizes,
-                imageUrl: mainData.mainImage // Guarda a URL da imagem caso precise criar
-            };
+            // Adiciona a cor principal SÓ SE tiver estoque
+            if (mainData.sizes && mainData.sizes.length > 0) {
+                siteInventory[mainData.specificColor.toUpperCase()] = {
+                    sizes: mainData.sizes,
+                    imageUrl: mainData.mainImage
+                };
+                console.log(`   ✅ Cor Principal (${mainData.specificColor}): Disponível.`);
+            } else {
+                console.log(`   ⛔ Cor Principal (${mainData.specificColor}): SEM ESTOQUE.`);
+            }
 
-            // Visita variantes para pegar tamanhos E imagens (para caso precise criar)
+            // C. Visita as variações (ex: Branca) para ver se tem estoque
             if (mainData.variantLinks.length > 0) {
-                process.stdout.write(`   🔎 Mapeando fornecedor: `);
+                process.stdout.write(`   🔎 Verificando outras cores: `);
+                
                 for (const variantLink of mainData.variantLinks) {
-                    try {
-                         await page.goto(variantLink.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                         const variantData = await page.evaluate(() => {
-                            let specificColor = 'Variante';
-                            const tds = Array.from(document.querySelectorAll('#product-attribute-specs-table tr'));
-                            const colorRow = tds.find(tr => tr.innerText.includes('Cor'));
-                            if (colorRow) specificColor = colorRow.querySelector('.data')?.innerText.trim();
-                            
-                            let hdImage = document.querySelector('.MagicToolboxMainContainer a')?.getAttribute('href');
+                    // Evita re-visitar a mesma URL se já estivermos nela
+                    if (variantLink.url === product.sourceUrl) continue;
 
-                            let sizes = [];
-                            try {
-                                const scripts = Array.from(document.querySelectorAll('script'));
-                                const match = scripts.find(s => s.innerText.includes('var spConfig'))?.innerText.match(/var spConfig = new Product.Config\((.*)\);/);
-                                if (match) {
-                                    const json = JSON.parse(match[1]);
-                                    const sizeAttr = Object.values(json.attributes).find(a => a.label === 'Tamanho');
-                                    if (sizeAttr) sizes = sizeAttr.options.map(o => o.label);
-                                }
-                            } catch (e) { }
-                            if (sizes.length === 0) sizes = ['Único'];
-                            return { specificColor, sizes, hdImage };
-                         });
-                         
-                         siteInventory[variantData.specificColor.toUpperCase()] = {
+                    const variantData = await scrapeProductData(page, variantLink.url);
+                    
+                    if (variantData && variantData.sizes.length > 0) {
+                        // Se tem estoque, adiciona ao inventário
+                        siteInventory[variantData.specificColor.toUpperCase()] = {
                              sizes: variantData.sizes,
-                             imageUrl: variantData.hdImage
-                         };
-                         process.stdout.write(`[${variantData.specificColor}] `);
-                    } catch (err) {}
+                             imageUrl: variantData.mainImage // Usa a imagem dessa variação
+                        };
+                        process.stdout.write(`[✅ ${variantData.specificColor}] `);
+                    } else {
+                        // Se não tem estoque, ignora
+                        process.stdout.write(`[⛔ ${variantData?.specificColor || 'Desc'}] `);
+                    }
                 }
                 console.log(""); 
             }
 
-            // --- B. RECONSTRUÇÃO TOTAL (FULL SYNC) ---
-            console.log(`   🏗️ Reconstruindo variações...`);
+            // --- RECONSTRUÇÃO ---
+            // Se o inventário do site estiver vazio (nem marrom, nem branca, nada), desativa tudo.
+            if (Object.keys(siteInventory).length === 0) {
+                console.log(`   ⛔ NENHUMA cor disponível. Desativando produto.`);
+                await client.patch(product._id).set({ isActive: false, variants: [] }).commit();
+                continue; // Vai pro próximo
+            }
+
+            // Se chegou aqui, TEM alguma cor disponível. Vamos montar o Sanity.
+            console.log(`   🏗️ Montando variações válidas...`);
             let currentVariants = product.variants || [];
             let newSanityVariants = [];
 
-            // Iteramos sobre o SITE (Fonte da Verdade)
             for (const [colorName, colorData] of Object.entries(siteInventory)) {
                 
-                // 1. Tenta achar essa cor no Sanity atual
+                // Tenta reaproveitar dados antigos (imagem, chave)
                 let existingVariant = currentVariants.find(v => (v.colorName || 'Única').toUpperCase() === colorName);
                 
                 let imageAsset = null;
-
                 if (existingVariant) {
-                    // SE JÁ EXISTE: Mantém a imagem que você já tem (Preserva edições manuais)
-                    console.log(`      ✅ Cor Existente: ${colorName}`);
                     imageAsset = existingVariant.variantImage;
                 } else {
-                    // SE É NOVA: Faz upload da imagem descoberta
-                    console.log(`      ✨ NOVA COR DETECTADA: ${colorName} - Baixando foto...`);
+                    console.log(`      ✨ Baixando foto da nova cor: ${colorName}...`);
                     imageAsset = await uploadMediaToSanity(colorData.imageUrl);
                 }
 
-                // 2. Constrói os Tamanhos (Espelhando o Site)
                 const mappedSizes = colorData.sizes.map(siteSize => {
-                    // Tenta achar o tamanho antigo pra manter o ID (opcional, mas bom pra histórico)
                     const existingSize = existingVariant?.sizes?.find(s => s.size === siteSize);
-
-                    if (!existingSize) {
-                        console.log(`         ➕ Novo Tamanho: ${siteSize}`);
-                    }
-
                     return {
-                        _key: existingSize?._key || generateKey(), // Mantém chave ou cria nova
+                        _key: existingSize?._key || generateKey(),
                         size: siteSize,
                         price: calculatedPrice,
-                        stock: 10, // Regra de Estoque Padrão
+                        stock: 10,
                         sku: `${slugify(product.title).substring(0,10)}-${colorName}-${siteSize}`.toUpperCase()
                     };
                 });
 
-                // Adiciona ao novo array
                 newSanityVariants.push({
                     _key: existingVariant?._key || generateKey(),
                     _type: 'object',
-                    colorName: colorName.charAt(0) + colorName.slice(1).toLowerCase(), // Formata texto Bonito
+                    colorName: colorName.charAt(0) + colorName.slice(1).toLowerCase(),
                     variantImage: imageAsset,
                     sizes: mappedSizes
                 });
             }
 
-            // --- C. SALVAMENTO ---
-            // O newSanityVariants contém APENAS o que estava no site. 
-            // O que estava no Sanity e não no site foi ignorado (excluído).
-            
-            if (newSanityVariants.length === 0) {
-                console.log(`   ⛔ Produto ficou vazio. Desativando.`);
-                await client.patch(product._id).set({ isActive: false, variants: [] }).commit();
-            } else {
-                await client.patch(product._id)
-                    .set({ 
-                        variants: newSanityVariants,
-                        price: calculatedPrice
-                    })
-                    .commit();
-                console.log(`   💾 Sincronização completa!`);
-            }
+            await client.patch(product._id)
+                .set({ 
+                    variants: newSanityVariants,
+                    price: calculatedPrice,
+                    isActive: true // Garante que volta a ficar ativo se tiver estoque
+                })
+                .commit();
+            console.log(`   💾 Atualizado com ${newSanityVariants.length} cores ativas.`);
 
         } catch (err) {
-            console.error(`   ❌ Erro: ${err.message}`);
+            console.error(`   ❌ Erro crítico: ${err.message}`);
         }
     }
     console.log('\n🏁 Finalizado!');
