@@ -116,7 +116,7 @@ export default function ProductDetails() {
 
   const carouselRef = useRef(null);
 
-  // Estados para Swipe Mobile
+  // Estados para Swipe Mobile (Mantidos caso queira reativar no futuro, mas desligados no JSX)
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const minSwipeDistance = 50; 
@@ -347,10 +347,9 @@ export default function ProductDetails() {
       }
   };
 
+  // Funções de swipe mantidas no código, mas não vinculadas no JSX abaixo
   const onTouchStart = (e) => {
-    // Se tiver mais de 1 dedo (tentando dar zoom), ignora o swipe
     if (e.targetTouches.length > 1) return; 
-    
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
   }
@@ -389,9 +388,7 @@ export default function ProductDetails() {
           <div className="lg:w-3/5 p-6 border-r border-gray-50 bg-white group relative">
            <div 
                 className="aspect-square w-full flex items-center justify-center mb-4 relative overflow-hidden rounded-lg border border-gray-50 select-none"
-                onTouchStartCapture={onTouchStart}
-                onTouchMoveCapture={onTouchMove}
-                onTouchEndCapture={onTouchEnd}
+                // Handlers de touch removidos para evitar conflito com zoom
             >
                 {activeMedia && (
                 isVideo ? (
@@ -439,18 +436,20 @@ export default function ProductDetails() {
                     <>
                         <button 
                             onClick={(e) => { e.stopPropagation(); navigateImage('prev'); }}
-                            className="hidden lg:flex absolute left-4 top-1/2 -translate-y-1/2 z-20 
-                                       bg-crocus-deep text-white w-10 h-10 rounded-full items-center justify-center 
-                                       shadow-lg shadow-purple-900/20 opacity-0 group-hover:opacity-100 
+                            className="flex absolute left-2 lg:left-4 top-1/2 -translate-y-1/2 z-20 
+                                       bg-crocus-deep text-white w-8 h-8 lg:w-10 lg:h-10 rounded-full items-center justify-center 
+                                       shadow-lg shadow-purple-900/20 
+                                       opacity-100 lg:opacity-0 lg:group-hover:opacity-100 
                                        transition-all duration-300 hover:scale-110 hover:bg-purple-900"
                         >
                             <ChevronLeft size={20} strokeWidth={3} />
                         </button>
                         <button 
                             onClick={(e) => { e.stopPropagation(); navigateImage('next'); }}
-                            className="hidden lg:flex absolute right-4 top-1/2 -translate-y-1/2 z-20 
-                                       bg-crocus-deep text-white w-10 h-10 rounded-full items-center justify-center 
-                                       shadow-lg shadow-purple-900/20 opacity-0 group-hover:opacity-100 
+                            className="flex absolute right-2 lg:right-4 top-1/2 -translate-y-1/2 z-20 
+                                       bg-crocus-deep text-white w-8 h-8 lg:w-10 lg:h-10 rounded-full items-center justify-center 
+                                       shadow-lg shadow-purple-900/20 
+                                       opacity-100 lg:opacity-0 lg:group-hover:opacity-100 
                                        transition-all duration-300 hover:scale-110 hover:bg-purple-900"
                         >
                             <ChevronRight size={20} strokeWidth={3} />
