@@ -8,10 +8,9 @@ import {
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
 import { useZipCode } from '../context/ZipCodeContext';
-// Importação da biblioteca (SÓ PARA O MOBILE AGORA)
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
-// --- 1. COMPONENTE DE ZOOM NATIVO (O ANTIGO, PARA PC) ---
+// --- COMPONENTES AUXILIARES ---
 const ZoomImage = ({ src, alt }) => {
   const [zoomParams, setZoomParams] = useState({ show: false, x: 0, y: 0 });
   const imgRef = useRef(null);
@@ -47,7 +46,6 @@ const ZoomImage = ({ src, alt }) => {
   );
 };
 
-// --- SELO MERCADO PAGO ---
 const MercadoPagoTrust = () => (
   <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col items-center gap-2">
     <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
@@ -62,7 +60,6 @@ const MercadoPagoTrust = () => (
   </div>
 );
 
-// --- CONFIGURAÇÃO DO TEXTO RICO ---
 const myPortableTextComponents = {
   types: {
     htmlBlock: ({ value }) => {
@@ -111,23 +108,20 @@ export default function ProductDetails() {
   const [calculating, setCalculating] = useState(false);
   const [shippingOptions, setShippingOptions] = useState(null);
 
-  // --- ESTADOS PARA FRETE ---
   const [handlingDays, setHandlingDays] = useState(0);
   const [carrierRules, setCarrierRules] = useState([]);
 
   const carouselRef = useRef(null);
 
-  // Estados para Swipe Mobile 
+  // Estados para Swipe
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const minSwipeDistance = 50; 
 
-  // --- FUNÇÃO DE PROCESSAMENTO HÍBRIDA ---
   const processVariants = (rawVariants, productOldPrice) => {
     if (!rawVariants || !Array.isArray(rawVariants)) return [];
     
     const flatList = [];
-    
     rawVariants.forEach(item => {
         if (item.sizes && Array.isArray(item.sizes) && item.sizes.length > 0) {
             const groupImage = item.variantImage; 
@@ -172,24 +166,20 @@ export default function ProductDetails() {
       setLoading(true);
       try {
         const query = `{
-  "product": *[_type == "product" && slug.current == $slug && isActive == true][0]{
+          "product": *[_type == "product" && slug.current == $slug && isActive == true][0]{
             _id, title, brand, description, specifications, "slug": slug,
             categories[]->{_id, title},
             price, oldPrice,
             "images": images[]{ _key, _type, asset->{_id, url, mimeType} },
-            
             "rawVariants": variants[] {
               _key, variantName, price, oldPrice, stock, sku, colorName,
               "variantImage": variantImage.asset->{_id, url, mimeType},
               sizes[] { size, price, sku, stock }
             },
-
             freeShipping,
             logistics { width, height, length, weight }
           },
-          "settings": *[_type == "shippingSettings"][0]{
-            handlingTime
-          },
+          "settings": *[_type == "shippingSettings"][0]{ handlingTime },
           "carrierConfig": *[_type == "carrierConfig"][0]{
             carriers[]{ name, serviceName, additionalDays, isActive, logoUrl }
           }
@@ -228,11 +218,10 @@ export default function ProductDetails() {
             if (productData.images?.length > 0) setActiveMedia(productData.images[0]);
           }
 
-          // --- CARROSSEL AMPLO (50 ITENS) ---
           if (productData.categories && productData.categories.length > 0) {
             const catId = productData.categories[0]._id;
             const relatedQuery = `
-  *[_type == "product" && references($catId) && _id != $id && isActive == true][0...50] {
+              *[_type == "product" && references($catId) && _id != $id && isActive == true][0...50] {
                 _id, title, slug, price, oldPrice,
                 "imageUrl": images[0].asset->url,
                 variants 
@@ -326,7 +315,6 @@ export default function ProductDetails() {
     window.location.href = '/cart'; 
   };
 
-  // --- NOVA FUNÇÃO: ADICIONAR AO CARRINHO (Sem sair da tela) ---
   const handleAddToCart = () => {
     if (!product) return;
     if (!selectedShipping) return alert("Por favor, calcule o frete para adicionar.");
@@ -344,16 +332,13 @@ export default function ProductDetails() {
     alert("Produto adicionado ao carrinho!"); 
   };
 
-  // --- FUNÇÃO QUICK ADD PARA O CARROSSEL (Lógica inteligente) ---
   const handleQuickAdd = (e, prod) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // Se tiver variantes, vai pro detalhe
     if (prod.variants && prod.variants.length > 0) {
         navigate(`/product/${prod.slug.current}`);
     } else {
-        // Se for único, adiciona direto
         addItem({
             _id: prod._id,
             title: prod.title,
@@ -612,56 +597,44 @@ export default function ProductDetails() {
                             const apiNameNormal = normalize(opt.name);
                             const apiCompanyNormal = normalize(opt.company?.name);
 
-                            const hasActiveRule = carrierRules.some(r => {
-                                const configName = normalize(r.name);
-                                const configService = normalize(r.serviceName);
-                                const nameMatch = apiNameNormal.includes(configName) || apiCompanyNormal.includes(configName);
-                                const serviceMatch = configService.includes(apiNameNormal) || apiNameNormal.includes(configService);
-                                return (nameMatch || serviceMatch) && r.isActive === true;
-                            });
-                            return hasActiveRule;
+                            // --- FILTRO DE BLINDAGEM (SÓ CORREIOS) ---
+                            const isSedex = apiNameNormal.includes('sedex');
+                            const isPac = apiNameNormal.includes('pac');
+                            const isCorreios = apiCompanyNormal.includes('correios');
+
+                            // SÓ PASSA SE FOR CORREIOS (OU SERVIÇOS DE CORREIOS)
+                            return isSedex || isPac || isCorreios;
 
                         }).map((opt, idx) => {
                             const isSelected = selectedShipping?.name === opt.name && selectedShipping?.price === opt.price;
                             const apiNameNormal = normalize(opt.name);
-                            const apiCompanyNormal = normalize(opt.company?.name);
                             const cleanCurrentCep = cep.replace(/\D/g, '');
                             const isLocal = cleanCurrentCep === '43850000';
 
-                            let bestRule = carrierRules.find(r => {
-                                const configService = normalize(r.serviceName);
-                                return configService.includes(apiNameNormal) || apiNameNormal.includes(configService);
-                            });
-
-                            if (!bestRule) {
-                                bestRule = carrierRules.find(r => {
-                                    const configName = normalize(r.name);
-                                    return apiNameNormal.includes(configName) || apiCompanyNormal.includes(configName);
-                                });
-                            }
+                            // Tenta achar regra SÓ PARA PEGAR O LOGO (Sem filtrar)
+                            const anyCorreiosRule = carrierRules.find(r => normalize(r.name).includes("correios"));
+                            let logoUrl = anyCorreiosRule?.logoUrl;
 
                             let displayName = opt.name;
-                            let logoUrl = bestRule?.logoUrl;
 
-                            if (isLocal) { displayName = "Expresso Palastore ⚡"; } 
-                            else if (apiNameNormal.includes("pac")) { displayName = "PAC (Econômico)"; }
-                            else if (apiNameNormal.includes("sedex")) { displayName = "SEDEX (Expresso)"; }
-                            else if (apiCompanyNormal.includes("correios") && !logoUrl) {
-                                const anyCorreiosRule = carrierRules.find(r => normalize(r.name).includes("correios"));
-                                if (anyCorreiosRule) logoUrl = anyCorreiosRule.logoUrl;
+                            // --- NOMES PADRONIZADOS ---
+                            if (isLocal) {
+                                displayName = "Expresso Palastore ⚡";
+                            } 
+                            else if (apiNameNormal.includes("pac")) {
+                                displayName = "PAC (Econômico)";
                             }
-                            else if (bestRule) { displayName = bestRule.serviceName; }
+                            else if (apiNameNormal.includes("sedex")) {
+                                displayName = "SEDEX (Expresso)";
+                            }
 
+                            // --- DIAS ADICIONAIS ---
                             let additionalDays = 0;
-                            const ruleForDays = carrierRules.find(r => {
-                                const configService = normalize(r.serviceName);
-                                if (apiNameNormal.includes("pac") && configService.includes("pac")) return true;
-                                if (apiNameNormal.includes("sedex") && configService.includes("sedex")) return true;
-                                return configService.includes(apiNameNormal) || apiNameNormal.includes(configService);
-                            });
-                            if (ruleForDays) additionalDays = ruleForDays.additionalDays || 0;
+                            // Se tiver config de dias extras nos correios, aplica
+                            if (anyCorreiosRule) additionalDays = anyCorreiosRule.additionalDays || 0;
 
                             let finalDays = parseInt(opt.delivery_time) || 0;
+                            // Só soma handling se não for local
                             if (!isLocal) finalDays += handlingDays;
                             finalDays += additionalDays;
 
@@ -692,7 +665,6 @@ export default function ProductDetails() {
                 )}
             </div>
 
-            {/* --- ÁREA DE BOTÕES DE AÇÃO --- */}
             <div className="flex flex-col gap-3">
                 <button onClick={handleBuyNow} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2">
                     Comprar Agora <ArrowRight size={18} />
@@ -750,13 +722,27 @@ export default function ProductDetails() {
                       {rel.imageUrl ? (
                         <img src={`${rel.imageUrl}?w=300`} alt={rel.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-300" />
                       ) : <Package className="text-gray-200"/>}
+
+                      {/* --- BOTÃO QUICK ADD (Mobile Fixed / Desktop Hover) --- */}
+                       <button 
+                            onClick={(e) => handleQuickAdd(e, rel)}
+                            className="absolute bottom-2 right-2 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg 
+                                       lg:transform lg:translate-y-10 lg:opacity-0 lg:group-hover:translate-y-0 lg:group-hover:opacity-100 
+                                       opacity-100 translate-y-0
+                                       transition-all duration-300 hover:bg-orange-700 z-20"
+                            title="Adicionar ao Carrinho"
+                        >
+                            <div className="relative">
+                                <ShoppingBag size={14} />
+                                <Plus size={8} strokeWidth={4} className="absolute -top-1 -right-1 bg-white text-orange-600 rounded-full" />
+                            </div>
+                        </button>
                     </div>
 
                     <h4 className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" title={rel.title}>
                       {rel.title}
                     </h4>
                     
-                    {/* AQUI ESTÁ A CORREÇÃO DO CARD */}
                     <div className="mt-auto pt-2 border-t border-gray-50 flex justify-between items-end">
                         <div className="flex flex-col">
                             {relOldPrice > relPrice && (
@@ -769,13 +755,12 @@ export default function ProductDetails() {
                             </span>
                             <div className="mt-1 flex flex-col gap-0.5">
                                 <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span>
-                                {/* --- RECUPERADO: EM ATÉ 12X --- */}
                                 <span className="text-[10px] text-gray-400 font-medium">Em até 12x</span>
                             </div>
                         </div>
 
-                        {/* --- BOTÃO QUICK ADD (No Rodapé) --- */}
-                        <button 
+                         {/* BOTÃO QUICK ADD (RODAPÉ) */}
+                         <button 
                             onClick={(e) => handleQuickAdd(e, rel)}
                             className="mb-1 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-orange-700 transition-colors flex-shrink-0 ml-2"
                             title="Adicionar ao Carrinho"
