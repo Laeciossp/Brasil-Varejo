@@ -107,6 +107,7 @@ export default function ProductDetails() {
   const [calculating, setCalculating] = useState(false);
   const [shippingOptions, setShippingOptions] = useState(null);
 
+  // AQUI FICA O VALOR REAL DE MANUSEIO (Ex: 4 dias)
   const [handlingDays, setHandlingDays] = useState(0);
 
   const carouselRef = useRef(null);
@@ -175,6 +176,7 @@ export default function ProductDetails() {
         const data = await client.fetch(query, { slug });
 
         if (data && data.product) {
+          // SALVA OS DIAS DE MANUSEIO DO SANITY
           setHandlingDays(Number(data.settings?.handlingTime) || 0);
 
           const productData = data.product;
@@ -204,7 +206,6 @@ export default function ProductDetails() {
             if (productData.images?.length > 0) setActiveMedia(productData.images[0]);
           }
 
-          // BUSCA RELACIONADOS (INCLUINDO LOGISTICS PARA O QUICK ADD FUNCIONAR)
           if (productData.categories && productData.categories.length > 0) {
             const catId = productData.categories[0]._id;
             const relatedQuery = `
@@ -294,6 +295,8 @@ export default function ProductDetails() {
              };
           });
 
+          candidates.sort((a, b) => a.price - b.price);
+
           let finalOptions = [];
 
           if (isLocal) {
@@ -303,7 +306,7 @@ export default function ProductDetails() {
              );
 
              if (!sedexOption) {
-                 candidates.sort((a, b) => b.price - a.price);
+                 candidates.sort((a, b) => b.price - a.price); 
                  sedexOption = candidates[0];
              }
 
@@ -328,7 +331,7 @@ export default function ProductDetails() {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    delivery_time: bestEconomy.days + handlingDays, 
+                    delivery_time: bestEconomy.days + handlingDays, // SOMA AQUI
                     company: "Correios/Jadlog"
                 });
              }
@@ -336,7 +339,7 @@ export default function ProductDetails() {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    delivery_time: bestExpress.days + handlingDays, 
+                    delivery_time: bestExpress.days + handlingDays, // SOMA AQUI
                     company: "Correios/Jadlog"
                 });
              }
@@ -353,6 +356,7 @@ export default function ProductDetails() {
     }
   };
 
+  // --- PASSAGEM DE BASTÃO: INCLUI 'handlingTime' NO ITEM DO CARRINHO ---
   const createCartItem = () => {
       const finalSku = selectedVariant ? (selectedVariant.sku || selectedVariant._key) : product._id;
       return {
@@ -365,7 +369,9 @@ export default function ProductDetails() {
         sku: finalSku,
         color: selectedVariant ? selectedVariant.color : null,
         size: selectedVariant ? selectedVariant.size : null,
+        
         // DADOS IMPORTANTES DE FRETE AQUI:
+        handlingTime: handlingDays, // <--- AQUI ESTÁ A CORREÇÃO
         width: product.logistics?.width || 15,
         height: product.logistics?.height || 15,
         length: product.logistics?.length || 15,
@@ -401,7 +407,8 @@ export default function ProductDetails() {
             image: prod.imageUrl,
             sku: prod._id,
             variantName: null,
-            // AGORA O QUICK ADD ENVIA OS DADOS REAIS:
+            // ENVIA OS DADOS TAMBÉM NO QUICK ADD
+            handlingTime: handlingDays, // Usa o que carregou na página pai
             width: prod.logistics?.width || 15,
             height: prod.logistics?.height || 15,
             length: prod.logistics?.length || 15,

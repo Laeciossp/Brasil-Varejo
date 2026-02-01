@@ -12,7 +12,7 @@ import { formatCurrency } from '../lib/utils';
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  useCdn: false, // Importante: false para pegar a config de dias atualizada
+  useCdn: false,
   apiVersion: '2023-05-03',
   token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
 });
@@ -37,9 +37,6 @@ export default function Cart() {
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   const [shippingOptions, setShippingOptions] = useState([]); 
   
-  // Variável para armazenar os dias extras (Manuseio)
-  const [handlingDays, setHandlingDays] = useState(0);
-
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   const [customerName, setCustomerName] = useState('');
@@ -56,27 +53,11 @@ export default function Cart() {
 
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // 1. BUSCAR CONFIGURAÇÃO DE DIAS DE MANUSEIO (GLOBAL)
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const query = `*[_type == "shippingSettings"][0]`;
-        const settings = await client.fetch(query);
-        const days = settings?.handlingTime ? Number(settings.handlingTime) : 0;
-        console.log("Dias de Manuseio Carregados:", days);
-        setHandlingDays(days);
-      } catch (e) { 
-        console.error("Erro ao buscar dias de manuseio:", e);
-      }
-    };
-    fetchSettings();
-  }, []);
-
   useEffect(() => {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- 2. CÁLCULO DE FRETE (USANDO DADOS PASSADOS NO CLIQUE + MANUSEIO) ---
+  // --- CÁLCULO DE FRETE QUE LÊ OS DADOS DO ITEM ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -90,17 +71,29 @@ export default function Cart() {
       
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
+        
+        // 1. TENTA LER O MANUSEIO DO PRÓPRIO ITEM (Prioridade Total)
+        // Se o item veio do novo ProductDetails, ele tem handlingTime.
+        let extraDays = items[0]?.handlingTime;
+
+        // Fallback: Se for undefined (item antigo), tenta buscar do Sanity na hora
+        if (extraDays === undefined || extraDays === null) {
+             try {
+                const settings = await client.fetch(`*[_type == "shippingSettings"][0]`);
+                extraDays = settings?.handlingTime ? Number(settings.handlingTime) : 0;
+             } catch (e) { extraDays = 0; }
+        }
+        
         const response = await fetch(`${baseUrl}/shipping`, { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             from: { postal_code: "43805000" }, 
             to: { postal_code: targetZip },
-            // AQUI ESTÁ A CHAVE: Usamos o item que veio do "Comprar Agora"
-            // Ele já traz width, height, etc.
+            // Mapeia os itens usando os dados que vieram do ProductDetails
             products: items.map(p => ({
               id: p._id,
-              width: Number(p.width) || 15, // Fallback só se der muito errado
+              width: Number(p.width) || 15,
               height: Number(p.height) || 15,
               length: Number(p.length) || 15,
               weight: Number(p.weight) || 0.5,
@@ -116,7 +109,6 @@ export default function Cart() {
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
 
-          // Padroniza valores
           const candidates = rawOptions.map(opt => {
              let val = opt.custom_price || opt.price || 0;
              if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
@@ -133,7 +125,7 @@ export default function Cart() {
           let finalOptions = [];
 
           if (isLocal) {
-             // Regra Palastore (Local)
+             // Palastore
              const paidOptions = candidates.filter(c => c.price > 0);
              paidOptions.sort((a, b) => a.price - b.price);
              const cheapest = paidOptions.length > 0 ? paidOptions[0] : (candidates[0] || {price: 20});
@@ -141,14 +133,12 @@ export default function Cart() {
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
                 price: cheapest.price, 
-                delivery_time: 5, // Fixo Local
+                delivery_time: 5, 
                 company: "Própria"
              });
 
           } else {
-             // Regra Nacional (PAC/SEDEX)
-             // ONDE A MÁGICA ACONTECE: SOMA O handlingDays
-             
+             // Nacional (SOMA O EXTRA DAYS AQUI)
              const bestEconomy = candidates.find(o => 
                 o.name.toLowerCase().includes('pac') || 
                 o.name.toLowerCase().includes('econômico') || 
@@ -164,8 +154,7 @@ export default function Cart() {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    // AQUI: Dias da API + Dias do Sanity
-                    delivery_time: bestEconomy.days + handlingDays, 
+                    delivery_time: bestEconomy.days + extraDays, // SOMA OBRIGATÓRIA
                     company: "Correios"
                 });
              }
@@ -174,8 +163,7 @@ export default function Cart() {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    // AQUI: Dias da API + Dias do Sanity
-                    delivery_time: bestExpress.days + handlingDays, 
+                    delivery_time: bestExpress.days + extraDays, // SOMA OBRIGATÓRIA
                     company: "Correios"
                 });
              }
@@ -183,7 +171,6 @@ export default function Cart() {
 
           setShippingOptions(finalOptions);
           
-          // Auto-seleciona a primeira opção
           if (finalOptions.length > 0) {
              setShipping(finalOptions[0]);
           } else {
@@ -199,7 +186,7 @@ export default function Cart() {
     
     recalculate();
     
-  }, [customer.activeAddressId, items.length, globalCep, handlingDays]); // Recalcula se handlingDays mudar
+  }, [customer.activeAddressId, items.length, globalCep]);
 
   const handleSaveAddress = () => {
     if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
@@ -243,7 +230,7 @@ export default function Cart() {
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: `Venda Site (Manuseio: ${handlingDays} dias)`
+        internalNotes: `Venda Site (Prazo: ${selectedShipping.delivery_time} dias)`
       };
 
       const createdOrder = await client.create(orderDoc);
