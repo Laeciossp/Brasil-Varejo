@@ -85,11 +85,13 @@ export default function Cart() {
              }
         }
         
-        // CÁLCULO SEGURO DO MANUSEIO
+        // CÁLCULO SEGURO DO MANUSEIO COM FALLBACK 4
         const maxHandlingTime = items.reduce((max, item) => {
-             const h = parseInt(item.handlingTime) || parseInt(handlingToAdd) || 0;
+             const h = parseInt(item.handlingTime) || parseInt(handlingToAdd) || 4; // Fallback 4
              return Math.max(max, h);
-        }, 0);
+        }, 4); // Começa em 4
+
+        const postingDays = 1; // Dia de postagem
 
         const response = await fetch(`${baseUrl}/shipping`, { 
           method: 'POST',
@@ -130,7 +132,6 @@ export default function Cart() {
 
           if (isLocal) {
              // === REGRA LOCAL (PALASTORE) ===
-             // Busca a opção mais barata que NÃO SEJA ZERO
              const paidOptions = candidates.filter(c => c.price > 0.01);
              const bestLocal = paidOptions.length > 0 ? paidOptions[0] : candidates[0];
              
@@ -143,7 +144,7 @@ export default function Cart() {
                  });
              }
           } else {
-             // === REGRA NACIONAL (PAC/SEDEX + MANUSEIO) ===
+             // === REGRA NACIONAL (PAC/SEDEX + MANUSEIO + POSTAGEM) ===
              
              const bestEconomy = candidates.find(o => 
                 o.cleanName.includes('pac') || 
@@ -160,7 +161,7 @@ export default function Cart() {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    delivery_time: parseInt(bestEconomy.days) + maxHandlingTime, // SOMA OBRIGATÓRIA
+                    delivery_time: parseInt(bestEconomy.days) + maxHandlingTime + postingDays,
                     company: "Correios"
                 });
              }
@@ -169,7 +170,7 @@ export default function Cart() {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    delivery_time: parseInt(bestExpress.days) + maxHandlingTime, // SOMA OBRIGATÓRIA
+                    delivery_time: parseInt(bestExpress.days) + maxHandlingTime + postingDays,
                     company: "Correios"
                 });
              }
@@ -177,7 +178,6 @@ export default function Cart() {
 
           setShippingOptions(finalOptions);
           
-          // Mantém a seleção anterior se ainda existir
           if (finalOptions.length > 0) {
              const currentName = selectedShipping?.name;
              const sameOption = finalOptions.find(o => o.name === currentName);

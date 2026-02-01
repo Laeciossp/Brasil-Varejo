@@ -108,7 +108,7 @@ export default function ProductDetails() {
   const [shippingOptions, setShippingOptions] = useState(null);
 
   // --- PRAZO FLEXÍVEL ---
-  const [handlingDays, setHandlingDays] = useState(0);
+  const [handlingDays, setHandlingDays] = useState(4); // Padrão 4 para garantir
 
   const carouselRef = useRef(null);
   const [touchStart, setTouchStart] = useState(null);
@@ -176,8 +176,10 @@ export default function ProductDetails() {
         const data = await client.fetch(query, { slug });
 
         if (data && data.product) {
-          // Garante que é número
-          setHandlingDays(parseInt(data.settings?.handlingTime) || 0);
+          // SE O SANITY RETORNAR ALGO, USA. SE NÃO, MANTÉM O 4 FIXO.
+          if (data.settings?.handlingTime) {
+             setHandlingDays(parseInt(data.settings.handlingTime));
+          }
 
           const productData = data.product;
           const processedVariants = processVariants(productData.rawVariants, productData.oldPrice);
@@ -285,7 +287,7 @@ export default function ProductDetails() {
       if (Array.isArray(rawOptions) && rawOptions.length > 0) {
           const isLocal = cleanCep === '43850000'; 
 
-          // PREPARAÇÃO: Ordena pelo menor preço
+          // 1. NORMALIZA E ORDENA POR PREÇO
           const candidates = rawOptions.map(opt => {
              let p = opt.custom_price || opt.price || 0;
              if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
@@ -295,18 +297,17 @@ export default function ProductDetails() {
                days: parseInt(opt.delivery_time) || 0,
                cleanName: (opt.name || '').toLowerCase()
              };
-          }).sort((a, b) => a.price - b.price);
+          }).sort((a, b) => a.price - b.price); // Mais barato primeiro
 
           let finalOptions = [];
           
           // CONVERTE O MANUSEIO PARA NÚMERO (SEGURANÇA)
-          const extraDays = parseInt(handlingDays) || 0;
+          const extraDays = parseInt(handlingDays) || 4; // Fallback 4
+          const postingDays = 1; // Dia da postagem ("dia + 8")
 
           if (isLocal) {
              // === REGRA LOCAL (PALASTORE) ===
-             // Pega a opção mais barata QUE CUSTE MAIS QUE ZERO (evita "Retirada" de 0 reais)
              const paidOptions = candidates.filter(c => c.price > 0.01);
-             // Se não tiver nenhuma paga, pega a primeira (mesmo que seja 0, fazer o quê)
              const bestLocal = paidOptions.length > 0 ? paidOptions[0] : candidates[0];
              
              if (bestLocal) {
@@ -318,16 +319,14 @@ export default function ProductDetails() {
                  });
              }
           } else {
-             // === REGRA NACIONAL (PAC/SEDEX + MANUSEIO) ===
+             // === REGRA NACIONAL (PAC/SEDEX + MANUSEIO + POSTAGEM) ===
              
-             // 1. Pega APENAS o melhor PAC
              const bestEconomy = candidates.find(o => 
                 o.cleanName.includes('pac') || 
                 o.cleanName.includes('econômico') || 
                 o.cleanName.includes('normal')
              );
              
-             // 2. Pega APENAS o melhor SEDEX
              const bestExpress = candidates.find(o => 
                 o.cleanName.includes('sedex') || 
                 o.cleanName.includes('expresso')
@@ -337,7 +336,7 @@ export default function ProductDetails() {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    delivery_time: parseInt(bestEconomy.days) + extraDays, // SOMA OBRIGATÓRIA
+                    delivery_time: parseInt(bestEconomy.days) + extraDays + postingDays, 
                     company: "Correios"
                 });
              }
@@ -346,7 +345,7 @@ export default function ProductDetails() {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    delivery_time: parseInt(bestExpress.days) + extraDays, // SOMA OBRIGATÓRIA
+                    delivery_time: parseInt(bestExpress.days) + extraDays + postingDays,
                     company: "Correios"
                 });
              }
