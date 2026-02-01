@@ -9,7 +9,7 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CONFIGURAÇÃO SANITY ---
+// --- CONFIGURAÇÃO DO SANITY ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -38,7 +38,11 @@ export default function Cart() {
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   
   const [showAddressForm, setShowAddressForm] = useState(false);
+  // Estado para os campos de endereço
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
+  
+  // Estado para Nome e CPF (Edição Manual)
+  const [customerName, setCustomerName] = useState('');
   
   const { 
     items, removeItem, updateQuantity, selectedShipping, setShipping,
@@ -50,9 +54,7 @@ export default function Cart() {
   const totalFinal = getTotalPrice();
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // --- DADOS DO CLIENTE (MANUAL + AUTOMÁTICO) ---
-  const [customerName, setCustomerName] = useState('');
-  
+  // Preencher Nome Automaticamente se Logado
   useEffect(() => {
     if (user && !customerName) {
         setCustomerName(user.fullName || '');
@@ -130,74 +132,72 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   };
 
-  // --- CHECKOUT (AQUI ESTÁ A CORREÇÃO PRINCIPAL) ---
+  // --- FINALIZAR COMPRA (CORRIGIDO) ---
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login para continuar.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
-    if (!customer.document) return alert("Informe o CPF para a Nota Fiscal.");
-    if (!customerName) return alert("Informe seu nome.");
+    if (!customer.document) return alert("Por favor, preencha o CPF.");
+    if (!customerName) return alert("Por favor, preencha seu Nome.");
 
     setLoading(true);
 
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      // 1. DADOS DO CLIENTE (ORGANIZADOS)
+      // 1. MONTAR OBJETO DO CLIENTE (Limpo)
       const cleanCustomer = {
         name: customerName,
         email: user.primaryEmailAddress?.emailAddress || "",
-        cpf: customer.document, // CPF vai aqui dentro
+        cpf: customer.document, // CPF vai DENTRO de customer
         phone: ""
       };
 
-      // 2. ITENS (GARANTINDO NOME)
-      const sanitizedItems = items.map(item => ({
-         _key: Math.random().toString(36).substring(7),
-         productName: item.title || item.name || "Produto Sem Nome", // Fallback triplo
-         variantName: item.variantName || "Padrão",
-         color: item.color || "",
-         size: item.size || "",
-         sku: item.sku || item._id,
-         quantity: item.quantity,
-         price: item.price,
-         imageUrl: item.image || "",
-         product: { _type: 'reference', _ref: item._id }
-      }));
-
-      // 3. ENDEREÇO (FORMATO DO SCHEMA)
-      const finalAddress = {
+      // 2. MONTAR OBJETO DE ENDEREÇO (Limpo)
+      const cleanAddress = {
         zip: activeAddress.zip,
         street: activeAddress.street,
         number: activeAddress.number,
-        complement: activeAddress.complement || "",
+        complement: activeAddress.complement || "", // Garante string vazia se nulo
         neighborhood: activeAddress.neighborhood,
         city: activeAddress.city,
         state: activeAddress.state
       };
 
-      // 4. CRIAÇÃO DO PEDIDO (SANITY)
+      // 3. MONTAR ITENS (Garantindo que tenham nome)
+      const sanitizedItems = items.map(item => ({
+         _key: Math.random().toString(36).substring(7),
+         productName: item.title || item.name || "Produto Sem Nome", // Fallback triplo
+         variantName: item.variantName || "Padrão", 
+         color: item.color || "",
+         size: item.size || "",
+         sku: item.sku || item._id,
+         quantity: item.quantity,
+         price: item.price,
+         imageUrl: item.image || "", 
+         product: { _type: 'reference', _ref: item._id }
+      }));
+
+      // 4. CRIAÇÃO DO PEDIDO NO SANITY (Payload Perfeito)
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
         status: 'pending',
-        customer: cleanCustomer, // Manda o objeto completo
+        customer: cleanCustomer, // Manda o objeto Customer
         items: sanitizedItems,
-        
-        // Manda o endereço para os DOIS campos (Entrega e Faturamento)
-        shippingAddress: finalAddress,
-        billingAddress: finalAddress,
-        
+        shippingAddress: cleanAddress, // Manda o objeto Endereço
+        billingAddress: cleanAddress,  // Duplica para Faturamento
         carrier: selectedShipping.name,
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Pedido via Site - Dados Verificados"
+        internalNotes: "Venda Site - Correção Final"
       };
 
       console.log("Enviando Pedido:", orderDoc);
+      // Escreve no Sanity
       await client.create(orderDoc);
 
-      // 5. WORKER DE PAGAMENTO
+      // 5. CHAMADA DE PAGAMENTO (Worker)
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
@@ -207,7 +207,7 @@ export default function Cart() {
             shipping: parseFloat(selectedShipping.price), 
             email: cleanCustomer.email, 
             tipoPagamento, 
-            shippingAddress: finalAddress,
+            shippingAddress: cleanAddress,
             customerDocument: cleanCustomer.cpf,
             totalAmount: totalFinal,
             orderId: orderNumber 
@@ -220,8 +220,8 @@ export default function Cart() {
         throw new Error(JSON.stringify(data.details || data.error));
       }
 
+      // 6. REDIRECIONAR
       clearCart();
-      
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
         mp.checkout({ preference: { id: data.id_preferencia } }).open(); 
@@ -242,7 +242,7 @@ export default function Cart() {
       <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6">
         <ShoppingCart size={40} className="text-gray-300" />
       </div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">Seu carrinho está vazio</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-2">Carrinho Vazio</h2>
       <Link to="/" className="bg-gray-900 text-white px-8 py-3 rounded-lg font-bold">Comprar</Link>
     </div>
   );
@@ -318,19 +318,18 @@ export default function Cart() {
                     ))}
                 </div>
 
+                {/* DADOS PARA NOTA FISCAL (NOME E CPF) */}
                 <div className="pt-4 border-t space-y-3">
                     <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados para Nota</h2>
-                    
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome Completo</label>
                         <input 
-                            placeholder="Seu Nome" 
+                            placeholder="Seu Nome Completo" 
                             value={customerName} 
                             onChange={e => setCustomerName(e.target.value)}
                             className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-orange-500"
                         />
                     </div>
-
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase block mb-1">CPF / CNPJ</label>
                         <input 
@@ -344,7 +343,7 @@ export default function Cart() {
             </div>
           </div>
 
-          {/* RESUMO */}
+          {/* RESUMO E PAGAMENTO */}
           <div className="lg:w-[380px] h-fit sticky top-6">
             <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
                 <h3 className="text-lg font-bold mb-6">Resumo</h3>
