@@ -26,7 +26,8 @@ export default {
       },
       initialValue: 'pending'
     },
-    // --- CAMPOS FANTASMAS (Para não dar erro com pedidos velhos) ---
+    
+    // --- CAMPOS OCULTOS/LEGADO ---
     { name: 'cpf', type: 'string', hidden: true },
     { name: 'customerEmail', type: 'string', hidden: true },
     { name: 'customerDocument', type: 'string', hidden: true },
@@ -34,7 +35,7 @@ export default {
     { name: 'alias', type: 'string', hidden: true },
     { name: 'id', type: 'string', hidden: true },
     
-    // --- DADOS REAIS ---
+    // --- DADOS DO CLIENTE ---
     {
       name: 'customer',
       title: 'Cliente',
@@ -47,6 +48,8 @@ export default {
         { name: 'phone', type: 'string', title: 'Telefone' }
       ]
     },
+
+    // --- ITENS DO PEDIDO ---
     {
       name: 'items',
       title: 'Itens',
@@ -71,27 +74,59 @@ export default {
         }
       ]
     },
+
+    // --- LOGÍSTICA E ENTREGA ---
+    {
+      name: 'carrier',
+      title: 'Transportadora',
+      type: 'string',
+      group: 'logistics'
+    },
+    {
+      name: 'shippingCost',
+      title: 'Custo do Frete',
+      type: 'number',
+      group: 'logistics' // Coloquei aqui para ficar junto com a transportadora
+    },
     {
       name: 'shippingAddress',
-      title: 'Entrega',
+      title: 'Endereço de Entrega',
       type: 'object',
       group: 'logistics',
       fields: [
-        { name: 'zip', type: 'string' },
-        { name: 'street', type: 'string' },
-        { name: 'number', type: 'string' },
-        { name: 'neighborhood', type: 'string' },
-        { name: 'city', type: 'string' },
-        { name: 'state', type: 'string' },
-        { name: 'complement', type: 'string' }
+        { name: 'alias', type: 'string', title: 'Apelido (Casa/Trabalho)' },
+        { name: 'id', type: 'string', title: 'ID', hidden: true },
+        { name: 'zip', type: 'string', title: 'CEP' },
+        { name: 'street', type: 'string', title: 'Rua' },
+        { name: 'number', type: 'string', title: 'Número' },
+        { name: 'neighborhood', type: 'string', title: 'Bairro' },
+        { name: 'city', type: 'string', title: 'Cidade' },
+        { name: 'state', type: 'string', title: 'UF' },
+        { name: 'complement', type: 'string', title: 'Complemento' }
       ]
+    },
+
+    // --- FATURAMENTO ---
+    {
+      name: 'totalAmount', 
+      title: 'Valor Total', 
+      type: 'number', 
+      group: 'billing' 
+    },
+    { 
+      name: 'paymentMethod', 
+      title: 'Método de Pagamento', 
+      type: 'string', 
+      group: 'billing' 
     },
     {
       name: 'billingAddress',
-      title: 'Faturamento',
+      title: 'Endereço de Faturamento',
       type: 'object',
       group: 'billing',
       fields: [
+        { name: 'alias', type: 'string', title: 'Apelido' },
+        { name: 'id', type: 'string', title: 'ID', hidden: true },
         { name: 'zip', type: 'string' },
         { name: 'street', type: 'string' },
         { name: 'number', type: 'string' },
@@ -101,7 +136,14 @@ export default {
         { name: 'complement', type: 'string' }
       ]
     },
-    { name: 'totalAmount', title: 'Total', type: 'number', group: 'billing' },
-    { name: 'paymentMethod', title: 'Método', type: 'string', group: 'billing' }
+
+    // --- ADMIN / NOTAS ---
+    { 
+      name: 'internalNotes', 
+      title: 'Notas Internas / Sistema', 
+      type: 'text', 
+      rows: 3,
+      group: 'admin' 
+    }
   ]
 }
