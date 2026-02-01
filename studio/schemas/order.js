@@ -36,14 +36,15 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- CAMPOS OCULTOS (PARA NÃO DAR ERRO VERMELHO) ---
-    { name: 'cpf', type: 'string', hidden: true },
+    // --- CAMPOS PARA ESCONDER ERROS DO SISTEMA DE PAGAMENTO ---
+    { name: 'cpf', type: 'string', hidden: true }, 
     { name: 'customerDocument', type: 'string', hidden: true },
-    { name: 'document', type: 'string', hidden: true },
+    { name: 'customerEmail', type: 'string', hidden: true },
     { name: 'alias', type: 'string', hidden: true },
     { name: 'id', type: 'string', hidden: true },
+    { name: 'document', type: 'string', hidden: true },
 
-    // --- CLIENTE (ESTRUTURA CORRETA) ---
+    // --- CLIENTE (AQUI FICAM OS DADOS CERTOS) ---
     {
       name: 'customer',
       title: 'Dados do Cliente',
@@ -57,7 +58,7 @@ export default {
       ]
     },
 
-    // --- ITENS DO PEDIDO (COM PREVIEW CORRIGIDO) ---
+    // --- ITENS DO PEDIDO ---
     {
       name: 'items',
       title: 'Itens do Pedido',
@@ -87,14 +88,15 @@ export default {
               qty: 'quantity'
             },
             prepare({title, variant, color, size, qty}) {
-              const details = [];
+              // Monta a descrição
+              let details = [];
               if (variant && variant !== 'Padrão') details.push(variant);
-              if (color) details.push(color);
-              if (size) details.push(size);
-              
+              if (color) details.push(`Cor: ${color}`);
+              if (size) details.push(`Tam: ${size}`);
+
               return { 
-                title: `${qty}x ${title || 'PRODUTO SEM NOME'}`, 
-                subtitle: details.join(' - ') || 'Item Padrão'
+                title: `${qty}x ${title || 'Produto'}`, 
+                subtitle: details.join(' | ') || 'Sem detalhes'
               }
             }
           }
@@ -112,8 +114,8 @@ export default {
         { name: 'zip', type: 'string', title: 'CEP' },
         { name: 'street', type: 'string', title: 'Rua' },
         { name: 'number', type: 'string', title: 'Número' },
-        { name: 'complement', type: 'string', title: 'Complemento' },
         { name: 'neighborhood', type: 'string', title: 'Bairro' },
+        { name: 'complement', type: 'string', title: 'Complemento' }, // Adicionado
         { name: 'city', type: 'string', title: 'Cidade' },
         { name: 'state', type: 'string', title: 'Estado' }
       ]
@@ -128,14 +130,14 @@ export default {
         { name: 'zip', type: 'string', title: 'CEP' },
         { name: 'street', type: 'string', title: 'Rua' },
         { name: 'number', type: 'string', title: 'Número' },
-        { name: 'complement', type: 'string', title: 'Complemento' },
         { name: 'neighborhood', type: 'string', title: 'Bairro' },
+        { name: 'complement', type: 'string', title: 'Complemento' }, // Adicionado
         { name: 'city', type: 'string', title: 'Cidade' },
         { name: 'state', type: 'string', title: 'Estado' }
       ]
     },
 
-    // --- FINANÇAS ---
+    // --- OUTROS ---
     { name: 'trackingCode', title: 'Código de Rastreio', type: 'string', group: 'logistics' },
     { name: 'carrier', title: 'Transportadora', type: 'string', group: 'logistics' },
     { name: 'shippingCost', title: 'Custo do Frete', type: 'number', group: 'billing' },
@@ -148,14 +150,14 @@ export default {
     select: { 
       title: 'orderNumber', 
       customer: 'customer.name', 
-      status: 'status', 
+      status: 'status',
       total: 'totalAmount'
     },
     prepare({title, customer, status, total}) {
       const statusIcons = { pending: '🟡', paid: '🟢', shipped: '🚚', delivered: '🏠', cancelled: '❌' };
       return {
         title: `${statusIcons[status] || '⚪'} ${title || 'Novo'} - ${customer || 'Cliente'}`,
-        subtitle: total ? `R$ ${total}` : ''
+        subtitle: total ? `R$ ${total.toFixed(2)}` : ''
       }
     }
   }
