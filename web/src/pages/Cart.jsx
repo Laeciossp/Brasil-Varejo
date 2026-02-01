@@ -9,7 +9,7 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CONFIGURAÇÃO DO SANITY ---
+// --- CONFIGURAÇÃO DO SANITY (TOKEN DE ESCRITA) ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -47,8 +47,7 @@ export default function Cart() {
     tipoPagamento, setTipoPagamento, globalCep, clearCart
   } = useCartStore();
   
-  // --- CORREÇÃO DO CÁLCULO (FIM DO NAN) ---
-  // Forçamos tudo a ser número (Number) para evitar erros de texto
+  // Cálculo Total Blindado
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   const shippingCost = selectedShipping?.price ? Number(selectedShipping.price) : 0;
   const totalFinal = subtotal + shippingCost;
@@ -88,13 +87,15 @@ export default function Cart() {
         const options = await response.json();
 
         if (Array.isArray(options) && options.length > 0) {
-          const PRAZO_MANUSEIO_PADRAO = 5; 
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
 
           const optionsAdjusted = options.map(opt => {
             let finalName = opt.name;
             let finalDays = parseInt(opt.delivery_time) || 0;
+            // Garante que preço é número
+            let finalPrice = Number(opt.custom_price || opt.price || 0);
+            
             const lowerName = (opt.name || '').toLowerCase();
 
             if (isLocal) {
@@ -107,14 +108,10 @@ export default function Cart() {
 
             if (!isLocal) finalDays += 5; 
 
-            return { ...opt, name: finalName, delivery_time: finalDays };
+            return { ...opt, name: finalName, delivery_time: finalDays, price: finalPrice };
           });
 
-          const filteredOptions = isLocal 
-            ? optionsAdjusted.filter(opt => !opt.name.toLowerCase().includes('pac')) 
-            : optionsAdjusted;
-
-          setShipping(filteredOptions[0]);
+          setShipping(optionsAdjusted[0]);
         }
       } catch (error) {
         console.error("Erro frete", error);
@@ -144,6 +141,7 @@ export default function Cart() {
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
+      // 1. PREPARAR DADOS
       const cleanCustomer = {
         name: customerName,
         email: user.primaryEmailAddress?.emailAddress || "",
@@ -161,6 +159,7 @@ export default function Cart() {
         state: activeAddress.state
       };
 
+      // Garante nome do produto
       const sanitizedItems = items.map(item => ({
          _key: Math.random().toString(36).substring(7),
          productName: item.title || item.name || "Produto", 
@@ -174,6 +173,8 @@ export default function Cart() {
          product: { _type: 'reference', _ref: item._id }
       }));
 
+      // 2. CRIAR PEDIDO NO SANITY (AQUI ESTÁ A MÁGICA)
+      // O site cria o pedido perfeitamente organizado
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
@@ -186,13 +187,14 @@ export default function Cart() {
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Criado pelo Site (Organizado)"
+        internalNotes: "Venda Site (Frontend Create)"
       };
 
-      console.log("Criando pedido no Sanity...", orderDoc);
+      console.log("Criando pedido...", orderDoc);
       const createdOrder = await client.create(orderDoc);
-      const sanityId = createdOrder._id;
+      const sanityId = createdOrder._id; // PEGA O ID DO PEDIDO CRIADO
 
+      // 3. CHAMAR O WORKER (SÓ PAGAMENTO)
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
@@ -205,7 +207,7 @@ export default function Cart() {
             shippingAddress: cleanAddress,
             customerDocument: cleanCustomer.cpf,
             totalAmount: totalFinal,
-            orderId: sanityId 
+            orderId: sanityId // MANDA O ID DO SANITY PRO WORKER USAR
         })
       });
 
@@ -215,6 +217,7 @@ export default function Cart() {
         throw new Error(JSON.stringify(data.details || data.error));
       }
 
+      // 4. REDIRECIONAR
       clearCart();
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
@@ -286,7 +289,7 @@ export default function Cart() {
                 
                 {showAddressForm && (
                    <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-2 gap-3">
-                      <input placeholder="Apelido (Ex: Casa)" className="p-2 border rounded col-span-2" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
+                      <input placeholder="Apelido" className="p-2 border rounded col-span-2" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
                       <input placeholder="CEP" className="p-2 border rounded" value={newAddr.zip} onChange={e => setNewAddr({...newAddr, zip: e.target.value})} />
                       <input placeholder="Rua" className="p-2 border rounded" value={newAddr.street} onChange={e => setNewAddr({...newAddr, street: e.target.value})} />
                       <input placeholder="Número" className="p-2 border rounded" value={newAddr.number} onChange={e => setNewAddr({...newAddr, number: e.target.value})} />

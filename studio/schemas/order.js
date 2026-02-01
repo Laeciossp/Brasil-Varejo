@@ -26,11 +26,15 @@ export default {
       },
       initialValue: 'pending'
     },
-    // --- DADOS FANTASMAS (Para não dar erro com o pedido antigo do Worker) ---
+    // --- CAMPOS FANTASMAS (Para não dar erro com pedidos velhos) ---
     { name: 'cpf', type: 'string', hidden: true },
     { name: 'customerEmail', type: 'string', hidden: true },
     { name: 'customerDocument', type: 'string', hidden: true },
+    { name: 'document', type: 'string', hidden: true },
+    { name: 'alias', type: 'string', hidden: true },
+    { name: 'id', type: 'string', hidden: true },
     
+    // --- DADOS REAIS ---
     {
       name: 'customer',
       title: 'Cliente',
@@ -55,10 +59,15 @@ export default {
           fields: [
             { name: 'productName', title: 'Nome', type: 'string' },
             { name: 'variantName', title: 'Variação', type: 'string' },
+            { name: 'color', title: 'Cor', type: 'string' },
+            { name: 'size', title: 'Tamanho', type: 'string' },
             { name: 'quantity', title: 'Qtd', type: 'number' },
             { name: 'price', title: 'Preço', type: 'number' },
             { name: 'imageUrl', title: 'Imagem', type: 'string' }
-          ]
+          ],
+          preview: {
+            select: { title: 'productName', subtitle: 'variantName' }
+          }
         }
       ]
     },

@@ -1,5 +1,5 @@
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 const useCartStore = create(
   persist(
@@ -7,7 +7,7 @@ const useCartStore = create(
       // --- ESTADOS ---
       items: [],
       favorites: [],
-      globalCep: 'Informe seu CEP', // Estado global persistente do CEP
+      globalCep: 'Informe seu CEP', 
       selectedShipping: null, 
       tipoPagamento: 'cartao', 
       customer: {
@@ -19,7 +19,7 @@ const useCartStore = create(
       // --- SETTERS GLOBAIS ---
       setGlobalCep: (cep) => set({ globalCep: cep }),
 
-      // --- LÓGICA DE FAVORITOS ---
+      // --- FAVORITOS ---
       toggleFavorite: (product) => set((state) => {
         const isFav = state.favorites.find(item => item._id === product._id);
         if (isFav) {
@@ -28,25 +28,39 @@ const useCartStore = create(
         return { favorites: [...state.favorites, product] };
       }),
 
-      // --- LÓGICA DO CARRINHO ---
+      // --- CARRINHO (BLINDADO) ---
       addItem: (product) => {
-        const items = get().items
-        const existingItem = items.find((item) => item._id === product._id)
+        const { items } = get();
+        // SEGURANÇA: Garante que o preço seja salvo como número
+        const safePrice = Number(product.price) || 0;
+        
+        const existingItem = items.find((item) => item.sku === product.sku || item._id === product._id);
+
         if (existingItem) {
-          set({ items: items.map((item) => item._id === product._id ? { ...item, quantity: item.quantity + 1 } : item) })
+          set({
+            items: items.map((item) =>
+              (item.sku === product.sku || item._id === product._id)
+                ? { ...item, quantity: Number(item.quantity) + 1 }
+                : item
+            ),
+          });
         } else {
-          // Garante que logistics venha junto se existir no produto
-          set({ items: [...items, { ...product, quantity: 1 }] })
+          // Salva o item novo com preço numérico garantido
+          set({ items: [...items, { ...product, price: safePrice, quantity: 1 }] });
         }
       },
 
       updateQuantity: (productId, quantity) => {
-        if (quantity < 1) return
-        set({ items: get().items.map((item) => item._id === productId ? { ...item, quantity } : item) })
+        if (quantity < 1) return;
+        set({
+          items: get().items.map((item) =>
+            item._id === productId ? { ...item, quantity: Number(quantity) } : item
+          ),
+        });
       },
 
-      removeItem: (productId) => {
-        const newItems = get().items.filter((item) => item._id !== productId);
+      removeItem: (productId, sku) => {
+        const newItems = get().items.filter((item) => item._id !== productId && item.sku !== sku);
         set({ 
           items: newItems,
           selectedShipping: newItems.length === 0 ? null : get().selectedShipping 
@@ -55,12 +69,10 @@ const useCartStore = create(
       
       // --- SETTERS GERAIS ---
       setShipping: (shipping) => set({ selectedShipping: shipping }),
-      
       setTipoPagamento: (tipo) => set({ tipoPagamento: tipo }),
-      
       setDocument: (doc) => set((state) => ({ customer: { ...state.customer, document: doc } })),
       
-      // --- GESTÃO DE ENDEREÇOS ---
+      // --- ENDEREÇOS ---
       addAddress: (address) => set((state) => {
         const newAddress = { ...address, id: Math.random().toString(36).substr(2, 9) };
         return { 
@@ -83,15 +95,21 @@ const useCartStore = create(
 
       setActiveAddress: (id) => set((state) => ({ customer: { ...state.customer, activeAddressId: id } })),
 
-      // --- CÁLCULOS TOTAIS ---
+      // --- CÁLCULO TOTAL (CORREÇÃO DO NAN) ---
       getTotalPrice: () => {
         const { items, selectedShipping, tipoPagamento } = get();
-        if (!items || items.length === 0) return 0;
+        
+        // 1. Soma dos Produtos (Força Number em tudo)
+        const subtotalProdutos = items.reduce((total, item) => {
+          return total + (Number(item.price) * Number(item.quantity));
+        }, 0);
 
-        const subtotalProdutos = items.reduce((total, item) => total + (Number(item.price) * item.quantity), 0);
-        const valorFrete = selectedShipping ? Number(selectedShipping.price) : 0;
+        // 2. Soma do Frete (Força Number)
+        const valorFrete = selectedShipping && selectedShipping.price 
+          ? Number(selectedShipping.price) 
+          : 0;
 
-        // Regra: 10% de desconto no PIX/Boleto apenas sobre os produtos
+        // 3. Aplica regra de desconto se houver
         if (tipoPagamento === 'pix' || tipoPagamento === 'boleto') {
           return (subtotalProdutos * 0.9) + valorFrete;
         }
@@ -99,11 +117,10 @@ const useCartStore = create(
         return subtotalProdutos + valorFrete;
       },
       
-      // Limpa carrinho e frete, reseta pagamento
       clearCart: () => set({ items: [], selectedShipping: null, tipoPagamento: 'cartao' })
     }),
-    { name: 'cart-storage' } // Nome no LocalStorage
+    { name: 'cart-storage' }
   )
-)
+);
 
 export default useCartStore;

@@ -14,9 +14,8 @@ var src_default = {
     try {
       const url = new URL(req.url);
 
-      // --- ROTAS DE FRETE E LOGIN (MANTIDAS IGUAIS) ---
+      // --- ROTAS AUXILIARES (FRETE, LOGIN) - MANTIDAS IGUAIS ---
       if (url.pathname === "/login/melhorenvio") {
-        /* ... (Mantenha o código de login igual) ... */
         const client_id = env.MELHORENVIO_CLIENT_ID;
         const redirect_uri = "https://brasil-varejo-api.laeciossp.workers.dev/callback/melhorenvio";
         const scope = "shipping-calculate shipping-checkout shipping-info user-read";
@@ -25,7 +24,6 @@ var src_default = {
       }
 
       if (url.pathname === "/callback/melhorenvio") {
-         /* ... (Mantenha o callback igual) ... */
         const code = url.searchParams.get("code");
         const response = await fetch("https://www.melhorenvio.com.br/oauth/token", {
           method: "POST",
@@ -41,16 +39,15 @@ var src_default = {
         const data = await response.json();
         if (data.access_token) {
           await env.CARRINHO.put("MELHORENVIO_TOKEN", data.access_token);
-          return new Response("Autorizado com Sucesso!", { headers });
+          return new Response("Autorizado!", { headers });
         }
         return new Response(JSON.stringify({ error: "Erro auth" }), { status: 400, headers });
       }
 
       if (req.method === "POST" && url.pathname.includes("shipping")) {
-         /* ... (Mantenha o cálculo de frete igual) ... */
         const body = await req.json();
-        // Lógica simplificada de frete para economizar espaço aqui na resposta
-        // (Use o seu código de frete original aqui, ele não é o problema)
+        // Lógica de frete... (assumindo que já está configurada)
+        // Aqui você pode manter sua lógica de frete original
         const token = await env.CARRINHO.get("MELHORENVIO_TOKEN");
         if (!token) return new Response(JSON.stringify([]), { headers });
         
@@ -71,17 +68,15 @@ var src_default = {
       }
 
       // =================================================================
-      // 4. ROTA: CHECKOUT (MODIFICADA - SÓ PAGAMENTO)
+      // 4. ROTA: CHECKOUT (SÓ PAGAMENTO)
       // =================================================================
       if (req.method === "POST" && url.pathname.includes("checkout")) {
         const reqData = await req.json();
-        // Recebemos o orderId criado pelo Site
         const { items, email, shipping, tipoPagamento, orderId, shippingAddress, customerDocument } = reqData;
 
-        // REMOVIDO: Bloco que criava pedido no Sanity (PASSO A)
-        // Agora confiamos que o Site já criou e nos mandou o orderId correto.
+        // IMPORTANTE: Não criamos mais o pedido no Sanity aqui.
+        // Usamos o orderId que veio do Frontend.
 
-        // --- GERAR PAGAMENTO NO MERCADO PAGO ---
         const isCashPayment = (tipoPagamento === 'pix' || tipoPagamento === 'boleto');
         const fatorDesconto = isCashPayment ? 0.9 : 1.0;
 
@@ -113,7 +108,7 @@ var src_default = {
             pending: "https://palastore.com.br/sucesso"
           },
           auto_return: "approved",
-          external_reference: orderId, // USA O ID QUE VEIO DO SITE
+          external_reference: orderId, // ID DO SANITY VINDO DO FRONT
           notification_url: "https://brasil-varejo-api.laeciossp.workers.dev/webhook",
           payment_methods: {
             excluded_payment_types: tipoPagamento === 'boleto' ? [{ id: "credit_card" }] : [],
@@ -143,7 +138,7 @@ var src_default = {
       }
 
       // =================================================================
-      // 5. ROTA: WEBHOOK (ATUALIZA O STATUS DO PEDIDO)
+      // 5. ROTA: WEBHOOK
       // =================================================================
       if (url.pathname.includes("webhook")) {
         const urlParams = new URLSearchParams(url.search);
@@ -157,14 +152,13 @@ var src_default = {
           if (respPagamento.ok) {
             const pagamento = await respPagamento.json();
             if (pagamento.status === "approved") {
-              const sanityId = pagamento.external_reference; // ID vindo do Sanity
+              const sanityId = pagamento.external_reference;
               
-              // Atualiza o pedido existente para "Pago"
               if (sanityId && env.SANITY_TOKEN && env.SANITY_PROJECT_ID) {
                 const mutation = {
                   mutations: [{
                       patch: {
-                        id: sanityId, // Busca pelo ID correto
+                        id: sanityId,
                         set: { status: "paid", paymentMethod: pagamento.payment_method_id }
                       }
                   }]
