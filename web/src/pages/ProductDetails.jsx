@@ -109,18 +109,14 @@ export default function ProductDetails() {
   const [shippingOptions, setShippingOptions] = useState(null);
 
   const [handlingDays, setHandlingDays] = useState(0);
-  const [carrierRules, setCarrierRules] = useState([]);
 
   const carouselRef = useRef(null);
-
-  // Estados para Swipe
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const minSwipeDistance = 50; 
 
   const processVariants = (rawVariants, productOldPrice) => {
     if (!rawVariants || !Array.isArray(rawVariants)) return [];
-    
     const flatList = [];
     rawVariants.forEach(item => {
         if (item.sizes && Array.isArray(item.sizes) && item.sizes.length > 0) {
@@ -153,12 +149,7 @@ export default function ProductDetails() {
             });
         }
     });
-
-    return flatList.sort((a, b) => {
-        const nameA = a.variantName || "";
-        const nameB = b.variantName || "";
-        return nameA.localeCompare(nameB);
-    });
+    return flatList.sort((a, b) => (a.variantName || "").localeCompare(b.variantName || ""));
   };
 
   useEffect(() => {
@@ -179,17 +170,13 @@ export default function ProductDetails() {
             freeShipping,
             logistics { width, height, length, weight }
           },
-          "settings": *[_type == "shippingSettings"][0]{ handlingTime },
-          "carrierConfig": *[_type == "carrierConfig"][0]{
-            carriers[]{ name, serviceName, additionalDays, isActive, logoUrl }
-          }
+          "settings": *[_type == "shippingSettings"][0]{ handlingTime }
         }`;
 
         const data = await client.fetch(query, { slug });
 
         if (data && data.product) {
           setHandlingDays(Number(data.settings?.handlingTime) || 0);
-          setCarrierRules(data.carrierConfig?.carriers || []);
 
           const productData = data.product;
           const processedVariants = processVariants(productData.rawVariants, productData.oldPrice);
@@ -262,7 +249,6 @@ export default function ProductDetails() {
     }
   }, [product, globalCep]);
 
-  // --- 3. CÁLCULO DE FRETE (A CORREÇÃO DA BAGUNÇA É AQUI) ---
   const handleCalculateShipping = async (cepOverride) => {
     const targetCep = typeof cepOverride === 'string' ? cepOverride : cep;
     const cleanCep = targetCep.replace(/\D/g, '');
@@ -297,7 +283,6 @@ export default function ProductDetails() {
       if (Array.isArray(rawOptions) && rawOptions.length > 0) {
           const isLocal = cleanCep === '43850000'; 
 
-          // --- FASE 1: PADRONIZAR DADOS (Preço vira Número) ---
           const candidates = rawOptions.map(opt => {
              let p = opt.custom_price || opt.price || 0;
              if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
@@ -308,62 +293,50 @@ export default function ProductDetails() {
              };
           });
 
-          // Ordenar por preço (Menor primeiro)
           candidates.sort((a, b) => a.price - b.price);
 
           let finalOptions = [];
 
           if (isLocal) {
-             // REGRA LOCAL: Pega o mais barato e fixa dados
              const cheapest = candidates[0];
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
                 price: cheapest ? cheapest.price : 0, 
-                delivery_time: 5, // Prazo FIXO
+                delivery_time: 5,
                 company: "Própria"
              });
           } else {
-             // REGRA NACIONAL: PENEIRA FINA (1 PAC, 1 SEDEX)
-             
-             // Encontra o MELHOR Econômico
              const bestEconomy = candidates.find(o => 
                 o.name.toLowerCase().includes('pac') || 
                 o.name.toLowerCase().includes('econômico') ||
                 o.name.toLowerCase().includes('normal')
              );
-
-             // Encontra o MELHOR Expresso
              const bestExpress = candidates.find(o => 
                 o.name.toLowerCase().includes('sedex') || 
                 o.name.toLowerCase().includes('expresso')
              );
 
-             // Adiciona na lista com o prazo somado
              if (bestEconomy) {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    delivery_time: bestEconomy.days + handlingDays, // + Manuseio
+                    delivery_time: bestEconomy.days + handlingDays, 
                     company: "Correios/Jadlog"
                 });
              }
-
              if (bestExpress && bestExpress.name !== bestEconomy?.name) {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    delivery_time: bestExpress.days + handlingDays, // + Manuseio
+                    delivery_time: bestExpress.days + handlingDays, 
                     company: "Correios/Jadlog"
                 });
              }
           }
-
-          // Se a lista filtrou tudo e ficou vazia, mostra a original (fallback)
           setShippingOptions(finalOptions.length > 0 ? finalOptions : []);
       } else {
           setShippingOptions([]);
       }
-
     } catch (err) {
       console.error(err);
       setShippingOptions([]); 
@@ -372,54 +345,44 @@ export default function ProductDetails() {
     }
   };
 
+  const createCartItem = () => {
+      const finalSku = selectedVariant ? (selectedVariant.sku || selectedVariant._key) : product._id;
+      return {
+        _id: product._id,
+        title: product.title, 
+        slug: product.slug,
+        price: currentPrice,
+        image: activeMedia ? urlFor(activeMedia.asset).url() : '',
+        variantName: selectedVariant ? selectedVariant.variantName : null,
+        sku: finalSku,
+        color: selectedVariant ? selectedVariant.color : null,
+        size: selectedVariant ? selectedVariant.size : null,
+        // --- AQUI ESTÁ A CORREÇÃO DA DISCREPÂNCIA ---
+        // Salvamos as dimensões reais para o Carrinho usar depois
+        width: product.logistics?.width || 15,
+        height: product.logistics?.height || 15,
+        length: product.logistics?.length || 15,
+        weight: product.logistics?.weight || 0.5
+      };
+  };
+
   const handleBuyNow = () => {
     if (!product) return;
     if (!selectedShipping) return alert("Por favor, calcule o frete para continuar.");
-    
-    const finalSku = selectedVariant ? (selectedVariant.sku || selectedVariant._key) : product._id;
-
-    const cartItem = {
-      _id: product._id,
-      title: product.title, 
-      slug: product.slug,
-      price: currentPrice,
-      image: activeMedia ? urlFor(activeMedia.asset).url() : '',
-      variantName: selectedVariant ? selectedVariant.variantName : null,
-      sku: finalSku,
-      color: selectedVariant ? selectedVariant.color : null,
-      size: selectedVariant ? selectedVariant.size : null
-    };
-    
-    addItem(cartItem);
+    addItem(createCartItem());
     window.location.href = '/cart'; 
   };
 
   const handleAddToCart = () => {
     if (!product) return;
     if (!selectedShipping) return alert("Por favor, calcule o frete para adicionar.");
-    
-    const finalSku = selectedVariant ? (selectedVariant.sku || selectedVariant._key) : product._id;
-
-    const cartItem = {
-      _id: product._id,
-      title: product.title, 
-      slug: product.slug,
-      price: currentPrice,
-      image: activeMedia ? urlFor(activeMedia.asset).url() : '',
-      variantName: selectedVariant ? selectedVariant.variantName : null,
-      sku: finalSku,
-      color: selectedVariant ? selectedVariant.color : null,
-      size: selectedVariant ? selectedVariant.size : null
-    };
-
-    addItem(cartItem);
+    addItem(createCartItem());
     alert("Produto adicionado ao carrinho!"); 
   };
 
   const handleQuickAdd = (e, prod) => {
     e.preventDefault();
     e.stopPropagation();
-
     if (prod.variants && prod.variants.length > 0) {
         navigate(`/product/${prod.slug.current}`);
     } else {
@@ -430,7 +393,9 @@ export default function ProductDetails() {
             price: prod.price,
             image: prod.imageUrl,
             sku: prod._id,
-            variantName: null
+            variantName: null,
+            // Adiciona defaults se não tiver dados completos no quick add
+            width: 15, height: 15, length: 15, weight: 0.5
         });
         alert("Adicionado ao carrinho!");
     }
@@ -470,10 +435,6 @@ export default function ProductDetails() {
     if (distance > minSwipeDistance) navigateImage('next');
     if (distance < -minSwipeDistance) navigateImage('prev');
   }
-
-  const normalize = (str) => {
-      return (str || "").toLowerCase().trim(); 
-  };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-orange-500 rounded-full animate-spin"></div></div>;
   if (!product) return <div className="p-10 text-center">Produto não encontrado.</div>;
@@ -781,7 +742,6 @@ export default function ProductDetails() {
                             </div>
                         </div>
 
-                         {/* BOTÃO QUICK ADD (RODAPÉ) */}
                          <button 
                             onClick={(e) => handleQuickAdd(e, rel)}
                             className="mb-1 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-orange-700 transition-colors flex-shrink-0 ml-2"

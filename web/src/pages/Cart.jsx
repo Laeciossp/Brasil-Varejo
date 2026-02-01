@@ -8,6 +8,7 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
+// --- CONFIGURAÇÃO SANITY ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -33,12 +34,9 @@ const MercadoPagoTrust = () => (
 export default function Cart() {
   const { user, isLoaded } = useUser();
   const [loading, setLoading] = useState(false);
-  
-  // Controle de estado local do frete
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   const [shippingOptions, setShippingOptions] = useState([]); 
   
-  // Config do Sanity
   const [globalHandlingTime, setGlobalHandlingTime] = useState(0);
 
   const [showAddressForm, setShowAddressForm] = useState(false);
@@ -51,17 +49,14 @@ export default function Cart() {
     tipoPagamento, setTipoPagamento, globalCep, clearCart
   } = useCartStore();
   
-  // --- CÁLCULOS (Força Numérico) ---
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   
-  // Se selectedShipping for nulo ou inválido, usa 0
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
   
   const totalFinal = subtotal + shippingCost;
 
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // 1. Busca Configurações ao carregar
   useEffect(() => {
     const fetchSettings = async () => {
       try {
@@ -77,18 +72,18 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- 2. CÁLCULO DE FRETE (Lógica Corrigida) ---
+  // --- CÁLCULO DE FRETE (USANDO MEDIDAS REAIS) ---
   useEffect(() => {
     const recalculate = async () => {
-      // Prioridade: Endereço selecionado > CEP Global
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
       
-      if (!targetZip || items.length === 0) return;
+      if (!targetZip || items.length === 0) {
+          setShipping(null);
+          return;
+      }
 
       setRecalculatingShipping(true);
-      setShippingOptions([]); // Limpa para não mostrar dados antigos
-      setShipping(null); // Zera seleção atual para forçar nova escolha
-
+      
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
         const response = await fetch(`${baseUrl}/shipping`, { 
@@ -97,9 +92,13 @@ export default function Cart() {
           body: JSON.stringify({
             from: { postal_code: "43805000" }, 
             to: { postal_code: targetZip },
+            // AGORA USAMOS AS MEDIDAS REAIS DO PRODUTO (SALVAS EM ProductDetails.jsx)
             products: items.map(p => ({
               id: p._id,
-              width: 15, height: 15, length: 15, weight: 0.5,
+              width: p.width || 15,
+              height: p.height || 15,
+              length: p.length || 15,
+              weight: p.weight || 0.5,
               insurance_value: p.price,
               quantity: p.quantity
             }))
@@ -112,7 +111,6 @@ export default function Cart() {
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
 
-          // FASE A: Normalizar Preços (Garantir Number)
           const allOptions = rawOptions.map(opt => {
              let val = opt.custom_price || opt.price || 0;
              if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
@@ -123,23 +121,19 @@ export default function Cart() {
              };
           });
 
-          // FASE B: Filtrar
           let finalOptions = [];
 
           if (isLocal) {
-             // LOCAL: Pega o mais barato da API e aplica regra local
              allOptions.sort((a, b) => a.price - b.price);
              const cheapest = allOptions[0];
-             
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
                 price: cheapest ? cheapest.price : 0, 
-                delivery_time: 5,
+                delivery_time: 5, 
                 company: "Própria"
              });
 
           } else {
-             // NACIONAL: Separar PAC e SEDEX
              const pacs = allOptions.filter(o => 
                 o.name.toLowerCase().includes('pac') || 
                 o.name.toLowerCase().includes('econômico') || 
@@ -151,7 +145,6 @@ export default function Cart() {
                 o.name.toLowerCase().includes('expresso')
              );
 
-             // Ordenar e pegar o CAMPEÃO de cada
              if (pacs.length > 0) {
                 pacs.sort((a, b) => a.price - b.price);
                 finalOptions.push({
@@ -173,13 +166,12 @@ export default function Cart() {
              }
           }
 
-          // FASE C: Atualizar Estado e FORÇAR SELEÇÃO
           setShippingOptions(finalOptions);
           
           if (finalOptions.length > 0) {
-             // OBRIGA O CARRINHO A PEGAR O PRIMEIRO FRETE
-             console.log("Frete selecionado automaticamente:", finalOptions[0]);
              setShipping(finalOptions[0]);
+          } else {
+             setShipping(null);
           }
         }
       } catch (error) {
@@ -189,12 +181,10 @@ export default function Cart() {
       }
     };
     
-    // Este efeito roda sempre que o ID do endereço muda
     recalculate();
     
   }, [customer.activeAddressId, items.length, globalCep, globalHandlingTime]);
 
-  // Função para salvar novo endereço
   const handleSaveAddress = () => {
     if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
     addAddress({ ...newAddr, id: Math.random().toString(36).substr(2, 9) });
@@ -202,7 +192,6 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   };
 
-  // CHECKOUT (Igual ao anterior, pois estava correto)
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login para continuar.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
@@ -328,7 +317,7 @@ export default function Cart() {
                 ))}
             </div>
 
-            {/* ENTREGA E DADOS */}
+            {/* ENTREGA */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
                 <div className="flex justify-between items-center">
                     <h2 className="text-lg font-bold flex gap-2"><MapPin className="text-orange-500"/> Entrega</h2>
@@ -364,15 +353,9 @@ export default function Cart() {
                 </div>
 
                 <div className="pt-4 border-t space-y-3">
-                    <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados para Nota</h2>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome Completo</label>
-                        <input placeholder="Seu Nome" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">CPF / CNPJ</label>
-                        <input placeholder="000.000.000-00" value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
-                    </div>
+                    <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados</h2>
+                    <input placeholder="Nome Completo" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
+                    <input placeholder="CPF / CNPJ" value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
                 </div>
             </div>
           </div>
@@ -383,7 +366,6 @@ export default function Cart() {
                 <div className="space-y-3 text-sm mb-6">
                     <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                     
-                    {/* FRETE */}
                     <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-center">
                             <span className="flex gap-1"><Truck size={14}/> Frete</span>
