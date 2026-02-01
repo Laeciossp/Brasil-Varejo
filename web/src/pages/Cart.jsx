@@ -8,11 +8,10 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CONFIGURAÇÃO DO SANITY ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  useCdn: false, // Dados sempre frescos
+  useCdn: false,
   apiVersion: '2023-05-03',
   token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
 });
@@ -34,10 +33,12 @@ const MercadoPagoTrust = () => (
 export default function Cart() {
   const { user, isLoaded } = useUser();
   const [loading, setLoading] = useState(false);
+  
+  // Controle de estado local do frete
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   const [shippingOptions, setShippingOptions] = useState([]); 
   
-  // Dias de manuseio vindos do painel
+  // Config do Sanity
   const [globalHandlingTime, setGlobalHandlingTime] = useState(0);
 
   const [showAddressForm, setShowAddressForm] = useState(false);
@@ -50,28 +51,24 @@ export default function Cart() {
     tipoPagamento, setTipoPagamento, globalCep, clearCart
   } = useCartStore();
   
-  // --- CÁLCULOS BLINDADOS (NUMBER) ---
+  // --- CÁLCULOS (Força Numérico) ---
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   
-  // Garante que o custo do frete é um número válido. Se for null/undefined, vira 0.
+  // Se selectedShipping for nulo ou inválido, usa 0
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
   
   const totalFinal = subtotal + shippingCost;
 
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // --- 1. BUSCAR CONFIGURAÇÃO DE MANUSEIO ---
+  // 1. Busca Configurações ao carregar
   useEffect(() => {
     const fetchSettings = async () => {
       try {
         const query = `*[_type == "shippingSettings"][0]`;
         const settings = await client.fetch(query);
-        if (settings && settings.handlingTime) {
-          setGlobalHandlingTime(Number(settings.handlingTime));
-        }
-      } catch (error) {
-        console.error("Erro config frete:", error);
-      }
+        if (settings?.handlingTime) setGlobalHandlingTime(Number(settings.handlingTime));
+      } catch (e) { console.error(e); }
     };
     fetchSettings();
   }, []);
@@ -80,14 +77,18 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- 2. CÁLCULO E FILTRAGEM RIGOROSA DE FRETE ---
+  // --- 2. CÁLCULO DE FRETE (Lógica Corrigida) ---
   useEffect(() => {
     const recalculate = async () => {
+      // Prioridade: Endereço selecionado > CEP Global
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
+      
       if (!targetZip || items.length === 0) return;
 
       setRecalculatingShipping(true);
-      
+      setShippingOptions([]); // Limpa para não mostrar dados antigos
+      setShipping(null); // Zera seleção atual para forçar nova escolha
+
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
         const response = await fetch(`${baseUrl}/shipping`, { 
@@ -111,96 +112,89 @@ export default function Cart() {
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
 
-          // --- FASE 1: LIMPEZA DE DADOS ---
-          const candidates = rawOptions.map(opt => {
-             // Limpa preço
-             let p = opt.custom_price || opt.price || 0;
-             if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
-             
+          // FASE A: Normalizar Preços (Garantir Number)
+          const allOptions = rawOptions.map(opt => {
+             let val = opt.custom_price || opt.price || 0;
+             if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
              return {
                ...opt,
-               price: Number(p), // Garante número
+               price: Number(val),
                days: parseInt(opt.delivery_time) || 0
              };
           });
 
-          // Ordena tudo pelo mais barato primeiro
-          candidates.sort((a, b) => a.price - b.price);
-
+          // FASE B: Filtrar
           let finalOptions = [];
 
           if (isLocal) {
-             // --- REGRA LOCAL ---
-             const cheapest = candidates[0]; 
+             // LOCAL: Pega o mais barato da API e aplica regra local
+             allOptions.sort((a, b) => a.price - b.price);
+             const cheapest = allOptions[0];
              
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
                 price: cheapest ? cheapest.price : 0, 
-                delivery_time: 5, // Prazo FIXO 5 dias
+                delivery_time: 5,
                 company: "Própria"
              });
 
           } else {
-             // --- REGRA NACIONAL (PENEIRA FINA) ---
-             
-             // 1. Pega TODOS que parecem econômicos
-             const allEconomics = candidates.filter(o => 
+             // NACIONAL: Separar PAC e SEDEX
+             const pacs = allOptions.filter(o => 
                 o.name.toLowerCase().includes('pac') || 
-                o.name.toLowerCase().includes('econômico') ||
+                o.name.toLowerCase().includes('econômico') || 
                 o.name.toLowerCase().includes('normal')
              );
-
-             // 2. Pega TODOS que parecem expressos
-             const allExpress = candidates.filter(o => 
+             
+             const sedexs = allOptions.filter(o => 
                 o.name.toLowerCase().includes('sedex') || 
                 o.name.toLowerCase().includes('expresso')
              );
 
-             // 3. SELECIONA APENAS O CAMPEÃO (MAIS BARATO) DE CADA CATEGORIA
-             if (allEconomics.length > 0) {
-                // Como já ordenamos 'candidates' por preço lá em cima, o primeiro da lista filtrada É o mais barato
-                const bestEco = allEconomics[0]; 
+             // Ordenar e pegar o CAMPEÃO de cada
+             if (pacs.length > 0) {
+                pacs.sort((a, b) => a.price - b.price);
                 finalOptions.push({
                     name: "PAC (Econômico)",
-                    price: bestEco.price,
-                    delivery_time: bestEco.days + globalHandlingTime,
+                    price: pacs[0].price,
+                    delivery_time: pacs[0].days + globalHandlingTime,
                     company: "Correios"
                 });
              }
 
-             if (allExpress.length > 0) {
-                const bestExp = allExpress[0];
-                // Só adiciona se for diferente do econômico (pra não duplicar se for a única opção)
-                if (bestExp.name !== finalOptions[0]?.name) {
-                    finalOptions.push({
-                        name: "SEDEX (Expresso)",
-                        price: bestExp.price,
-                        delivery_time: bestExp.days + globalHandlingTime,
-                        company: "Correios"
-                    });
-                }
+             if (sedexs.length > 0) {
+                sedexs.sort((a, b) => a.price - b.price);
+                finalOptions.push({
+                    name: "SEDEX (Expresso)",
+                    price: sedexs[0].price,
+                    delivery_time: sedexs[0].days + globalHandlingTime,
+                    company: "Correios"
+                });
              }
           }
 
+          // FASE C: Atualizar Estado e FORÇAR SELEÇÃO
           setShippingOptions(finalOptions);
           
-          // --- CORREÇÃO DO "ZERO" ---
-          // Força a seleção da primeira opção SEMPRE que recalcular.
           if (finalOptions.length > 0) {
+             // OBRIGA O CARRINHO A PEGAR O PRIMEIRO FRETE
+             console.log("Frete selecionado automaticamente:", finalOptions[0]);
              setShipping(finalOptions[0]);
           }
         }
       } catch (error) {
-        console.error("Erro frete", error);
+        console.error("Erro frete:", error);
       } finally {
         setRecalculatingShipping(false);
       }
     };
     
+    // Este efeito roda sempre que o ID do endereço muda
     recalculate();
     
   }, [customer.activeAddressId, items.length, globalCep, globalHandlingTime]);
 
+  // Função para salvar novo endereço
   const handleSaveAddress = () => {
     if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
     addAddress({ ...newAddr, id: Math.random().toString(36).substr(2, 9) });
@@ -208,6 +202,7 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   };
 
+  // CHECKOUT (Igual ao anterior, pois estava correto)
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login para continuar.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
@@ -218,7 +213,6 @@ export default function Cart() {
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      // Cria pedido no Sanity primeiro
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
@@ -250,7 +244,6 @@ export default function Cart() {
       const createdOrder = await client.create(orderDoc);
       const sanityId = createdOrder._id;
 
-      // Chama Worker para Pagamento
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
@@ -272,7 +265,6 @@ export default function Cart() {
       });
 
       const data = await response.json();
-
       if (data.error || !data.url) throw new Error(JSON.stringify(data.details || data.error));
 
       clearCart();
@@ -284,7 +276,6 @@ export default function Cart() {
       }
 
     } catch (error) {
-      console.error("Erro Checkout:", error);
       alert("Erro ao processar: " + error.message);
     } finally { 
       setLoading(false); 
@@ -337,7 +328,7 @@ export default function Cart() {
                 ))}
             </div>
 
-            {/* ENTREGA */}
+            {/* ENTREGA E DADOS */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
                 <div className="flex justify-between items-center">
                     <h2 className="text-lg font-bold flex gap-2"><MapPin className="text-orange-500"/> Entrega</h2>
@@ -361,17 +352,27 @@ export default function Cart() {
                 <div className="grid md:grid-cols-2 gap-4">
                     {customer.addresses?.map(addr => (
                         <div key={addr.id} onClick={() => setActiveAddress(addr.id)} className={`p-4 border-2 rounded-lg cursor-pointer ${addr.id === customer.activeAddressId ? 'border-blue-600 bg-blue-50' : 'border-gray-100'}`}>
-                            <p className="font-bold text-sm">{addr.alias || 'Local'}</p>
+                            <div className="flex justify-between mb-1">
+                                <span className="font-bold text-sm">{addr.alias || 'Local'}</span>
+                                {addr.id === customer.activeAddressId && <div className="w-3 h-3 bg-blue-600 rounded-full"></div>}
+                            </div>
                             <p className="text-xs text-gray-600">{addr.street}, {addr.number} {addr.complement}</p>
                             <p className="text-xs text-gray-500">{addr.city}/{addr.state}</p>
+                            <p className="text-xs text-gray-400 font-mono">{addr.zip}</p>
                         </div>
                     ))}
                 </div>
 
                 <div className="pt-4 border-t space-y-3">
-                    <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados</h2>
-                    <input placeholder="Nome Completo" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
-                    <input placeholder="CPF / CNPJ" value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
+                    <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados para Nota</h2>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome Completo</label>
+                        <input placeholder="Seu Nome" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">CPF / CNPJ</label>
+                        <input placeholder="000.000.000-00" value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
+                    </div>
                 </div>
             </div>
           </div>
@@ -382,13 +383,13 @@ export default function Cart() {
                 <div className="space-y-3 text-sm mb-6">
                     <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                     
+                    {/* FRETE */}
                     <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-center">
                             <span className="flex gap-1"><Truck size={14}/> Frete</span>
                             {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? formatCurrency(selectedShipping.price) : '--'}</span>}
                         </div>
                         
-                        {/* LISTA LIMPA: Só aparece 1 PAC e 1 SEDEX (ou Expresso Local) */}
                         {!recalculatingShipping && shippingOptions.map(opt => (
                             <div key={opt.name} onClick={() => setShipping(opt)} className={`p-3 border rounded-lg cursor-pointer text-xs flex justify-between items-center ${selectedShipping?.name === opt.name ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'hover:bg-gray-50'}`}>
                                 <div className="flex flex-col">
