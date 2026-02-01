@@ -121,7 +121,7 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
   };
 
-  // --- FINALIZAR COMPRA ---
+  // --- FINALIZAR COMPRA (CORREÇÃO DE DADOS) ---
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Frete/Endereço?");
@@ -132,10 +132,18 @@ export default function Cart() {
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      // 1. PREPARA ITENS (CORREÇÃO DO UNDEFINED)
+      // 1. DADOS SANITIZADOS DO CLIENTE (PARA EVITAR UNKNOWN FIELDS)
+      const cleanCustomer = {
+        name: user.fullName || "Cliente Site",
+        email: user.primaryEmailAddress?.emailAddress || "",
+        cpf: customer.document, // CPF VAI AQUI DENTRO
+        phone: "" 
+      };
+
+      // 2. DADOS SANITIZADOS DOS ITENS (PARA EVITAR UNDEFINED)
       const sanitizedItems = items.map(item => ({
          _key: Math.random().toString(36).substring(7),
-         // AQUI ESTÁ O SEGREDO: Se não tiver title, tenta name, se não tiver, coloca texto padrão
+         // Garante que SEMPRE vai ter um nome
          productName: item.title || item.name || "Produto Sem Nome", 
          variantName: item.variantName || "Padrão", 
          color: item.color || "",
@@ -144,12 +152,10 @@ export default function Cart() {
          quantity: item.quantity,
          price: item.price,
          imageUrl: item.image || "", 
-         product: { _type: 'reference', _ref: item._id },
-         productSlug: item.slug?.current || item.slug || ""
+         product: { _type: 'reference', _ref: item._id }
       }));
 
-      // 2. PREPARA ENDEREÇO (LIMPO - SEM ALIAS/ID)
-      // O erro 'Unknown field alias' acontecia porque mandávamos o objeto activeAddress direto
+      // 3. DADOS SANITIZADOS DO ENDEREÇO
       const cleanAddress = {
         zip: activeAddress.zip,
         street: activeAddress.street,
@@ -160,31 +166,26 @@ export default function Cart() {
         complement: ""
       };
 
-      // 3. CRIA O PEDIDO NO SANITY (ESTRUTURA LIMPA)
-      // Note que NÃO enviamos 'customerDocument' solto na raiz, só dentro de customer
+      // 4. CRIAR PEDIDO NO SANITY
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
         status: 'pending',
-        customer: {
-            name: user.fullName || "Cliente Site",
-            email: user.primaryEmailAddress?.emailAddress || "",
-            cpf: customer.document, // Coloca o CPF no lugar certo
-            phone: "" 
-        },
-        items: sanitizedItems,
+        customer: cleanCustomer, // Envia o objeto limpo
+        items: sanitizedItems,   // Envia os itens limpos
         shippingAddress: cleanAddress,
         carrier: selectedShipping.name,
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Checkout V5 - Dados Higienizados"
+        internalNotes: "Criado via Site v6"
       };
 
-      console.log("Enviando pedido...", orderDoc);
+      console.log("Salvando pedido...", orderDoc);
+      // Aqui salvamos no banco
       await client.create(orderDoc);
 
-      // 4. CHAMA O PAGAMENTO (WORKER)
+      // 5. CHAMAR WORKER PARA PAGAMENTO
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
@@ -192,10 +193,10 @@ export default function Cart() {
         body: JSON.stringify({ 
             items: sanitizedItems,
             shipping: parseFloat(selectedShipping.price), 
-            email: user.primaryEmailAddress?.emailAddress, 
+            email: cleanCustomer.email, 
             tipoPagamento, 
             shippingAddress: cleanAddress,
-            customerDocument: customer.document,
+            customerDocument: cleanCustomer.cpf,
             totalAmount: totalFinal,
             orderId: orderNumber 
         })
@@ -207,7 +208,7 @@ export default function Cart() {
         throw new Error(JSON.stringify(data.details || data.error));
       }
 
-      // 5. REDIRECIONA
+      // 6. REDIRECIONAR
       clearCart();
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });

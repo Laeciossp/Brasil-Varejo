@@ -1,3 +1,4 @@
+// schemas/order.js
 export default {
   name: 'order',
   title: '📦 Pedidos',
@@ -36,16 +37,16 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- CAMPOS FANTASMAS (CORREÇÃO DE ERRO "UNKNOWN FIELD") ---
-    // Adicione estes campos EXATAMENTE assim para sumir o erro vermelho
-    { name: 'cpf', type: 'string', hidden: true }, 
-    { name: 'document', type: 'string', hidden: true },
+    // --- CAMPOS FANTASMAS (PARA SUMIR COM OS ERROS VERMELHOS) ---
+    // O Sanity vai aceitar esses dados antigos mas não vai mostrar nem dar erro.
+    { name: 'cpf', type: 'string', hidden: true },
     { name: 'customerDocument', type: 'string', hidden: true },
     { name: 'customerEmail', type: 'string', hidden: true },
     { name: 'alias', type: 'string', hidden: true },
     { name: 'id', type: 'string', hidden: true },
+    { name: 'document', type: 'string', hidden: true },
 
-    // --- CLIENTE (ESTRUTURA CORRETA) ---
+    // --- CLIENTE (ONDE OS DADOS DEVEM FICAR) ---
     {
       name: 'customer',
       title: 'Dados do Cliente',
@@ -73,14 +74,14 @@ export default {
             { name: 'productName', title: 'Nome do Produto', type: 'string' },
             { name: 'variantName', title: 'Variação', type: 'string' }, 
             
-            // Campos específicos
+            // Detalhes separados
             { name: 'color', title: 'Cor', type: 'string' }, 
             { name: 'size', title: 'Tamanho', type: 'string' }, 
             { name: 'sku', title: 'SKU', type: 'string' }, 
             
             { name: 'quantity', title: 'Quantidade', type: 'number' },
             { name: 'price', title: 'Preço', type: 'number' },
-            { name: 'imageUrl', title: 'Imagem URL', type: 'string' }, // String evita crash
+            { name: 'imageUrl', title: 'Imagem URL', type: 'string' },
             
             { name: 'product', title: 'Ref. Produto', type: 'reference', to: [{type: 'product'}] },
           ],
@@ -93,11 +94,10 @@ export default {
               qty: 'quantity'
             },
             prepare({title, subtitle, color, size, qty}) {
-              // Monta a descrição para não ficar "undefined"
               let details = [];
               if (subtitle && subtitle !== 'Padrão') details.push(subtitle);
-              if (color) details.push(color);
-              if (size) details.push(size);
+              if (color) details.push(`Cor: ${color}`);
+              if (size) details.push(`Tam: ${size}`);
 
               return { 
                 title: `${qty}x ${title || 'PRODUTO SEM NOME'}`, 
@@ -109,7 +109,7 @@ export default {
       ]
     },
 
-    // --- ENDEREÇO DE ENTREGA ---
+    // --- ENDEREÇO ---
     {
       name: 'shippingAddress',
       title: 'Endereço de Entrega',
@@ -143,15 +143,17 @@ export default {
       ]
     },
 
-    // --- LOGÍSTICA E FINANCEIRO ---
+    // --- LOGÍSTICA/FINANCEIRO ---
     { name: 'trackingCode', title: 'Código de Rastreio', type: 'string', group: 'logistics' },
+    { name: 'trackingUrl', title: 'Link de Rastreio', type: 'url', group: 'logistics' },
     { name: 'carrier', title: 'Transportadora', type: 'string', group: 'logistics' },
     { name: 'shippingCost', title: 'Custo do Frete', type: 'number', group: 'billing' },
     { name: 'totalAmount', title: 'Valor Total', type: 'number', group: 'billing' },
     { name: 'paymentMethod', title: 'Método Pagamento', type: 'string', group: 'billing' },
     
     // --- ADMIN ---
-    { name: 'internalNotes', title: 'Anotações Internas', type: 'text', group: 'admin' }
+    { name: 'internalNotes', title: 'Anotações Internas', type: 'text', group: 'admin' },
+    { name: 'hasUnreadMessage', title: 'Mensagem Não Lida', type: 'boolean', initialValue: false, group: 'admin' }
   ],
   preview: {
     select: { 
