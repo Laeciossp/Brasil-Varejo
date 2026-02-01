@@ -282,75 +282,101 @@ export default function ProductDetails() {
           }]
         })
       });
-      const rawOptions = await response.json();
+     const rawOptions = await response.json();
 
-      if (Array.isArray(rawOptions) && rawOptions.length > 0) {
-          const isLocal = cleanCep === '43850000'; 
+    if (Array.isArray(rawOptions) && rawOptions.length > 0) {
+          const cleanCep = targetCep.replace(/\D/g, '');
+          const isLocal = cleanCep === '43850000';
+          
+          // Lista da Vizinhança
+          const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanCep.startsWith(p));
 
-          // 1. NORMALIZA E ORDENA POR PREÇO
+          const sanityDays = Number(handlingDays) || 0;
+          const extraDays = isNearby ? 4 : sanityDays; 
+          const postingDays = 1; 
+
+          // --- MAPEAR E CORRIGIR PREÇOS ZERADOS ---
           const candidates = rawOptions.map(opt => {
-             let p = opt.custom_price || opt.price || 0;
+             let p = opt.custom_price || opt.price || opt.valor || 0;
              if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
+             
+             let finalPrice = Number(p);
+             const nameLower = (opt.name || '').toLowerCase();
+
+             // AQUI ESTÁ A MÁGICA: Se o preço veio 0 e é vizinho (Simões Filho/Centro), a gente conserta.
+             if (finalPrice === 0 && isNearby) {
+                 if (nameLower.includes('pac') || nameLower.includes('econômico')) finalPrice = 16.90;
+                 if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
+             }
+
              return {
                ...opt,
-               price: Number(p),
-               days: parseInt(opt.delivery_time) || 0,
-               cleanName: (opt.name || '').toLowerCase()
+               price: finalPrice,
+               days: parseInt(opt.delivery_time || opt.prazo) || 1,
+               cleanName: nameLower
              };
-          }).sort((a, b) => a.price - b.price); // Mais barato primeiro
+          })
+          // Agora filtramos. Simões Filho vai passar porque corrigimos o preço para 16.90/19.90
+          .filter(c => c.price > 0 || (product && product.freeShipping))
+          .sort((a, b) => a.price - b.price);
 
           let finalOptions = [];
-          
-          // CONVERTE O MANUSEIO PARA NÚMERO (SEGURANÇA)
-          const extraDays = parseInt(handlingDays) || 4; // Fallback 4
-          const postingDays = 1; // Dia da postagem ("dia + 8")
 
           if (isLocal) {
-             // === REGRA LOCAL (PALASTORE) ===
-             const paidOptions = candidates.filter(c => c.price > 0.01);
-             const bestLocal = paidOptions.length > 0 ? paidOptions[0] : candidates[0];
-             
-             if (bestLocal) {
-                 finalOptions.push({
-                    name: "Expresso Palastore ⚡",
-                    price: bestLocal.price, 
-                    delivery_time: 5, // FIXO EM 5 DIAS
-                    company: "Própria"
-                 });
-             }
+              const bestLocal = candidates.find(c => c.price > 0) || candidates[0];
+              if (bestLocal) {
+                  finalOptions.push({
+                     name: "Expresso Palastore ⚡",
+                     price: bestLocal.price > 0 ? bestLocal.price : 15.00, 
+                     delivery_time: 5, 
+                     company: "Própria"
+                  });
+              }
           } else {
-             // === REGRA NACIONAL (PAC/SEDEX + MANUSEIO + POSTAGEM) ===
-             
-             const bestEconomy = candidates.find(o => 
-                o.cleanName.includes('pac') || 
-                o.cleanName.includes('econômico') || 
-                o.cleanName.includes('normal')
-             );
-             
-             const bestExpress = candidates.find(o => 
-                o.cleanName.includes('sedex') || 
-                o.cleanName.includes('expresso')
-             );
+              const pac = candidates.find(o => o.cleanName.includes('pac') || o.cleanName.includes('econômico'));
+              const sedex = candidates.find(o => o.cleanName.includes('sedex') || o.cleanName.includes('expresso'));
 
-             if (bestEconomy) {
-                finalOptions.push({
-                    name: "PAC (Econômico)",
-                    price: bestEconomy.price,
-                    delivery_time: parseInt(bestEconomy.days) + extraDays + postingDays, 
-                    company: "Correios"
-                });
-             }
-             
-             if (bestExpress && bestExpress.cleanName !== bestEconomy?.cleanName) {
-                finalOptions.push({
-                    name: "SEDEX (Expresso)",
-                    price: bestExpress.price,
-                    delivery_time: parseInt(bestExpress.days) + extraDays + postingDays,
-                    company: "Correios"
-                });
-             }
+              const pacBuffer = isNearby ? 0 : 3;
+              const sedexBuffer = isNearby ? 0 : 1;
+
+              if (pac) {
+                 // Padronização de prazo (Mínimo 7 dias de base para vizinhos)
+                 let basePac = isNearby ? Math.max(7, pac.days) : pac.days;
+                 finalOptions.push({
+                     name: "PAC (Econômico)",
+                     price: pac.price,
+                     delivery_time: basePac + extraDays + postingDays + pacBuffer, 
+                     company: "Correios"
+                 });
+              }
+              
+              if (sedex) {
+                 let baseSedex = isNearby ? Math.max(2, sedex.days) : sedex.days;
+                 let finalSedexDays = baseSedex + extraDays + postingDays + sedexBuffer;
+
+                 if (pac) {
+                    let pacRef = (isNearby ? Math.max(7, pac.days) : pac.days) + extraDays + postingDays + pacBuffer;
+                    if (finalSedexDays >= pacRef) finalSedexDays = Math.max(2, pacRef - 2);
+                 }
+
+                 finalOptions.push({
+                     name: "SEDEX (Expresso)",
+                     price: sedex.price,
+                     delivery_time: finalSedexDays,
+                     company: "Correios"
+                 });
+              }
+
+              // Fallback para quem não tem PAC/SEDEX
+              if (finalOptions.length === 0 && candidates.length > 0) {
+                  finalOptions.push({
+                      name: candidates[0].name || "Entrega Padrão",
+                      price: candidates[0].price,
+                      delivery_time: candidates[0].days + extraDays + postingDays + pacBuffer,
+                      company: candidates[0].company || "Transportadora"
+                  });
+              }
           }
-          
           setShippingOptions(finalOptions);
       } else {
           setShippingOptions([]);

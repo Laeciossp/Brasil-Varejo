@@ -8,7 +8,7 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CONFIGURAÇÃO SANITY (PARA FALLBACK) ---
+// --- CONFIGURAÇÃO SANITY ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -72,26 +72,11 @@ export default function Cart() {
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
         
-        let handlingToAdd = items[0]?.handlingTime;
-
-        // Fallback Sanity
-        if (handlingToAdd === undefined || handlingToAdd === null) {
-             try {
-                const settingsQuery = `*[_type == "shippingSettings"][0]`;
-                const settings = await client.fetch(settingsQuery);
-                handlingToAdd = settings?.handlingTime ? Number(settings.handlingTime) : 0;
-             } catch (e) {
-                handlingToAdd = 0;
-             }
-        }
-        
-        // CÁLCULO SEGURO DO MANUSEIO COM FALLBACK 4
+        // Cálculo de Manuseio
         const maxHandlingTime = items.reduce((max, item) => {
-             const h = parseInt(item.handlingTime) || parseInt(handlingToAdd) || 4; // Fallback 4
+             const h = parseInt(item.handlingTime) || 4; 
              return Math.max(max, h);
-        }, 4); // Começa em 4
-
-        const postingDays = 1; // Dia de postagem
+        }, 4);
 
         const response = await fetch(`${baseUrl}/shipping`, { 
           method: 'POST',
@@ -113,79 +98,106 @@ export default function Cart() {
         
         const rawOptions = await response.json();
 
+        // --- LÓGICA DE FRETE ---
         if (Array.isArray(rawOptions) && rawOptions.length > 0) {
           const cleanZip = targetZip.replace(/\D/g, '');
-          const isLocal = cleanZip === '43850000'; 
+          const isLocal = cleanZip === '43850000';
+          // Lista de Vizinhança
+          const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanZip.startsWith(p));
 
+          const extraDays = isNearby ? 4 : maxHandlingTime; // Força 4 dias se for vizinho
+          const postingDays = 1;
+
+          // --- MAPEAMENTO E CORREÇÃO DE PREÇOS ---
           const candidates = rawOptions.map(opt => {
-             let val = opt.custom_price || opt.price || 0;
-             if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
-             return {
-               ...opt,
-               price: Number(val),
-               days: parseInt(opt.delivery_time) || 0,
-               cleanName: (opt.name || '').toLowerCase()
-             };
-          }).sort((a, b) => a.price - b.price);
+              let val = opt.custom_price || opt.price || opt.valor || 0;
+              if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
+              
+              let finalPrice = Number(val);
+              const nameLower = (opt.name || '').toLowerCase();
+
+              // SE PREÇO ZERO + VIZINHO = CORRIGE PREÇO (Salva Simões Filho/Centro)
+              if (finalPrice === 0 && isNearby) {
+                  if (nameLower.includes('pac') || nameLower.includes('econômico')) finalPrice = 16.90;
+                  if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
+              }
+
+              return {
+                ...opt,
+                price: finalPrice,
+                days: parseInt(opt.delivery_time || opt.prazo) || 1,
+                cleanName: nameLower
+              };
+          })
+          .filter(c => c.price > 0) // Filtra zerados (mas os corrigidos acima passam)
+          .sort((a, b) => a.price - b.price);
 
           let finalOptions = [];
 
           if (isLocal) {
-             // === REGRA LOCAL (PALASTORE) ===
-             const paidOptions = candidates.filter(c => c.price > 0.01);
-             const bestLocal = paidOptions.length > 0 ? paidOptions[0] : candidates[0];
-             
-             if (bestLocal) {
-                 finalOptions.push({
-                    name: "Expresso Palastore ⚡",
-                    price: bestLocal.price, 
-                    delivery_time: 5, // FIXO 5 DIAS
-                    company: "Própria"
-                 });
-             }
+             finalOptions.push({
+                name: "Palastore Expresso ⚡",
+                price: candidates[0]?.price > 0 ? candidates[0].price : 15.00, 
+                delivery_time: 5, 
+                company: "Própria"
+             });
           } else {
-             // === REGRA NACIONAL (PAC/SEDEX + MANUSEIO + POSTAGEM) ===
+             const pac = candidates.find(o => o.cleanName.includes('pac') || o.cleanName.includes('econômico'));
+             const sedex = candidates.find(o => o.cleanName.includes('sedex') || o.cleanName.includes('expresso'));
              
-             const bestEconomy = candidates.find(o => 
-                o.cleanName.includes('pac') || 
-                o.cleanName.includes('econômico') || 
-                o.cleanName.includes('normal')
-             );
-             
-             const bestExpress = candidates.find(o => 
-                o.cleanName.includes('sedex') || 
-                o.cleanName.includes('expresso')
-             );
+             const pacBuffer = isNearby ? 0 : 3;
+             const sedexBuffer = isNearby ? 0 : 1;
 
-             if (bestEconomy) {
+             if (pac) {
+                // Padronização: Base mínima de 7 dias para vizinhos
+                let basePac = isNearby ? Math.max(7, pac.days) : pac.days;
                 finalOptions.push({
                     name: "PAC (Econômico)",
-                    price: bestEconomy.price,
-                    delivery_time: parseInt(bestEconomy.days) + maxHandlingTime + postingDays,
+                    price: pac.price,
+                    delivery_time: basePac + extraDays + postingDays + pacBuffer,
                     company: "Correios"
                 });
              }
 
-             if (bestExpress && bestExpress.cleanName !== bestEconomy?.cleanName) {
+             if (sedex) {
+                let baseSedex = isNearby ? Math.max(2, sedex.days) : sedex.days;
+                let finalSedexDays = baseSedex + extraDays + postingDays + sedexBuffer;
+                
+                if (pac) {
+                    let pacRef = (isNearby ? Math.max(7, pac.days) : pac.days) + extraDays + postingDays + pacBuffer;
+                    if (finalSedexDays >= pacRef) finalSedexDays = Math.max(2, pacRef - 2);
+                }
+
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
-                    price: bestExpress.price,
-                    delivery_time: parseInt(bestExpress.days) + maxHandlingTime + postingDays,
+                    price: sedex.price,
+                    delivery_time: finalSedexDays,
                     company: "Correios"
                 });
+             }
+             
+             // Fallback
+             if (finalOptions.length === 0 && candidates.length > 0) {
+                 finalOptions.push({
+                    name: candidates[0].name,
+                    price: candidates[0].price,
+                    delivery_time: candidates[0].days + extraDays + postingDays + pacBuffer,
+                    company: "Transportadora"
+                 });
              }
           }
 
           setShippingOptions(finalOptions);
           
           if (finalOptions.length > 0) {
-             const currentName = selectedShipping?.name;
-             const sameOption = finalOptions.find(o => o.name === currentName);
-             setShipping(sameOption || finalOptions[0]);
+              const currentName = selectedShipping?.name;
+              const sameOption = finalOptions.find(o => o.name === currentName);
+              setShipping(sameOption || finalOptions[0]);
           } else {
-             setShipping(null);
+              setShipping(null);
           }
         }
+
       } catch (error) {
         console.error("Erro frete:", error);
       } finally {
