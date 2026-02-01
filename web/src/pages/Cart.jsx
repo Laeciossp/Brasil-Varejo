@@ -85,8 +85,10 @@ export default function Cart() {
              }
         }
         
+        // CÁLCULO SEGURO DO MANUSEIO
         const maxHandlingTime = items.reduce((max, item) => {
-             return Math.max(max, (item.handlingTime || handlingToAdd || 0));
+             const h = parseInt(item.handlingTime) || parseInt(handlingToAdd) || 0;
+             return Math.max(max, h);
         }, 0);
 
         const response = await fetch(`${baseUrl}/shipping`, { 
@@ -129,30 +131,26 @@ export default function Cart() {
           if (isLocal) {
              // === REGRA LOCAL (PALASTORE) ===
              // Busca a opção mais barata que NÃO SEJA ZERO
-             const paidOptions = candidates.filter(c => c.price > 0);
-             paidOptions.sort((a, b) => a.price - b.price);
-             
+             const paidOptions = candidates.filter(c => c.price > 0.01);
              const bestLocal = paidOptions.length > 0 ? paidOptions[0] : candidates[0];
              
              if (bestLocal) {
                  finalOptions.push({
                     name: "Expresso Palastore ⚡",
-                    price: bestLocal.price, // PREÇO CORRETO
+                    price: bestLocal.price, 
                     delivery_time: 5, // FIXO 5 DIAS
                     company: "Própria"
                  });
              }
           } else {
-             // === REGRA NACIONAL ===
+             // === REGRA NACIONAL (PAC/SEDEX + MANUSEIO) ===
              
-             // 1. Melhor PAC
              const bestEconomy = candidates.find(o => 
                 o.cleanName.includes('pac') || 
                 o.cleanName.includes('econômico') || 
                 o.cleanName.includes('normal')
              );
              
-             // 2. Melhor SEDEX
              const bestExpress = candidates.find(o => 
                 o.cleanName.includes('sedex') || 
                 o.cleanName.includes('expresso')
@@ -162,7 +160,7 @@ export default function Cart() {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    delivery_time: bestEconomy.days + maxHandlingTime,
+                    delivery_time: parseInt(bestEconomy.days) + maxHandlingTime, // SOMA OBRIGATÓRIA
                     company: "Correios"
                 });
              }
@@ -171,7 +169,7 @@ export default function Cart() {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    delivery_time: bestExpress.days + maxHandlingTime,
+                    delivery_time: parseInt(bestExpress.days) + maxHandlingTime, // SOMA OBRIGATÓRIA
                     company: "Correios"
                 });
              }
@@ -179,6 +177,7 @@ export default function Cart() {
 
           setShippingOptions(finalOptions);
           
+          // Mantém a seleção anterior se ainda existir
           if (finalOptions.length > 0) {
              const currentName = selectedShipping?.name;
              const sameOption = finalOptions.find(o => o.name === currentName);
