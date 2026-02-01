@@ -36,6 +36,7 @@ export default function Cart() {
   const { user, isLoaded } = useUser();
   const [loading, setLoading] = useState(false);
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
+  const [shippingOptions, setShippingOptions] = useState([]); // Estado local para opções limpas
   
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
@@ -47,7 +48,7 @@ export default function Cart() {
     tipoPagamento, setTipoPagamento, globalCep, clearCart
   } = useCartStore();
   
-  // --- CÁLCULO TOTAL (BLINDADO) ---
+  // --- CÁLCULOS ---
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   const shippingCost = selectedShipping?.price ? Number(selectedShipping.price) : 0;
   const totalFinal = subtotal + shippingCost;
@@ -60,7 +61,7 @@ export default function Cart() {
     }
   }, [user]);
 
-  // --- RECALCULAR FRETE (CORREÇÃO DO ZERO) ---
+  // --- LÓGICA DE FRETE (LIMPEZA E CORREÇÃO) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -84,46 +85,60 @@ export default function Cart() {
           })
         });
         
-        const options = await response.json();
+        const rawOptions = await response.json();
 
-        if (Array.isArray(options) && options.length > 0) {
+        // --- FILTRAGEM INTELIGENTE ---
+        if (Array.isArray(rawOptions) && rawOptions.length > 0) {
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
+          
+          let finalOptions = [];
 
-          const optionsAdjusted = options.map(opt => {
-            let finalName = opt.name;
-            let finalDays = parseInt(opt.delivery_time) || 0;
-            
-            // --- CORREÇÃO DE PREÇO ---
-            // 1. Pega qualquer campo que possa ter o preço
-            let rawPrice = opt.custom_price || opt.price || "0";
-            
-            // 2. Converte para string e substitui vírgula por ponto (ex: "15,50" -> "15.50")
-            let stringPrice = String(rawPrice).replace(',', '.');
-            
-            // 3. Transforma em número real
-            let finalPrice = parseFloat(stringPrice) || 0;
+          if (isLocal) {
+             // Opção Fixa para Entrega Local
+             finalOptions.push({
+                name: "Expresso Palastore ⚡",
+                price: 0, // Ou coloque um valor fixo ex: 10.00
+                delivery_time: 1
+             });
+          } else {
+             // 1. Sanitizar preços (Transformar tudo em Number)
+             const safeOptions = rawOptions.map(opt => {
+                let p = opt.custom_price || opt.price || 0;
+                if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
+                return { ...opt, price: Number(p) };
+             });
 
-            const lowerName = (opt.name || '').toLowerCase();
+             // 2. Encontrar o MELHOR PAC e o MELHOR SEDEX
+             const pacs = safeOptions.filter(o => o.name.toLowerCase().includes('pac') || o.name.toLowerCase().includes('econômico'));
+             const sedexs = safeOptions.filter(o => o.name.toLowerCase().includes('sedex') || o.name.toLowerCase().includes('expresso'));
 
-            if (isLocal) {
-                finalName = "Expresso Palastore ⚡";
-                // SE QUISER COBRAR TAXA FIXA LOCAL, DESCOMENTE A LINHA ABAIXO:
-                // if (finalPrice === 0) finalPrice = 10.00; 
-            } else if (lowerName.includes('pac')) {
-                finalName = "PAC (Econômico)";
-            } else if (lowerName.includes('sedex')) {
-                finalName = "SEDEX (Expresso)";
-            }
+             // Ordenar por preço (menor para maior)
+             pacs.sort((a, b) => a.price - b.price);
+             sedexs.sort((a, b) => a.price - b.price);
 
-            if (!isLocal) finalDays += 5; 
+             // Pegar só o primeiro de cada (o mais barato)
+             if (pacs.length > 0) {
+                finalOptions.push({
+                    ...pacs[0],
+                    name: "PAC (Econômico)",
+                    delivery_time: parseInt(pacs[0].delivery_time) + 5
+                });
+             }
+             if (sedexs.length > 0) {
+                finalOptions.push({
+                    ...sedexs[0],
+                    name: "SEDEX (Expresso)",
+                    delivery_time: parseInt(sedexs[0].delivery_time) + 5
+                });
+             }
+          }
 
-            // Retorna o objeto com o preço numérico corrigido
-            return { ...opt, name: finalName, delivery_time: finalDays, price: finalPrice };
-          });
-
-          // Define o frete selecionado (com o preço corrigido)
-          setShipping(optionsAdjusted[0]);
+          // Salva as opções limpas e seleciona a primeira automaticamente
+          setShippingOptions(finalOptions);
+          if (finalOptions.length > 0) {
+             setShipping(finalOptions[0]);
+          }
         }
       } catch (error) {
         console.error("Erro frete", error);
@@ -153,7 +168,6 @@ export default function Cart() {
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      // 1. DADOS
       const cleanCustomer = {
         name: customerName,
         email: user.primaryEmailAddress?.emailAddress || "",
@@ -184,7 +198,7 @@ export default function Cart() {
          product: { _type: 'reference', _ref: item._id }
       }));
 
-      // 2. CRIA PEDIDO NO SANITY
+      // CRIA PEDIDO NO SANITY
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
@@ -197,14 +211,14 @@ export default function Cart() {
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Pedido Site (Frete Corrigido)"
+        internalNotes: "Venda Site"
       };
 
       console.log("Criando pedido...", orderDoc);
       const createdOrder = await client.create(orderDoc);
       const sanityId = createdOrder._id;
 
-      // 3. CHAMA WORKER
+      // CHAMA WORKER
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
@@ -320,6 +334,7 @@ export default function Cart() {
                     ))}
                 </div>
 
+                {/* DADOS PESSOAIS */}
                 <div className="pt-4 border-t space-y-3">
                     <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados para Nota</h2>
                     <div>
@@ -339,12 +354,23 @@ export default function Cart() {
                 <h3 className="text-lg font-bold mb-6">Resumo</h3>
                 <div className="space-y-3 text-sm mb-6">
                     <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-                    <div className="flex justify-between items-center">
-                        <span className="flex gap-1"><Truck size={14}/> Frete</span>
-                        {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? formatCurrency(selectedShipping.price) : '--'}</span>}
+                    
+                    {/* SELEÇÃO DE FRETE OTIMIZADA */}
+                    <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-center">
+                            <span className="flex gap-1"><Truck size={14}/> Frete</span>
+                            {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? formatCurrency(selectedShipping.price) : '--'}</span>}
+                        </div>
+                        {/* LISTA LIMPA DE OPÇÕES DE FRETE */}
+                        {!recalculatingShipping && shippingOptions.map(opt => (
+                            <div key={opt.name} onClick={() => setShipping(opt)} className={`p-2 border rounded cursor-pointer text-xs flex justify-between ${selectedShipping?.name === opt.name ? 'border-orange-500 bg-orange-50' : ''}`}>
+                                <span>{opt.name} - {opt.delivery_time} dias</span>
+                                <span className="font-bold">{formatCurrency(opt.price)}</span>
+                            </div>
+                        ))}
                     </div>
-                    {selectedShipping && <div className="text-xs text-right text-gray-400">{selectedShipping.name}</div>}
                 </div>
+
                 <div className="border-t pt-4 mb-6 space-y-2">
                     <label className="flex items-center gap-2 p-2 border rounded cursor-pointer"><input type="radio" checked={tipoPagamento === 'pix'} onChange={() => setTipoPagamento('pix')}/> PIX</label>
                     <label className="flex items-center gap-2 p-2 border rounded cursor-pointer"><input type="radio" checked={tipoPagamento === 'cartao'} onChange={() => setTipoPagamento('cartao')}/> Cartão</label>
