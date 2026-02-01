@@ -36,27 +36,14 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- CAMPOS RAIZ (Aceita os dados do Worker sem erro) ---
-    { 
-      name: 'cpf', 
-      title: 'CPF (Sistema Antigo)', 
-      type: 'string', 
-      group: 'details',
-      readOnly: true 
-    },
-    { 
-      name: 'customerEmail', 
-      title: 'Email (Sistema Antigo)', 
-      type: 'string', 
-      hidden: true 
-    },
-    { 
-      name: 'customerDocument', // Caso o worker envie este
-      type: 'string', 
-      hidden: true 
-    },
+    // --- CAMPOS OCULTOS (PARA NÃO DAR ERRO VERMELHO) ---
+    { name: 'cpf', type: 'string', hidden: true },
+    { name: 'customerDocument', type: 'string', hidden: true },
+    { name: 'document', type: 'string', hidden: true },
+    { name: 'alias', type: 'string', hidden: true },
+    { name: 'id', type: 'string', hidden: true },
 
-    // --- CLIENTE (Estrutura Nova) ---
+    // --- CLIENTE (ESTRUTURA CORRETA) ---
     {
       name: 'customer',
       title: 'Dados do Cliente',
@@ -70,7 +57,7 @@ export default {
       ]
     },
 
-    // --- ITENS DO PEDIDO ---
+    // --- ITENS DO PEDIDO (COM PREVIEW CORRIGIDO) ---
     {
       name: 'items',
       title: 'Itens do Pedido',
@@ -81,44 +68,33 @@ export default {
           type: 'object',
           title: 'Produto',
           fields: [
-            // O Worker pode mandar 'name', 'title' ou 'productName'. Aceitamos todos.
-            { name: 'productName', title: 'Nome (Site)', type: 'string' },
-            { name: 'title', title: 'Nome (Worker)', type: 'string' }, 
-            { name: 'name', title: 'Nome (Genérico)', type: 'string' },
-            
+            { name: 'productName', title: 'Nome do Produto', type: 'string' },
             { name: 'variantName', title: 'Variação', type: 'string' }, 
             { name: 'color', title: 'Cor', type: 'string' }, 
             { name: 'size', title: 'Tamanho', type: 'string' }, 
             { name: 'sku', title: 'SKU', type: 'string' }, 
-            
             { name: 'quantity', title: 'Quantidade', type: 'number' },
             { name: 'price', title: 'Preço', type: 'number' },
             { name: 'imageUrl', title: 'Imagem URL', type: 'string' },
-            
             { name: 'product', title: 'Ref. Produto', type: 'reference', to: [{type: 'product'}] },
           ],
           preview: {
             select: { 
-              pName: 'productName', 
-              tName: 'title',
-              genName: 'name',
+              title: 'productName', 
               variant: 'variantName',
               color: 'color',
               size: 'size',
               qty: 'quantity'
             },
-            prepare({pName, tName, genName, variant, color, size, qty}) {
-              // Lógica inteligente para achar o nome onde ele estiver
-              const finalName = pName || tName || genName || 'Produto sem nome';
-              
-              let details = [];
+            prepare({title, variant, color, size, qty}) {
+              const details = [];
               if (variant && variant !== 'Padrão') details.push(variant);
               if (color) details.push(color);
               if (size) details.push(size);
-
+              
               return { 
-                title: `${qty}x ${finalName}`, 
-                subtitle: details.join(' | ')
+                title: `${qty}x ${title || 'PRODUTO SEM NOME'}`, 
+                subtitle: details.join(' - ') || 'Item Padrão'
               }
             }
           }
@@ -142,13 +118,12 @@ export default {
         { name: 'state', type: 'string', title: 'Estado' }
       ]
     },
-    // Endereço de Faturamento (Opcional, pois o worker talvez não preencha)
     {
       name: 'billingAddress',
       title: 'Endereço de Faturamento',
       type: 'object',
       group: 'billing',
-      options: { collapsible: true, collapsed: true },
+      options: { collapsible: true, collapsed: false },
       fields: [
         { name: 'zip', type: 'string', title: 'CEP' },
         { name: 'street', type: 'string', title: 'Rua' },
@@ -160,7 +135,7 @@ export default {
       ]
     },
 
-    // --- OUTROS ---
+    // --- FINANÇAS ---
     { name: 'trackingCode', title: 'Código de Rastreio', type: 'string', group: 'logistics' },
     { name: 'carrier', title: 'Transportadora', type: 'string', group: 'logistics' },
     { name: 'shippingCost', title: 'Custo do Frete', type: 'number', group: 'billing' },
@@ -172,19 +147,15 @@ export default {
   preview: {
     select: { 
       title: 'orderNumber', 
-      cName: 'customer.name', 
-      // Tenta pegar nome antigo se o novo falhar
-      oldCpf: 'cpf', 
-      status: 'status',
+      customer: 'customer.name', 
+      status: 'status', 
       total: 'totalAmount'
     },
-    prepare({title, cName, oldCpf, status, total}) {
+    prepare({title, customer, status, total}) {
       const statusIcons = { pending: '🟡', paid: '🟢', shipped: '🚚', delivered: '🏠', cancelled: '❌' };
-      const clientInfo = cName || (oldCpf ? `CPF: ${oldCpf}` : 'Cliente Site');
-      
       return {
-        title: `${statusIcons[status] || '⚪'} ${title || 'Novo'} - ${clientInfo}`,
-        subtitle: total ? `R$ ${total.toFixed(2)}` : ''
+        title: `${statusIcons[status] || '⚪'} ${title || 'Novo'} - ${customer || 'Cliente'}`,
+        subtitle: total ? `R$ ${total}` : ''
       }
     }
   }
