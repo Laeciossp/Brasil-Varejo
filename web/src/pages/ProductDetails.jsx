@@ -293,15 +293,23 @@ export default function ProductDetails() {
              };
           });
 
-          candidates.sort((a, b) => a.price - b.price);
-
           let finalOptions = [];
 
           if (isLocal) {
-             const cheapest = candidates[0];
+             // --- REGRA LOCAL: PREÇO DE SEDEX ---
+             let baseOption = candidates.find(o => 
+                o.name.toLowerCase().includes('sedex') || 
+                o.name.toLowerCase().includes('expresso')
+             );
+             
+             if (!baseOption) {
+                 candidates.sort((a, b) => b.price - a.price); // fallback
+                 baseOption = candidates[0];
+             }
+
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
-                price: cheapest ? cheapest.price : 0, 
+                price: baseOption ? baseOption.price : 20.00, 
                 delivery_time: 5,
                 company: "Própria"
              });
@@ -357,8 +365,6 @@ export default function ProductDetails() {
         sku: finalSku,
         color: selectedVariant ? selectedVariant.color : null,
         size: selectedVariant ? selectedVariant.size : null,
-        // --- AQUI ESTÁ A CORREÇÃO DA DISCREPÂNCIA ---
-        // Salvamos as dimensões reais para o Carrinho usar depois
         width: product.logistics?.width || 15,
         height: product.logistics?.height || 15,
         length: product.logistics?.length || 15,
@@ -394,7 +400,6 @@ export default function ProductDetails() {
             image: prod.imageUrl,
             sku: prod._id,
             variantName: null,
-            // Adiciona defaults se não tiver dados completos no quick add
             width: 15, height: 15, length: 15, weight: 0.5
         });
         alert("Adicionado ao carrinho!");

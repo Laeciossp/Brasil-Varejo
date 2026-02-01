@@ -8,7 +8,6 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CONFIGURAÇÃO SANITY ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -36,9 +35,7 @@ export default function Cart() {
   const [loading, setLoading] = useState(false);
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   const [shippingOptions, setShippingOptions] = useState([]); 
-  
   const [globalHandlingTime, setGlobalHandlingTime] = useState(0);
-
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   const [customerName, setCustomerName] = useState('');
@@ -50,11 +47,8 @@ export default function Cart() {
   } = useCartStore();
   
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
-  
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
-  
   const totalFinal = subtotal + shippingCost;
-
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
   useEffect(() => {
@@ -72,7 +66,7 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- CÁLCULO DE FRETE (USANDO MEDIDAS REAIS) ---
+  // --- CÁLCULO DE FRETE ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -92,7 +86,7 @@ export default function Cart() {
           body: JSON.stringify({
             from: { postal_code: "43805000" }, 
             to: { postal_code: targetZip },
-            // AGORA USAMOS AS MEDIDAS REAIS DO PRODUTO (SALVAS EM ProductDetails.jsx)
+            // ENVIA MEDIDAS REAIS
             products: items.map(p => ({
               id: p._id,
               width: p.width || 15,
@@ -111,6 +105,7 @@ export default function Cart() {
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
 
+          // 1. Normalizar Preços
           const allOptions = rawOptions.map(opt => {
              let val = opt.custom_price || opt.price || 0;
              if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
@@ -124,16 +119,28 @@ export default function Cart() {
           let finalOptions = [];
 
           if (isLocal) {
-             allOptions.sort((a, b) => a.price - b.price);
-             const cheapest = allOptions[0];
+             // --- REGRA LOCAL: PREÇO DE SEDEX ---
+             // Procura especificamente o SEDEX na lista para pegar o preço dele
+             let baseOption = allOptions.find(o => 
+                o.name.toLowerCase().includes('sedex') || 
+                o.name.toLowerCase().includes('expresso')
+             );
+
+             // Se por acaso não achar SEDEX, pega o mais caro (segurança) ou o primeiro
+             if (!baseOption) {
+                 allOptions.sort((a, b) => b.price - a.price); // Do maior pro menor
+                 baseOption = allOptions[0];
+             }
+             
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
-                price: cheapest ? cheapest.price : 0, 
-                delivery_time: 5, 
+                price: baseOption ? baseOption.price : 20.00, // Preço do SEDEX
+                delivery_time: 5, // Prazo Fixo
                 company: "Própria"
              });
 
           } else {
+             // --- REGRA NACIONAL ---
              const pacs = allOptions.filter(o => 
                 o.name.toLowerCase().includes('pac') || 
                 o.name.toLowerCase().includes('econômico') || 
@@ -145,6 +152,7 @@ export default function Cart() {
                 o.name.toLowerCase().includes('expresso')
              );
 
+             // Ordena e pega o mais barato de cada categoria
              if (pacs.length > 0) {
                 pacs.sort((a, b) => a.price - b.price);
                 finalOptions.push({
@@ -168,6 +176,7 @@ export default function Cart() {
 
           setShippingOptions(finalOptions);
           
+          // --- FORÇA SELEÇÃO IMEDIATA ---
           if (finalOptions.length > 0) {
              setShipping(finalOptions[0]);
           } else {
