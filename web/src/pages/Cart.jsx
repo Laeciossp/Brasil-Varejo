@@ -56,7 +56,7 @@ export default function Cart() {
 
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // 1. Busca Dias de Manuseio apenas
+  // 1. Busca Dias de Manuseio (Configuração Global)
   useEffect(() => {
     const fetchSettings = async () => {
       try {
@@ -72,7 +72,7 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- 2. CÁLCULO DE FRETE (USA OS DADOS QUE VIERAM NO ITEM) ---
+  // --- 2. CÁLCULO DE FRETE (USA OS DADOS DO ITEM + MANUSEIO) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -92,10 +92,10 @@ export default function Cart() {
           body: JSON.stringify({
             from: { postal_code: "43805000" }, 
             to: { postal_code: targetZip },
-            // Mapeia os itens (Assumindo que eles JÁ TEM width, height etc vindos do ProductDetails)
+            // ENVIA OS ITENS COM AS MEDIDAS QUE O PRODUCTDETAILS MANDOU
             products: items.map(p => ({
               id: p._id,
-              width: Number(p.width) || 15, // Fallback só por segurança
+              width: Number(p.width) || 15,
               height: Number(p.height) || 15,
               length: Number(p.length) || 15,
               weight: Number(p.weight) || 0.5,
@@ -121,14 +121,13 @@ export default function Cart() {
              };
           });
 
-          // Ordena pelo menor preço
+          // Ordena (Menor preço primeiro)
           candidates.sort((a, b) => a.price - b.price);
 
           let finalOptions = [];
 
           if (isLocal) {
-             // Palastore (Lógica que já funciona)
-             // Filtra gratuitos e pega o mais barato real
+             // LÓGICA PALASTORE
              const paidOptions = candidates.filter(c => c.price > 0);
              paidOptions.sort((a, b) => a.price - b.price);
              const cheapest = paidOptions.length > 0 ? paidOptions[0] : (candidates[0] || {price: 20});
@@ -141,8 +140,7 @@ export default function Cart() {
              });
 
           } else {
-             // Nacional: Soma Manuseio para bater com a página de produto
-             
+             // LÓGICA NACIONAL (COM SOMA DE DIAS)
              const bestEconomy = candidates.find(o => 
                 o.name.toLowerCase().includes('pac') || 
                 o.name.toLowerCase().includes('econômico') || 
@@ -158,7 +156,7 @@ export default function Cart() {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    delivery_time: bestEconomy.days + globalHandlingTime, 
+                    delivery_time: bestEconomy.days + globalHandlingTime, // SOMA O MANUSEIO
                     company: "Correios"
                 });
              }
@@ -167,7 +165,7 @@ export default function Cart() {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    delivery_time: bestExpress.days + globalHandlingTime, 
+                    delivery_time: bestExpress.days + globalHandlingTime, // SOMA O MANUSEIO
                     company: "Correios"
                 });
              }

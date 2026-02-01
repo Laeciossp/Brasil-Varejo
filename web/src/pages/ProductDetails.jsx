@@ -204,6 +204,7 @@ export default function ProductDetails() {
             if (productData.images?.length > 0) setActiveMedia(productData.images[0]);
           }
 
+          // BUSCA RELACIONADOS (INCLUINDO LOGISTICS PARA O QUICK ADD FUNCIONAR)
           if (productData.categories && productData.categories.length > 0) {
             const catId = productData.categories[0]._id;
             const relatedQuery = `
@@ -211,7 +212,7 @@ export default function ProductDetails() {
                 _id, title, slug, price, oldPrice,
                 "imageUrl": images[0].asset->url,
                 variants,
-                logistics
+                logistics { width, height, length, weight }
               }
             `;
             const related = await client.fetch(relatedQuery, { catId, id: productData._id });
@@ -293,16 +294,22 @@ export default function ProductDetails() {
              };
           });
 
-          // Ordenar (Menor preço primeiro)
-          candidates.sort((a, b) => a.price - b.price);
-
           let finalOptions = [];
 
           if (isLocal) {
-             const cheapest = candidates[0];
+             let sedexOption = candidates.find(o => 
+                o.name.toLowerCase().includes('sedex') || 
+                o.name.toLowerCase().includes('expresso')
+             );
+
+             if (!sedexOption) {
+                 candidates.sort((a, b) => b.price - a.price);
+                 sedexOption = candidates[0];
+             }
+
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
-                price: cheapest ? cheapest.price : 0, 
+                price: sedexOption ? sedexOption.price : 20.00, 
                 delivery_time: 5,
                 company: "Própria"
              });
@@ -346,7 +353,6 @@ export default function ProductDetails() {
     }
   };
 
-  // --- AQUI ESTÁ A MÁGICA: ENVIAR DADOS COMPLETOS ---
   const createCartItem = () => {
       const finalSku = selectedVariant ? (selectedVariant.sku || selectedVariant._key) : product._id;
       return {
@@ -359,7 +365,7 @@ export default function ProductDetails() {
         sku: finalSku,
         color: selectedVariant ? selectedVariant.color : null,
         size: selectedVariant ? selectedVariant.size : null,
-        // DADOS DE FRETE INJETADOS NO CARRINHO
+        // DADOS IMPORTANTES DE FRETE AQUI:
         width: product.logistics?.width || 15,
         height: product.logistics?.height || 15,
         length: product.logistics?.length || 15,
@@ -395,7 +401,7 @@ export default function ProductDetails() {
             image: prod.imageUrl,
             sku: prod._id,
             variantName: null,
-            // Quick Add também precisa de dados se tiver
+            // AGORA O QUICK ADD ENVIA OS DADOS REAIS:
             width: prod.logistics?.width || 15,
             height: prod.logistics?.height || 15,
             length: prod.logistics?.length || 15,
@@ -503,7 +509,6 @@ export default function ProductDetails() {
                 )
                 )}
 
-                {/* BOTÕES DE NAVEGAÇÃO IMAGEM */}
                 {product.images?.length > 1 && (
                     <>
                         <button 
