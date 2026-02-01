@@ -133,8 +133,8 @@ export default function ProductDetails() {
                     oldPrice: productOldPrice,
                     stock: sizeObj.stock,
                     sku: sizeObj.sku,
-                    color: item.colorName, 
-                    size: sizeObj.size,
+                    color: item.colorName, // IMPORTANTE: Captura a COR
+                    size: sizeObj.size,    // IMPORTANTE: Captura o TAMANHO
                     variantImage: groupImage
                 });
             });
@@ -147,8 +147,8 @@ export default function ProductDetails() {
                 oldPrice: item.oldPrice || productOldPrice,
                 stock: item.stock,
                 sku: item.sku,
-                color: item.colorName, 
-                size: item.size || item.variantName, 
+                color: item.colorName, // IMPORTANTE: Captura a COR
+                size: item.size || item.variantName, // IMPORTANTE: Captura o TAMANHO
                 variantImage: item.variantImage
             });
         }
@@ -299,35 +299,53 @@ export default function ProductDetails() {
     }
   };
 
+  // --- FUNÇÃO CORRIGIDA: COMPRAR AGORA ---
   const handleBuyNow = () => {
     if (!product) return;
     if (!selectedShipping) return alert("Por favor, calcule o frete para continuar.");
+    
+    const finalSku = selectedVariant ? (selectedVariant.sku || selectedVariant._key) : product._id;
+
+    // AQUI ESTÁ A CORREÇÃO: Enviamos 'color' e 'size' separados para o gestor
     const cartItem = {
       _id: product._id,
-      title: product.title,
+      title: product.title, // Nome do Produto (Limpo)
       slug: product.slug,
       price: currentPrice,
       image: activeMedia ? urlFor(activeMedia.asset).url() : '',
+      
+      // DADOS DA VARIAÇÃO COMPLETOS
       variantName: selectedVariant ? selectedVariant.variantName : null,
-      sku: selectedVariant ? selectedVariant._key : product._id
+      sku: finalSku,
+      color: selectedVariant ? selectedVariant.color : null,
+      size: selectedVariant ? selectedVariant.size : null
     };
+    
     addItem(cartItem);
     window.location.href = '/cart'; 
   };
 
+  // --- FUNÇÃO CORRIGIDA: ADICIONAR AO CARRINHO ---
   const handleAddToCart = () => {
     if (!product) return;
     if (!selectedShipping) return alert("Por favor, calcule o frete para adicionar.");
     
+    const finalSku = selectedVariant ? (selectedVariant.sku || selectedVariant._key) : product._id;
+
     const cartItem = {
       _id: product._id,
-      title: product.title,
+      title: product.title, // Nome do Produto (Limpo)
       slug: product.slug,
       price: currentPrice,
       image: activeMedia ? urlFor(activeMedia.asset).url() : '',
+      
+      // DADOS DA VARIAÇÃO COMPLETOS
       variantName: selectedVariant ? selectedVariant.variantName : null,
-      sku: selectedVariant ? selectedVariant._key : product._id
+      sku: finalSku,
+      color: selectedVariant ? selectedVariant.color : null,
+      size: selectedVariant ? selectedVariant.size : null
     };
+
     addItem(cartItem);
     alert("Produto adicionado ao carrinho!"); 
   };
