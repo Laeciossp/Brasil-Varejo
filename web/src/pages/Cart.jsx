@@ -57,7 +57,7 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- RECALCULAR FRETE (COM FILTRO INTELIGENTE + PRAZO DINÂMICO) ---
+  // --- RECALCULAR FRETE ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -72,10 +72,9 @@ export default function Cart() {
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
         
-        // 1. OBTÉM O MANUSEIO (LÊ DO ITEM PRIMEIRO)
         let handlingToAdd = items[0]?.handlingTime;
 
-        // Se o item veio sem handlingTime (antigo/cache), busca no Sanity como fallback
+        // Fallback Sanity
         if (handlingToAdd === undefined || handlingToAdd === null) {
              try {
                 const settingsQuery = `*[_type == "shippingSettings"][0]`;
@@ -86,7 +85,6 @@ export default function Cart() {
              }
         }
         
-        // CÁLCULO DO PRAZO MÁXIMO
         const maxHandlingTime = items.reduce((max, item) => {
              return Math.max(max, (item.handlingTime || handlingToAdd || 0));
         }, 0);
@@ -121,53 +119,54 @@ export default function Cart() {
              return {
                ...opt,
                price: Number(val),
-               days: parseInt(opt.delivery_time) || 0
+               days: parseInt(opt.delivery_time) || 0,
+               cleanName: (opt.name || '').toLowerCase()
              };
-          });
-
-          // Ordena pelo mais barato
-          candidates.sort((a, b) => a.price - b.price);
+          }).sort((a, b) => a.price - b.price);
 
           let finalOptions = [];
 
           if (isLocal) {
-             // === LÓGICA PALASTORE (LOCAL) ===
-             const cheapest = candidates[0]; // Pega a opção mais barata
-             
-             finalOptions.push({
-                name: "Expresso Palastore ⚡",
-                price: cheapest ? cheapest.price : 20.00, 
-                delivery_time: 5, // !!! FIXADO EM 5 DIAS COMO PEDIDO !!!
-                company: "Própria"
-             });
-
+             // === REGRA LOCAL (FERRO E FOGO) ===
+             const cheapest = candidates[0];
+             if (cheapest) {
+                 finalOptions.push({
+                    name: "Expresso Palastore ⚡",
+                    price: cheapest.price, 
+                    delivery_time: 5, // !!! FIXO 5 DIAS !!!
+                    company: "Própria"
+                 });
+             }
           } else {
-             // === LÓGICA NACIONAL (FILTRO ESTRITO) ===
+             // === REGRA NACIONAL (FILTRO RIGOROSO) ===
+             
+             // 1. Melhor PAC
              const bestEconomy = candidates.find(o => 
-                o.name.toLowerCase().includes('pac') || 
-                o.name.toLowerCase().includes('econômico') || 
-                o.name.toLowerCase().includes('normal')
+                o.cleanName.includes('pac') || 
+                o.cleanName.includes('econômico') || 
+                o.cleanName.includes('normal')
              );
              
+             // 2. Melhor SEDEX
              const bestExpress = candidates.find(o => 
-                (o.name.toLowerCase().includes('sedex') || o.name.toLowerCase().includes('expresso')) &&
-                o.name !== bestEconomy?.name // Evita duplicação
+                o.cleanName.includes('sedex') || 
+                o.cleanName.includes('expresso')
              );
 
              if (bestEconomy) {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    delivery_time: bestEconomy.days + maxHandlingTime, // SOMA O PRAZO FLEXÍVEL
+                    delivery_time: bestEconomy.days + maxHandlingTime,
                     company: "Correios"
                 });
              }
 
-             if (bestExpress) {
+             if (bestExpress && bestExpress.cleanName !== bestEconomy?.cleanName) {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    delivery_time: bestExpress.days + maxHandlingTime, // SOMA O PRAZO FLEXÍVEL
+                    delivery_time: bestExpress.days + maxHandlingTime,
                     company: "Correios"
                 });
              }

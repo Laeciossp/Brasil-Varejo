@@ -107,7 +107,6 @@ export default function ProductDetails() {
   const [calculating, setCalculating] = useState(false);
   const [shippingOptions, setShippingOptions] = useState(null);
 
-  // PRAZO DE MANUSEIO (Vem do Sanity)
   const [handlingDays, setHandlingDays] = useState(0);
 
   const carouselRef = useRef(null);
@@ -284,68 +283,71 @@ export default function ProductDetails() {
       if (Array.isArray(rawOptions) && rawOptions.length > 0) {
           const isLocal = cleanCep === '43850000'; 
 
+          // 1. LIMPEZA DOS DADOS E ORDENAÇÃO POR PREÇO
           const candidates = rawOptions.map(opt => {
              let p = opt.custom_price || opt.price || 0;
              if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
              return {
                ...opt,
                price: Number(p),
-               days: parseInt(opt.delivery_time) || 0
+               days: parseInt(opt.delivery_time) || 0,
+               cleanName: (opt.name || '').toLowerCase()
              };
-          });
-
-          // ORDENA POR PREÇO (Menor -> Maior)
-          candidates.sort((a, b) => a.price - b.price);
+          }).sort((a, b) => a.price - b.price); // Mais barato primeiro
 
           let finalOptions = [];
 
           if (isLocal) {
-             // === LÓGICA LOCAL (PALASTORE) ===
-             // Pega a opção mais barata (geralmente SEDEX local ou similar)
-             const cheapest = candidates[0]; 
+             // === REGRA LOCAL (FERRO E FOGO) ===
+             // Ignora nomes da API. Pega o primeiro (mais barato) e força os dados da Palastore.
+             const cheapest = candidates[0];
              
-             finalOptions.push({
-                name: "Expresso Palastore ⚡",
-                price: cheapest ? cheapest.price : 20.00, // Usa o preço real calculado (ex: 14 reais)
-                delivery_time: 5, // !!! FIXADO EM 5 DIAS COMO PEDIDO !!!
-                company: "Própria"
-             });
+             if (cheapest) {
+                 finalOptions.push({
+                    name: "Expresso Palastore ⚡",
+                    price: cheapest.price, // Usa o preço da API
+                    delivery_time: 5, // !!! FIXO 5 DIAS !!!
+                    company: "Própria"
+                 });
+             }
           } else {
-             // === LÓGICA NACIONAL (FILTRO ESTRITO) ===
+             // === REGRA NACIONAL (FILTRO RIGOROSO) ===
              
-             // 1. Pega APENAS o Melhor PAC (o primeiro da lista ordenada)
+             // 1. Acha o primeiro PAC (o mais barato, pois já ordenamos)
              const bestEconomy = candidates.find(o => 
-                o.name.toLowerCase().includes('pac') || 
-                o.name.toLowerCase().includes('econômico') ||
-                o.name.toLowerCase().includes('normal')
+                o.cleanName.includes('pac') || 
+                o.cleanName.includes('econômico') ||
+                o.cleanName.includes('normal')
              );
              
-             // 2. Pega APENAS o Melhor SEDEX (que não seja o PAC)
+             // 2. Acha o primeiro SEDEX (o mais barato)
              const bestExpress = candidates.find(o => 
-                (o.name.toLowerCase().includes('sedex') || o.name.toLowerCase().includes('expresso')) &&
-                o.name !== bestEconomy?.name // Evita duplicação se PAC e SEDEX forem iguais (raro, mas seguro)
+                o.cleanName.includes('sedex') || 
+                o.cleanName.includes('expresso')
              );
 
+             // Adiciona PAC (se existir)
              if (bestEconomy) {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    delivery_time: bestEconomy.days + handlingDays, // SOMA O PRAZO SANITY
-                    company: "Correios/Jadlog"
+                    delivery_time: bestEconomy.days + handlingDays, // SOMA O PRAZO
+                    company: "Correios"
                 });
              }
              
-             if (bestExpress) {
+             // Adiciona SEDEX (se existir e não for igual ao PAC)
+             if (bestExpress && bestExpress.cleanName !== bestEconomy?.cleanName) {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    delivery_time: bestExpress.days + handlingDays, // SOMA O PRAZO SANITY
-                    company: "Correios/Jadlog"
+                    delivery_time: bestExpress.days + handlingDays, // SOMA O PRAZO
+                    company: "Correios"
                 });
              }
           }
           
-          setShippingOptions(finalOptions.length > 0 ? finalOptions : []);
+          setShippingOptions(finalOptions);
       } else {
           setShippingOptions([]);
       }
@@ -369,9 +371,7 @@ export default function ProductDetails() {
         sku: finalSku,
         color: selectedVariant ? selectedVariant.color : null,
         size: selectedVariant ? selectedVariant.size : null,
-        
-        handlingTime: handlingDays, // ENVIA O PRAZO FLEXÍVEL PRO CARRINHO
-        
+        handlingTime: handlingDays,
         width: product.logistics?.width || 15,
         height: product.logistics?.height || 15,
         length: product.logistics?.length || 15,
@@ -407,7 +407,7 @@ export default function ProductDetails() {
             image: prod.imageUrl,
             sku: prod._id,
             variantName: null,
-            handlingTime: handlingDays, // ENVIA O PRAZO FLEXÍVEL PRO CARRINHO
+            handlingTime: handlingDays,
             width: prod.logistics?.width || 15,
             height: prod.logistics?.height || 15,
             length: prod.logistics?.length || 15,
