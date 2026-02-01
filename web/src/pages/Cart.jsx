@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  Trash2, ShoppingCart, ArrowRight, ShieldCheck, Minus, Plus, 
-  MapPin, CreditCard, QrCode, Lock, Truck
+  Trash2, ShoppingCart, ArrowRight, ShieldCheck, MapPin, CreditCard, QrCode, Lock, Truck
 } from 'lucide-react';
 import { useUser } from "@clerk/clerk-react";
 import { createClient } from "@sanity/client"; 
@@ -13,7 +12,7 @@ import { formatCurrency } from '../lib/utils';
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  useCdn: false,
+  useCdn: false, // Importante: false para pegar o dado mais recente do painel
   apiVersion: '2023-05-03',
   token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
 });
@@ -36,8 +35,11 @@ export default function Cart() {
   const { user, isLoaded } = useUser();
   const [loading, setLoading] = useState(false);
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
-  const [shippingOptions, setShippingOptions] = useState([]); // Estado local para opções limpas
+  const [shippingOptions, setShippingOptions] = useState([]); 
   
+  // Estado para armazenar os dias de manuseio vindos do Sanity
+  const [globalHandlingTime, setGlobalHandlingTime] = useState(0);
+
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   const [customerName, setCustomerName] = useState('');
@@ -48,26 +50,47 @@ export default function Cart() {
     tipoPagamento, setTipoPagamento, globalCep, clearCart
   } = useCartStore();
   
-  // --- CÁLCULOS ---
+  // --- CÁLCULOS (Forçando números para evitar NaN ou Zero errado) ---
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
-  const shippingCost = selectedShipping?.price ? Number(selectedShipping.price) : 0;
+  const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
   const totalFinal = subtotal + shippingCost;
 
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
+  // --- 1. BUSCAR DIAS DE MANUSEIO DO GESTOR (SANITY) ---
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        // Busca o documento de configurações de frete
+        const query = `*[_type == "shippingSettings"][0]`;
+        const settings = await client.fetch(query);
+        if (settings && settings.handlingTime) {
+          console.log("Dias de Manuseio (Gestor):", settings.handlingTime);
+          setGlobalHandlingTime(Number(settings.handlingTime));
+        }
+      } catch (error) {
+        console.error("Erro ao buscar config de frete:", error);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  // Preencher nome se logado
   useEffect(() => {
     if (user && !customerName) {
         setCustomerName(user.fullName || '');
     }
   }, [user]);
 
-  // --- LÓGICA DE FRETE (LIMPEZA E CORREÇÃO) ---
+  // --- 2. CÁLCULO E FILTRO DE FRETE ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
       if (!targetZip || items.length === 0) return;
 
       setRecalculatingShipping(true);
+      setShippingOptions([]); 
+
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
         const response = await fetch(`${baseUrl}/shipping`, { 
@@ -87,57 +110,77 @@ export default function Cart() {
         
         const rawOptions = await response.json();
 
-        // --- FILTRAGEM INTELIGENTE ---
         if (Array.isArray(rawOptions) && rawOptions.length > 0) {
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
-          
+
+          // LIMPEZA INICIAL DOS DADOS
+          const normalizedOptions = rawOptions.map(opt => {
+             // Tratamento de Preço: Garante que vira número
+             let val = opt.custom_price || opt.price || 0;
+             if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
+             
+             return {
+               ...opt,
+               price: Number(val), // Preço numérico garantido
+               originalDays: parseInt(opt.delivery_time) || 0
+             };
+          });
+
           let finalOptions = [];
 
           if (isLocal) {
-             // Opção Fixa para Entrega Local
+             // --- REGRA LOCAL (43850000) ---
+             // Pega o menor preço da API para não ser zero (ou fixa se quiser)
+             normalizedOptions.sort((a, b) => a.price - b.price);
+             const cheapest = normalizedOptions[0];
+
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
-                price: 0, // Ou coloque um valor fixo ex: 10.00
-                delivery_time: 1
+                price: cheapest.price, 
+                delivery_time: 5, // <--- PRAZO FIXO 5 DIAS (Pedido do usuário)
+                company: "Própria"
              });
+
           } else {
-             // 1. Sanitizar preços (Transformar tudo em Number)
-             const safeOptions = rawOptions.map(opt => {
-                let p = opt.custom_price || opt.price || 0;
-                if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
-                return { ...opt, price: Number(p) };
-             });
+             // --- REGRA NACIONAL (Limpa a bagunça) ---
+             
+             // Filtra apenas PAC e SEDEX (ignora outras transportadoras confusas)
+             const pacs = normalizedOptions.filter(o => o.name.toLowerCase().includes('pac') || o.name.toLowerCase().includes('econômico'));
+             const sedexs = normalizedOptions.filter(o => o.name.toLowerCase().includes('sedex') || o.name.toLowerCase().includes('expresso'));
 
-             // 2. Encontrar o MELHOR PAC e o MELHOR SEDEX
-             const pacs = safeOptions.filter(o => o.name.toLowerCase().includes('pac') || o.name.toLowerCase().includes('econômico'));
-             const sedexs = safeOptions.filter(o => o.name.toLowerCase().includes('sedex') || o.name.toLowerCase().includes('expresso'));
-
-             // Ordenar por preço (menor para maior)
-             pacs.sort((a, b) => a.price - b.price);
-             sedexs.sort((a, b) => a.price - b.price);
-
-             // Pegar só o primeiro de cada (o mais barato)
+             // Pega o MELHOR PAC
              if (pacs.length > 0) {
+                pacs.sort((a, b) => a.price - b.price); // Ordena pelo mais barato
+                const bestPac = pacs[0];
                 finalOptions.push({
-                    ...pacs[0],
                     name: "PAC (Econômico)",
-                    delivery_time: parseInt(pacs[0].delivery_time) + 5
+                    price: bestPac.price,
+                    // SOMA O PRAZO DO GESTOR AQUI
+                    delivery_time: bestPac.originalDays + globalHandlingTime, 
+                    company: bestPac.company?.name || "Correios"
                 });
              }
+
+             // Pega o MELHOR SEDEX
              if (sedexs.length > 0) {
+                sedexs.sort((a, b) => a.price - b.price); // Ordena pelo mais barato
+                const bestSedex = sedexs[0];
                 finalOptions.push({
-                    ...sedexs[0],
                     name: "SEDEX (Expresso)",
-                    delivery_time: parseInt(sedexs[0].delivery_time) + 5
+                    price: bestSedex.price,
+                    // SOMA O PRAZO DO GESTOR AQUI
+                    delivery_time: bestSedex.originalDays + globalHandlingTime, 
+                    company: bestSedex.company?.name || "Correios"
                 });
              }
           }
 
-          // Salva as opções limpas e seleciona a primeira automaticamente
           setShippingOptions(finalOptions);
+          
+          // Seleciona automaticamente a primeira opção
           if (finalOptions.length > 0) {
-             setShipping(finalOptions[0]);
+             setShipping(finalOptions[0]); 
           }
         }
       } catch (error) {
@@ -147,7 +190,7 @@ export default function Cart() {
       }
     };
     recalculate();
-  }, [customer.activeAddressId, items.length, globalCep]);
+  }, [customer.activeAddressId, items.length, globalCep, globalHandlingTime]); // Recalcula se o handlingTime mudar
 
   const handleSaveAddress = () => {
     if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
@@ -211,7 +254,7 @@ export default function Cart() {
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Venda Site"
+        internalNotes: `Venda Site (Manuseio: ${globalHandlingTime} dias)`
       };
 
       console.log("Criando pedido...", orderDoc);
@@ -334,7 +377,6 @@ export default function Cart() {
                     ))}
                 </div>
 
-                {/* DADOS PESSOAIS */}
                 <div className="pt-4 border-t space-y-3">
                     <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados para Nota</h2>
                     <div>
@@ -355,17 +397,20 @@ export default function Cart() {
                 <div className="space-y-3 text-sm mb-6">
                     <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                     
-                    {/* SELEÇÃO DE FRETE OTIMIZADA */}
                     <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-center">
                             <span className="flex gap-1"><Truck size={14}/> Frete</span>
                             {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? formatCurrency(selectedShipping.price) : '--'}</span>}
                         </div>
-                        {/* LISTA LIMPA DE OPÇÕES DE FRETE */}
+                        
+                        {/* LISTA LIMPA E FILTRADA */}
                         {!recalculatingShipping && shippingOptions.map(opt => (
-                            <div key={opt.name} onClick={() => setShipping(opt)} className={`p-2 border rounded cursor-pointer text-xs flex justify-between ${selectedShipping?.name === opt.name ? 'border-orange-500 bg-orange-50' : ''}`}>
-                                <span>{opt.name} - {opt.delivery_time} dias</span>
-                                <span className="font-bold">{formatCurrency(opt.price)}</span>
+                            <div key={opt.name} onClick={() => setShipping(opt)} className={`p-3 border rounded-lg cursor-pointer text-xs flex justify-between items-center ${selectedShipping?.name === opt.name ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'hover:bg-gray-50'}`}>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-gray-900">{opt.name}</span>
+                                    <span className="text-gray-500">Em até {opt.delivery_time} dias úteis</span>
+                                </div>
+                                <span className="font-bold text-sm">{formatCurrency(opt.price)}</span>
                             </div>
                         ))}
                     </div>
