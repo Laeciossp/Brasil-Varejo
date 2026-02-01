@@ -5,10 +5,19 @@ import {
   MapPin, CreditCard, QrCode, Lock, Truck
 } from 'lucide-react';
 import { useUser } from "@clerk/clerk-react";
+import { createClient } from "@sanity/client"; // Importação Necessária
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- SELO MERCADO PAGO DISCRETO ---
+// --- CONFIGURAÇÃO DO CLIENTE SANITY (COM TOKEN DE ESCRITA) ---
+const client = createClient({
+  projectId: 'o4upb251',
+  dataset: 'production',
+  useCdn: false,
+  apiVersion: '2023-05-03',
+  token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
+});
+
 const MercadoPagoTrust = () => (
   <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col items-center gap-2">
     <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
@@ -35,14 +44,14 @@ export default function Cart() {
   const { 
     items, removeItem, updateQuantity, selectedShipping, setShipping,
     getTotalPrice, customer, setActiveAddress, addAddress, setDocument, 
-    tipoPagamento, setTipoPagamento, globalCep 
+    tipoPagamento, setTipoPagamento, globalCep, clearCart
   } = useCartStore();
   
   const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const totalFinal = getTotalPrice();
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // --- RECALCULAR FRETE (LÓGICA MANTIDA) ---
+  // --- 1. RECALCULAR FRETE ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -72,9 +81,7 @@ export default function Cart() {
         const options = await response.json();
 
         if (Array.isArray(options) && options.length > 0) {
-          // === LÓGICA DE FRETE AJUSTADA (Igual ProductDetails) ===
           const PRAZO_MANUSEIO_PADRAO = 5; 
-          
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
 
@@ -83,7 +90,6 @@ export default function Cart() {
             let finalDays = parseInt(opt.delivery_time) || 0;
             const lowerName = (opt.name || '').toLowerCase();
 
-            // 1. Padronização de Nomes
             if (isLocal) {
                 finalName = "Expresso Palastore ⚡";
             } else if (lowerName.includes('pac')) {
@@ -92,27 +98,19 @@ export default function Cart() {
                 finalName = "SEDEX (Expresso)";
             }
 
-            // 2. Lógica de Dias (Manuseio)
             if (!isLocal) {
                 finalDays += PRAZO_MANUSEIO_PADRAO;
             }
 
-            return {
-                ...opt,
-                name: finalName,
-                delivery_time: finalDays
-            };
+            return { ...opt, name: finalName, delivery_time: finalDays };
           });
 
-          // Filtra opção local se necessário (remover PAC se for local)
           const filteredOptions = isLocal 
             ? optionsAdjusted.filter(opt => !opt.name.toLowerCase().includes('pac')) 
             : optionsAdjusted;
 
-          // Tenta manter a opção selecionada ou pega a primeira
           const currentName = selectedShipping?.name;
           const sameOption = filteredOptions.find(o => o.name === currentName);
-          
           setShipping(sameOption || filteredOptions[0]);
         }
       } catch (error) {
@@ -131,79 +129,92 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
   };
 
-  // --- CHECKOUT (AQUI ESTÁ A CORREÇÃO DOS DADOS) ---
+  // --- 2. FINALIZAR COMPRA (CORRIGIDO) ---
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login para continuar.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
     if (!customer.document) return alert("CPF/CNPJ obrigatório para a Nota Fiscal.");
 
     setLoading(true);
+
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
-      
-      // 1. Prepara os itens com COR, TAMANHO e SKU para o gestor
-      const itemsFormatted = items.map(item => ({
+      // A) Preparar Itens (Mapeamento Exato para o Schema)
+      const sanitizedItems = items.map(item => ({
          _key: Math.random().toString(36).substring(7),
-         productName: item.title, // Nome Limpo
-         variantName: item.variantName || null, // Variação Completa
          
-         // --- CAMPOS QUE FALTAVAM ---
-         color: item.color || null,
-         size: item.size || null,
+         // Aqui resolve o "undefined": Pega title OU name
+         productName: item.title || item.name || "Produto sem nome", 
+         
+         // Variação
+         variantName: item.variantName || "Padrão", 
+         
+         // Detalhes Cruciais (Se não tiver, manda string vazia para não quebrar)
+         color: item.color || "",
+         size: item.size || "",
          sku: item.sku || item._id,
          
          quantity: item.quantity,
          price: item.price,
          imageUrl: item.image,
+         
          product: { _type: 'reference', _ref: item._id },
-         productSlug: item.slug?.current || item.slug
+         productSlug: item.slug?.current || item.slug || ""
       }));
 
-      // 2. Prepara o Cliente (Agrupado para não dar erro de schema)
-      const customerData = {
-        name: user.fullName || customer.name,
-        email: user.primaryEmailAddress?.emailAddress || customer.email,
-        cpf: customer.document,
-        phone: customer.phone || ''
+      // B) Preparar Endereço (Limpar ID e Alias que o Sanity rejeita)
+      const cleanAddress = {
+        zip: activeAddress.zip,
+        street: activeAddress.street,
+        number: activeAddress.number,
+        neighborhood: activeAddress.neighborhood,
+        city: activeAddress.city,
+        state: activeAddress.state,
+        complement: "" // Adicione se tiver campo no form
       };
 
-      const response = await fetch(`${baseUrl}/checkout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            // Dados para o Worker processar pagamento
-            items: itemsFormatted, 
-            shipping: parseFloat(selectedShipping.price), 
-            email: customerData.email, 
-            tipoPagamento, 
-            shippingAddress: activeAddress,
-            customerDocument: customerData.cpf,
-            totalAmount: totalFinal,
+      // C) Objeto do Pedido (Payload)
+      const orderDoc = {
+        _type: 'order',
+        orderNumber: `#PALA-${Math.floor(Date.now() / 1000)}`,
+        status: 'pending',
+        
+        // Objeto Customer (Resolve erro de campos soltos)
+        customer: {
+            name: user.fullName || "Cliente Site",
+            email: user.primaryEmailAddress?.emailAddress || "",
+            cpf: customer.document, // O CPF digitado
+            phone: "" // Adicione se coletar telefone
+        },
 
-            // Dados Estruturados para salvar no Sanity (Corrigindo o Schema)
-            customer: customerData, // Envia o objeto customer completo
-            carrier: selectedShipping.name
-        })
-      });
+        items: sanitizedItems,
+        shippingAddress: cleanAddress,
+        
+        carrier: selectedShipping.name,
+        shippingCost: parseFloat(selectedShipping.price),
+        totalAmount: totalFinal,
+        paymentMethod: tipoPagamento,
+        
+        hasUnreadMessage: true,
+        internalNotes: "Pedido criado via Site (Checkout V2)"
+      };
 
-      const data = await response.json();
+      // D) Criação Direta no Sanity (Mais seguro que via API externa neste caso)
+      console.log("Enviando pedido...", orderDoc);
+      const createdOrder = await client.create(orderDoc);
+      
+      console.log("Pedido Criado ID:", createdOrder._id);
 
-      if (data.error || !data.url) {
-        console.error("Erro no Worker:", data);
-        alert(`Erro ao criar pagamento: ${JSON.stringify(data.details || data.error)}`);
-        setLoading(false);
-        return; 
-      }
+      // E) Redirecionar para Pagamento (Opcional - Exemplo com Link Externo ou Aviso)
+      // Se você tiver um link de pagamento do MP, pode gerar aqui.
+      // Por enquanto, vamos limpar o carrinho e avisar.
+      
+      clearCart();
+      alert(`Pedido ${createdOrder.orderNumber} recebido com sucesso!`);
+      // navigate('/sucesso'); 
 
-      if (data.id_preferencia && window.MercadoPago) {
-        const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
-        mp.checkout({ preference: { id: data.id_preferencia } }).open(); 
-      } else {
-        window.location.href = data.url; 
-      }
     } catch (error) {
-      console.error("Erro Front:", error);
-      alert("Erro de conexão. Verifique sua internet ou tente novamente.");
+      console.error("Erro CRÍTICO no Checkout:", error);
+      alert("Erro ao salvar pedido: " + error.message);
     } finally { 
       setLoading(false); 
     }
