@@ -12,7 +12,7 @@ import { formatCurrency } from '../lib/utils';
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  useCdn: false,
+  useCdn: false, // Importante: false para não pegar cache velho
   apiVersion: '2023-05-03',
   token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
 });
@@ -37,7 +37,8 @@ export default function Cart() {
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   const [shippingOptions, setShippingOptions] = useState([]); 
   
-  const [globalHandlingTime, setGlobalHandlingTime] = useState(0);
+  // Inicia como null para saber que ainda não carregou
+  const [globalHandlingTime, setGlobalHandlingTime] = useState(null);
 
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
@@ -52,22 +53,25 @@ export default function Cart() {
   // --- CÁLCULOS BLINDADOS ---
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   
+  // Se selectedShipping for inválido, usa 0
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
   
   const totalFinal = subtotal + shippingCost;
 
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // 1. BUSCAR CONFIGURAÇÃO DE MANUSEIO (Sincronizado com Página de Produto)
+  // 1. BUSCAR CONFIGURAÇÃO DE MANUSEIO DO SANITY
   useEffect(() => {
     const fetchSettings = async () => {
       try {
         const query = `*[_type == "shippingSettings"][0]`;
         const settings = await client.fetch(query);
         const days = settings?.handlingTime ? Number(settings.handlingTime) : 0;
+        console.log("Dias de Manuseio Carregados:", days);
         setGlobalHandlingTime(days);
       } catch (e) { 
         console.error("Erro config:", e);
+        setGlobalHandlingTime(0); // Fallback se der erro
       }
     };
     fetchSettings();
@@ -82,8 +86,9 @@ export default function Cart() {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
       
-      if (!targetZip || items.length === 0) {
-          setShipping(null);
+      // Só roda se tiver CEP, itens E se a config de dias já carregou (não é null)
+      if (!targetZip || items.length === 0 || globalHandlingTime === null) {
+          if (!targetZip || items.length === 0) setShipping(null);
           return;
       }
 
@@ -97,8 +102,7 @@ export default function Cart() {
           body: JSON.stringify({
             from: { postal_code: "43805000" }, 
             to: { postal_code: targetZip },
-            // IMPORTANTE: Se o item for velho e não tiver width, usa fallback 15.
-            // ESVAZIE O CARRINHO PARA CORRIGIR AS MEDIDAS!
+            // Usa as medidas salvas no item (mesma lógica do ProductDetails)
             products: items.map(p => ({
               id: p._id,
               width: Number(p.width) || 15,
@@ -117,7 +121,7 @@ export default function Cart() {
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
 
-          // 1. LIMPEZA DE DADOS
+          // 1. LIMPEZA E PADRONIZAÇÃO (Igual ProductDetails)
           const candidates = rawOptions.map(opt => {
              let val = opt.custom_price || opt.price || 0;
              if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
@@ -128,25 +132,25 @@ export default function Cart() {
              };
           });
 
-          // ORDENA POR PREÇO (MENOR PRIMEIRO) - IGUAL PRODUTO
+          // ORDENA POR PREÇO (MENOR PRIMEIRO)
           candidates.sort((a, b) => a.price - b.price);
 
           let finalOptions = [];
 
           if (isLocal) {
-             // --- REGRA LOCAL: PEGA O MAIS BARATO GERAL ---
-             // Igualzinho à página do produto que você disse que estava correta
+             // --- REGRA LOCAL: IGUAL À PÁGINA DE PRODUTO ---
+             // Pega o primeiro da lista (o mais barato de todos) e usa como base
              const cheapest = candidates[0];
              
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
                 price: cheapest ? cheapest.price : 0, 
-                delivery_time: 5, // Fixo
+                delivery_time: 5, // Prazo Fixo Local
                 company: "Própria"
              });
 
           } else {
-             // --- REGRA NACIONAL: PENEIRA FINA (1 de cada) ---
+             // --- REGRA NACIONAL: PENEIRA FINA ---
              
              // Melhor Econômico
              const bestEconomy = candidates.find(o => 
@@ -182,7 +186,8 @@ export default function Cart() {
 
           setShippingOptions(finalOptions);
           
-          // --- AUTO SELEÇÃO PARA NÃO FICAR ZERO ---
+          // --- AUTO SELEÇÃO OBRIGATÓRIA ---
+          // Isso corrige o problema do valor zerar ao trocar endereço
           if (finalOptions.length > 0) {
              setShipping(finalOptions[0]);
           } else {
@@ -198,7 +203,7 @@ export default function Cart() {
     
     recalculate();
     
-  }, [customer.activeAddressId, items.length, globalCep, globalHandlingTime]);
+  }, [customer.activeAddressId, items.length, globalCep, globalHandlingTime]); // Depende do globalHandlingTime agora
 
   const handleSaveAddress = () => {
     if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
