@@ -36,9 +36,7 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- CLIENTE (OBJETO ORGANIZADO) ---
-    // O erro "Unknown fields" acontece porque o frontend manda solto.
-    // Aqui garantimos a estrutura correta.
+    // --- CLIENTE ---
     {
       name: 'customer',
       title: 'Dados do Cliente',
@@ -52,7 +50,7 @@ export default {
       ]
     },
 
-    // --- ITENS DO PEDIDO (COM COR E TAMANHO) ---
+    // --- ITENS DO PEDIDO (CORRIGIDO O ERRO DE CRASH) ---
     {
       name: 'items',
       title: 'Itens do Pedido',
@@ -66,37 +64,28 @@ export default {
             { name: 'productName', title: 'Nome do Produto', type: 'string' },
             { name: 'variantName', title: 'Variação Completa', type: 'string' }, 
             
-            // --- CAMPOS CRUCIAIS PARA O GESTOR ---
             { name: 'color', title: 'Cor', type: 'string' }, 
             { name: 'size', title: 'Tamanho', type: 'string' }, 
             { name: 'sku', title: 'SKU', type: 'string' }, 
             
             { name: 'quantity', title: 'Quantidade', type: 'number' },
             { name: 'price', title: 'Preço Unitário', type: 'number' },
-            { name: 'imageUrl', title: 'Imagem', type: 'url' },
+            { name: 'imageUrl', title: 'Imagem URL', type: 'url' },
             
             { name: 'product', title: 'Ref. Produto', type: 'reference', to: [{type: 'product'}] },
             { name: 'productSlug', title: 'Slug', type: 'string' }
           ],
-          // --- AQUI ESTÁ A MÁGICA PARA APARECER NO PAINEL ---
           preview: {
             select: { 
               title: 'productName', 
-              color: 'color',
-              size: 'size',
+              subtitle: 'variantName',
               qty: 'quantity',
-              media: 'imageUrl' 
+              // REMOVI 'media' AQUI PARA NÃO DAR ERRO DE "TAG NAME" COM URL EXTERNA
             },
-            prepare({title, color, size, qty, media}) {
-              // Se tiver cor e tamanho, mostra. Se não, mostra "Padrão"
-              const details = (color && size) 
-                ? `${color} | Tam: ${size}` 
-                : (color ? color : 'Padrão');
-                
+            prepare({title, subtitle, qty}) {
               return { 
                 title: `${qty}x ${title}`, 
-                subtitle: details, // Isso vai aparecer no card do pedido!
-                media 
+                subtitle: subtitle || 'Item Padrão'
               }
             }
           }
@@ -181,7 +170,7 @@ export default {
   preview: {
     select: { 
       title: 'orderNumber', 
-      subtitle: 'customer.name', // Pega o nome de dentro do objeto customer
+      subtitle: 'customer.name', 
       status: 'status'
     },
     prepare({title, subtitle, status}) {
@@ -194,8 +183,8 @@ export default {
         cancelled: '❌'
       };
       return {
-        title: `${statusMap[status] || ''} Pedido #${title}`,
-        subtitle: subtitle || 'Cliente sem nome'
+        title: `${statusMap[status] || ''} ${title || 'Novo Pedido'}`,
+        subtitle: subtitle || 'Cliente não identificado'
       }
     }
   }

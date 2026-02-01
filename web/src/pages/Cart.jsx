@@ -5,11 +5,11 @@ import {
   MapPin, CreditCard, QrCode, Lock, Truck
 } from 'lucide-react';
 import { useUser } from "@clerk/clerk-react";
-import { createClient } from "@sanity/client"; // Importação Necessária
+import { createClient } from "@sanity/client"; 
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CONFIGURAÇÃO DO CLIENTE SANITY (COM TOKEN DE ESCRITA) ---
+// --- CLIENTE SANITY PARA SALVAR O PEDIDO ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -37,7 +37,6 @@ export default function Cart() {
   const [loading, setLoading] = useState(false);
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   
-  // Estados para Endereço/CPF
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
   
@@ -51,7 +50,7 @@ export default function Cart() {
   const totalFinal = getTotalPrice();
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // --- 1. RECALCULAR FRETE ---
+  // --- RECALCULO DE FRETE ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -129,7 +128,7 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
   };
 
-  // --- 2. FINALIZAR COMPRA (CORRIGIDO) ---
+  // --- FUNÇÃO PRINCIPAL: SALVA NO SANITY E VAI PRO MERCADO PAGO ---
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login para continuar.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
@@ -138,30 +137,21 @@ export default function Cart() {
     setLoading(true);
 
     try {
-      // A) Preparar Itens (Mapeamento Exato para o Schema)
+      // 1. DADOS SANITIZADOS PARA O BANCO DE DADOS (SANITY)
       const sanitizedItems = items.map(item => ({
          _key: Math.random().toString(36).substring(7),
-         
-         // Aqui resolve o "undefined": Pega title OU name
-         productName: item.title || item.name || "Produto sem nome", 
-         
-         // Variação
+         productName: item.title || item.name || "Produto", 
          variantName: item.variantName || "Padrão", 
-         
-         // Detalhes Cruciais (Se não tiver, manda string vazia para não quebrar)
          color: item.color || "",
          size: item.size || "",
          sku: item.sku || item._id,
-         
          quantity: item.quantity,
          price: item.price,
          imageUrl: item.image,
-         
          product: { _type: 'reference', _ref: item._id },
          productSlug: item.slug?.current || item.slug || ""
       }));
 
-      // B) Preparar Endereço (Limpar ID e Alias que o Sanity rejeita)
       const cleanAddress = {
         zip: activeAddress.zip,
         street: activeAddress.street,
@@ -169,52 +159,72 @@ export default function Cart() {
         neighborhood: activeAddress.neighborhood,
         city: activeAddress.city,
         state: activeAddress.state,
-        complement: "" // Adicione se tiver campo no form
+        complement: ""
       };
 
-      // C) Objeto do Pedido (Payload)
+      const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
+
+      // 2. CRIA O PEDIDO NO SANITY (Para seu painel funcionar)
       const orderDoc = {
         _type: 'order',
-        orderNumber: `#PALA-${Math.floor(Date.now() / 1000)}`,
+        orderNumber: orderNumber,
         status: 'pending',
-        
-        // Objeto Customer (Resolve erro de campos soltos)
         customer: {
             name: user.fullName || "Cliente Site",
             email: user.primaryEmailAddress?.emailAddress || "",
-            cpf: customer.document, // O CPF digitado
-            phone: "" // Adicione se coletar telefone
+            cpf: customer.document, 
+            phone: "" 
         },
-
         items: sanitizedItems,
         shippingAddress: cleanAddress,
-        
         carrier: selectedShipping.name,
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        
         hasUnreadMessage: true,
-        internalNotes: "Pedido criado via Site (Checkout V2)"
+        internalNotes: "Aguardando pagamento..."
       };
 
-      // D) Criação Direta no Sanity (Mais seguro que via API externa neste caso)
-      console.log("Enviando pedido...", orderDoc);
-      const createdOrder = await client.create(orderDoc);
-      
-      console.log("Pedido Criado ID:", createdOrder._id);
+      console.log("Salvando pedido no Sanity...");
+      await client.create(orderDoc);
+      console.log("Pedido salvo. Iniciando pagamento...");
 
-      // E) Redirecionar para Pagamento (Opcional - Exemplo com Link Externo ou Aviso)
-      // Se você tiver um link de pagamento do MP, pode gerar aqui.
-      // Por enquanto, vamos limpar o carrinho e avisar.
+      // 3. CHAMA O WORKER PARA GERAR PAGAMENTO (Para o cliente pagar)
+      const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       
-      clearCart();
-      alert(`Pedido ${createdOrder.orderNumber} recebido com sucesso!`);
-      // navigate('/sucesso'); 
+      const response = await fetch(`${baseUrl}/checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            items: sanitizedItems, // Envia os itens limpos
+            shipping: parseFloat(selectedShipping.price), 
+            email: user.primaryEmailAddress?.emailAddress, 
+            tipoPagamento, 
+            shippingAddress: cleanAddress,
+            customerDocument: customer.document,
+            totalAmount: totalFinal,
+            orderId: orderNumber // Manda o ID para referência
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.error || !data.url) {
+        throw new Error(JSON.stringify(data.details || data.error));
+      }
+
+      // 4. REDIRECIONA PARA PAGAMENTO
+      clearCart(); // Limpa o carrinho antes de ir
+      if (data.id_preferencia && window.MercadoPago) {
+        const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
+        mp.checkout({ preference: { id: data.id_preferencia } }).open(); 
+      } else {
+        window.location.href = data.url; 
+      }
 
     } catch (error) {
-      console.error("Erro CRÍTICO no Checkout:", error);
-      alert("Erro ao salvar pedido: " + error.message);
+      console.error("Erro no Checkout:", error);
+      alert("Erro ao processar: " + error.message);
     } finally { 
       setLoading(false); 
     }
