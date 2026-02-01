@@ -12,7 +12,7 @@ import { formatCurrency } from '../lib/utils';
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  useCdn: false,
+  useCdn: false, // False para garantir dados novos
   apiVersion: '2023-05-03',
   token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
 });
@@ -57,7 +57,7 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- CÁLCULO DE FRETE QUE LÊ OS DADOS DO ITEM ---
+  // --- 2. CÁLCULO DE FRETE (USANDO DADOS DO ITEM + FALLBACK SANITY) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -72,16 +72,18 @@ export default function Cart() {
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
         
-        // 1. TENTA LER O MANUSEIO DO PRÓPRIO ITEM (Prioridade Total)
-        // Se o item veio do novo ProductDetails, ele tem handlingTime.
-        let extraDays = items[0]?.handlingTime;
+        // 1. OBTÉM O MANUSEIO CORRETO
+        // Tenta pegar do item primeiro. Se for 0 ou undefined, busca no Sanity.
+        let handlingToAdd = items[0]?.handlingTime;
 
-        // Fallback: Se for undefined (item antigo), tenta buscar do Sanity na hora
-        if (extraDays === undefined || extraDays === null) {
+        if (!handlingToAdd || handlingToAdd === 0) {
              try {
-                const settings = await client.fetch(`*[_type == "shippingSettings"][0]`);
-                extraDays = settings?.handlingTime ? Number(settings.handlingTime) : 0;
-             } catch (e) { extraDays = 0; }
+                const settingsQuery = `*[_type == "shippingSettings"][0]`;
+                const settings = await client.fetch(settingsQuery);
+                handlingToAdd = settings?.handlingTime ? Number(settings.handlingTime) : 0;
+             } catch (e) {
+                handlingToAdd = 0;
+             }
         }
         
         const response = await fetch(`${baseUrl}/shipping`, { 
@@ -119,7 +121,6 @@ export default function Cart() {
              };
           });
 
-          // Ordena pelo menor preço
           candidates.sort((a, b) => a.price - b.price);
 
           let finalOptions = [];
@@ -138,7 +139,7 @@ export default function Cart() {
              });
 
           } else {
-             // Nacional (SOMA O EXTRA DAYS AQUI)
+             // Nacional (SOMA OBRIGATÓRIA)
              const bestEconomy = candidates.find(o => 
                 o.name.toLowerCase().includes('pac') || 
                 o.name.toLowerCase().includes('econômico') || 
@@ -154,7 +155,7 @@ export default function Cart() {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    delivery_time: bestEconomy.days + extraDays, // SOMA OBRIGATÓRIA
+                    delivery_time: bestEconomy.days + handlingToAdd, // SOMA AQUI
                     company: "Correios"
                 });
              }
@@ -163,7 +164,7 @@ export default function Cart() {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    delivery_time: bestExpress.days + extraDays, // SOMA OBRIGATÓRIA
+                    delivery_time: bestExpress.days + handlingToAdd, // SOMA AQUI
                     company: "Correios"
                 });
              }

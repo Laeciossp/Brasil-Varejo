@@ -107,7 +107,6 @@ export default function ProductDetails() {
   const [calculating, setCalculating] = useState(false);
   const [shippingOptions, setShippingOptions] = useState(null);
 
-  // AQUI FICA O VALOR REAL DE MANUSEIO (Ex: 4 dias)
   const [handlingDays, setHandlingDays] = useState(0);
 
   const carouselRef = useRef(null);
@@ -176,7 +175,7 @@ export default function ProductDetails() {
         const data = await client.fetch(query, { slug });
 
         if (data && data.product) {
-          // SALVA OS DIAS DE MANUSEIO DO SANITY
+          // DEFINE OS DIAS DE MANUSEIO
           setHandlingDays(Number(data.settings?.handlingTime) || 0);
 
           const productData = data.product;
@@ -241,6 +240,7 @@ export default function ProductDetails() {
     }
   };
 
+  // --- RECALCULA QUANDO O PRODUTO CARREGA *E* QUANDO O HANDLING DAYS ATUALIZA ---
   useEffect(() => {
     if (product && globalCep) {
         const cleanGlobal = globalCep.replace(/\D/g, '');
@@ -249,7 +249,7 @@ export default function ProductDetails() {
             handleCalculateShipping(cleanGlobal);
         }
     }
-  }, [product, globalCep]);
+  }, [product, globalCep, handlingDays]); // <--- AQUI ESTAVA O PROBLEMA, AGORA ADICIONADO handlingDays
 
   const handleCalculateShipping = async (cepOverride) => {
     const targetCep = typeof cepOverride === 'string' ? cepOverride : cep;
@@ -295,24 +295,16 @@ export default function ProductDetails() {
              };
           });
 
+          // Ordenar pelo menor preço
           candidates.sort((a, b) => a.price - b.price);
 
           let finalOptions = [];
 
           if (isLocal) {
-             let sedexOption = candidates.find(o => 
-                o.name.toLowerCase().includes('sedex') || 
-                o.name.toLowerCase().includes('expresso')
-             );
-
-             if (!sedexOption) {
-                 candidates.sort((a, b) => b.price - a.price); 
-                 sedexOption = candidates[0];
-             }
-
+             const cheapest = candidates[0];
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
-                price: sedexOption ? sedexOption.price : 20.00, 
+                price: cheapest ? cheapest.price : 20.00, 
                 delivery_time: 5,
                 company: "Própria"
              });
@@ -331,7 +323,7 @@ export default function ProductDetails() {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    delivery_time: bestEconomy.days + handlingDays, // SOMA AQUI
+                    delivery_time: bestEconomy.days + handlingDays, 
                     company: "Correios/Jadlog"
                 });
              }
@@ -339,7 +331,7 @@ export default function ProductDetails() {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    delivery_time: bestExpress.days + handlingDays, // SOMA AQUI
+                    delivery_time: bestExpress.days + handlingDays, 
                     company: "Correios/Jadlog"
                 });
              }
@@ -356,7 +348,6 @@ export default function ProductDetails() {
     }
   };
 
-  // --- PASSAGEM DE BASTÃO: INCLUI 'handlingTime' NO ITEM DO CARRINHO ---
   const createCartItem = () => {
       const finalSku = selectedVariant ? (selectedVariant.sku || selectedVariant._key) : product._id;
       return {
@@ -369,9 +360,8 @@ export default function ProductDetails() {
         sku: finalSku,
         color: selectedVariant ? selectedVariant.color : null,
         size: selectedVariant ? selectedVariant.size : null,
-        
         // DADOS IMPORTANTES DE FRETE AQUI:
-        handlingTime: handlingDays, // <--- AQUI ESTÁ A CORREÇÃO
+        handlingTime: handlingDays, // Envia o manuseio correto
         width: product.logistics?.width || 15,
         height: product.logistics?.height || 15,
         length: product.logistics?.length || 15,
@@ -407,8 +397,7 @@ export default function ProductDetails() {
             image: prod.imageUrl,
             sku: prod._id,
             variantName: null,
-            // ENVIA OS DADOS TAMBÉM NO QUICK ADD
-            handlingTime: handlingDays, // Usa o que carregou na página pai
+            handlingTime: handlingDays, // Tenta usar o do pai ou 0
             width: prod.logistics?.width || 15,
             height: prod.logistics?.height || 15,
             length: prod.logistics?.length || 15,
