@@ -86,7 +86,7 @@ export default function Cart() {
              }
         }
         
-        // CÁLCULO DO PRAZO MÁXIMO
+        // CÁLCULO DO PRAZO MÁXIMO (CASO TENHA MÚLTIPLOS ITENS COM PRAZOS DIFERENTES)
         const maxHandlingTime = items.reduce((max, item) => {
              return Math.max(max, (item.handlingTime || handlingToAdd || 0));
         }, 0);
@@ -115,6 +115,7 @@ export default function Cart() {
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
 
+          // Prepara candidatos convertendo preços e prazos
           const candidates = rawOptions.map(opt => {
              let val = opt.custom_price || opt.price || 0;
              if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
@@ -125,37 +126,42 @@ export default function Cart() {
              };
           });
 
-          // Ordena pelo mais barato
+          // Ordena pelo mais barato primeiro
           candidates.sort((a, b) => a.price - b.price);
 
           let finalOptions = [];
 
           if (isLocal) {
              // === LÓGICA PALASTORE (LOCAL) ===
+             // Pega a opção mais barata disponível e transforma em "Expresso Palastore"
              const paidOptions = candidates.filter(c => c.price > 0);
              paidOptions.sort((a, b) => a.price - b.price);
              const cheapest = paidOptions.length > 0 ? paidOptions[0] : (candidates[0] || {price: 20});
 
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
-                price: cheapest.price, 
-                delivery_time: 1, // Entrega rápida
+                price: cheapest.price, // Usa o preço calculado pela API (ou fixo se preferir)
+                delivery_time: 1, // Entrega local é rápida (ex: 1 dia)
                 company: "Própria"
              });
 
           } else {
              // === LÓGICA NACIONAL (FILTRO DE DUPLICATAS) ===
+             
+             // 1. Encontra o MELHOR PAC (O primeiro da lista ordenada por preço)
              const bestEconomy = candidates.find(o => 
                 o.name.toLowerCase().includes('pac') || 
                 o.name.toLowerCase().includes('econômico') || 
                 o.name.toLowerCase().includes('normal')
              );
              
+             // 2. Encontra o MELHOR SEDEX
              const bestExpress = candidates.find(o => 
                 o.name.toLowerCase().includes('sedex') || 
                 o.name.toLowerCase().includes('expresso')
              );
 
+             // Adiciona PAC se existir
              if (bestEconomy) {
                 finalOptions.push({
                     name: "PAC (Econômico)",
@@ -165,6 +171,7 @@ export default function Cart() {
                 });
              }
 
+             // Adiciona SEDEX se existir e não for igual ao PAC (evita duplicação se a API chamar tudo de normal)
              if (bestExpress && bestExpress.name !== bestEconomy?.name) {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
@@ -177,6 +184,7 @@ export default function Cart() {
 
           setShippingOptions(finalOptions);
           
+          // Mantém a seleção se possível, senão pega o primeiro
           if (finalOptions.length > 0) {
              const currentName = selectedShipping?.name;
              const sameOption = finalOptions.find(o => o.name === currentName);
