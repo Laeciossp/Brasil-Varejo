@@ -76,7 +76,7 @@ export default function Cart() {
         // Tenta pegar do item primeiro. Se for 0 ou undefined, busca no Sanity.
         let handlingToAdd = items[0]?.handlingTime;
 
-        if (!handlingToAdd || handlingToAdd === 0) {
+        if (handlingToAdd === undefined || handlingToAdd === null) {
              try {
                 const settingsQuery = `*[_type == "shippingSettings"][0]`;
                 const settings = await client.fetch(settingsQuery);
