@@ -254,24 +254,17 @@ export default function ProductDetails() {
   }, [product, globalCep, handlingDays]); 
 
  const handleCalculateShipping = async (e) => {
-    // Previne comportamento de formulário
     if (e && e.preventDefault) e.preventDefault();
-    
-    // Pega o CEP digitado ou do estado
     const targetCep = typeof e === 'string' ? e : cep;
-    
     if (!targetCep) return;
 
     setCalculating(true);
     setShippingOptions([]);
 
-    // --- 1. DEFINIÇÃO DE VARIÁVEIS (Fora do Try) ---
     const cleanCep = targetCep.replace(/\D/g, '');
     const isLocal = cleanCep === '43850000';
-    // Região Metropolitana + Interior Próximo (40 a 48)
     const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanCep.startsWith(p));
     
-    // Pega prazo do produto ou usa padrão 4
     const sanityDays = Number(product.handlingTime) || 4;
     const extraDays = isNearby ? 4 : sanityDays; 
     const postingDays = 1;
@@ -301,16 +294,14 @@ export default function ProductDetails() {
 
       const rawOptions = await response.json();
       
-      // --- 2. PROCESSAMENTO DA API (QUANDO ELA RESPONDE) ---
       if (Array.isArray(rawOptions) && rawOptions.length > 0) {
           const candidates = rawOptions.map(opt => {
              let p = opt.custom_price || opt.price || opt.valor || 0;
              if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
-             
              let finalPrice = Number(p);
              const nameLower = (opt.name || '').toLowerCase();
 
-             // CORREÇÃO: Se veio R$ 0,00 e é Vizinho (Salvador/Simões) -> Força Preço
+             // Correção de Zero SOMENTE para Vizinhos (Salvador/Simões)
              if (finalPrice === 0 && isNearby) {
                  if (nameLower.includes('pac') || nameLower.includes('econômico')) finalPrice = 16.90;
                  if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
@@ -327,16 +318,13 @@ export default function ProductDetails() {
           .sort((a, b) => a.price - b.price);
 
           if (isLocal) {
-              // LOCAL
               const bestPrice = candidates[0]?.price > 0 ? candidates[0].price : 15.00;
               finalOptions.push({
                  name: "Palastore Expresso ⚡",
-                 price: bestPrice, 
-                 delivery_time: 5, 
-                 company: "Própria"
+                 price: bestPrice, delivery_time: 5, company: "Própria"
               });
           } else {
-              // GERAL (Nacional e Vizinhos)
+              // NACIONAL + VIZINHOS
               const pac = candidates.find(o => o.cleanName.includes('pac') || o.cleanName.includes('econômico'));
               const sedex = candidates.find(o => o.cleanName.includes('sedex') || o.cleanName.includes('expresso'));
               
@@ -367,8 +355,8 @@ export default function ProductDetails() {
                      company: "Correios"
                  });
               }
-
-              // Fallback da API (Se retornou transportadora)
+              
+              // Fallback para Nacional (só se API retornou algo mas não foi correio)
               if (finalOptions.length === 0 && candidates.length > 0) {
                   finalOptions.push({
                       name: candidates[0].name || "Entrega Padrão",
@@ -380,41 +368,17 @@ export default function ProductDetails() {
           }
       } 
     } catch (error) {
-      console.error("Erro API Frete:", error);
+      console.error("Erro API:", error);
     }
 
-    // --- 3. RESGATE TOTAL (O SEGREDO DO SUCESSO) ---
-    // Se no final de tudo a lista estiver vazia...
+    // --- RESGATE APENAS PARA LOCAL E VIZINHOS (TRAVA DE SEGURANÇA) ---
+    // Nacional só aparece se a API mandar (como você quer)
     if (finalOptions.length === 0) {
          if (isLocal) {
-             finalOptions.push({
-                name: "Palastore Expresso ⚡",
-                price: 15.00, 
-                delivery_time: 5, 
-                company: "Própria"
-             });
+             finalOptions.push({ name: "Palastore Expresso ⚡", price: 15.00, delivery_time: 5, company: "Própria" });
          } else if (isNearby) {
-             finalOptions.push({
-                name: "PAC (Econômico)",
-                price: 16.90,
-                delivery_time: 12,
-                company: "Correios"
-             });
-             finalOptions.push({
-                name: "SEDEX (Expresso)",
-                price: 19.90,
-                delivery_time: 7,
-                company: "Correios"
-             });
-         } else {
-             // >>> AQUI ESTÁ O QUE FALTAVA: FALLBACK NACIONAL <<<
-             // Se falhou pra São Paulo/Rio/Etc, cria uma opção genérica
-             finalOptions.push({
-                name: "Entrega Econômica",
-                price: 35.90, // Preço médio seguro
-                delivery_time: 15, // Prazo seguro
-                company: "Transportadora"
-             });
+             finalOptions.push({ name: "PAC (Econômico)", price: 16.90, delivery_time: 12, company: "Correios" });
+             finalOptions.push({ name: "SEDEX (Expresso)", price: 19.90, delivery_time: 7, company: "Correios" });
          }
     }
 
