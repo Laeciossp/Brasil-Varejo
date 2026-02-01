@@ -204,7 +204,6 @@ export default function ProductDetails() {
             if (productData.images?.length > 0) setActiveMedia(productData.images[0]);
           }
 
-          // BUSCA RELACIONADOS (INCLUINDO LOGISTICS PARA O QUICK ADD FUNCIONAR)
           if (productData.categories && productData.categories.length > 0) {
             const catId = productData.categories[0]._id;
             const relatedQuery = `
@@ -248,7 +247,7 @@ export default function ProductDetails() {
             handleCalculateShipping(cleanGlobal);
         }
     }
-  }, [product, globalCep]);
+  }, [product, globalCep, handlingDays]); // Importante: handlingDays como dependência
 
   const handleCalculateShipping = async (cepOverride) => {
     const targetCep = typeof cepOverride === 'string' ? cepOverride : cep;
@@ -365,7 +364,10 @@ export default function ProductDetails() {
         sku: finalSku,
         color: selectedVariant ? selectedVariant.color : null,
         size: selectedVariant ? selectedVariant.size : null,
-        // DADOS IMPORTANTES DE FRETE AQUI:
+        
+        // --- AQUI ESTÁ A CORREÇÃO: ENVIAR handlingTime PARA O CART ---
+        handlingTime: handlingDays, 
+        
         width: product.logistics?.width || 15,
         height: product.logistics?.height || 15,
         length: product.logistics?.length || 15,
@@ -401,7 +403,8 @@ export default function ProductDetails() {
             image: prod.imageUrl,
             sku: prod._id,
             variantName: null,
-            // AGORA O QUICK ADD ENVIA OS DADOS REAIS:
+            // --- AQUI TAMBÉM: ENVIAR handlingTime ---
+            handlingTime: handlingDays,
             width: prod.logistics?.width || 15,
             height: prod.logistics?.height || 15,
             length: prod.logistics?.length || 15,

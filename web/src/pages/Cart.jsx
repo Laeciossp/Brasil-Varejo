@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  Trash2, ShoppingCart, ArrowRight, ShieldCheck, MapPin, Lock, Truck
+  Trash2, ShoppingCart, ArrowRight, ShieldCheck, MapPin, Lock, Truck, CreditCard, QrCode
 } from 'lucide-react';
 import { useUser } from "@clerk/clerk-react";
 import { createClient } from "@sanity/client"; 
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CONFIGURAÇÃO SANITY ---
+// --- CONFIGURAÇÃO SANITY (PARA FALLBACK) ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  useCdn: false, // False para garantir dados novos
+  useCdn: false, 
   apiVersion: '2023-05-03',
   token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
 });
@@ -57,7 +57,7 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- 2. CÁLCULO DE FRETE (USANDO DADOS DO ITEM + FALLBACK SANITY) ---
+  // --- RECALCULAR FRETE (COM LÓGICA DE MANUSEIO) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -72,10 +72,10 @@ export default function Cart() {
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
         
-        // 1. OBTÉM O MANUSEIO CORRETO
-        // Tenta pegar do item primeiro. Se for 0 ou undefined, busca no Sanity.
+        // 1. OBTÉM O MANUSEIO (CORREÇÃO: LÊ DO ITEM PRIMEIRO)
         let handlingToAdd = items[0]?.handlingTime;
 
+        // Se o item veio sem handlingTime (antigo/cache), busca no Sanity como fallback
         if (handlingToAdd === undefined || handlingToAdd === null) {
              try {
                 const settingsQuery = `*[_type == "shippingSettings"][0]`;
@@ -92,7 +92,6 @@ export default function Cart() {
           body: JSON.stringify({
             from: { postal_code: "43805000" }, 
             to: { postal_code: targetZip },
-            // Mapeia os itens usando os dados que vieram do ProductDetails
             products: items.map(p => ({
               id: p._id,
               width: Number(p.width) || 15,
@@ -126,7 +125,7 @@ export default function Cart() {
           let finalOptions = [];
 
           if (isLocal) {
-             // Palastore
+             // Lógica Palastore Local
              const paidOptions = candidates.filter(c => c.price > 0);
              paidOptions.sort((a, b) => a.price - b.price);
              const cheapest = paidOptions.length > 0 ? paidOptions[0] : (candidates[0] || {price: 20});
@@ -139,7 +138,7 @@ export default function Cart() {
              });
 
           } else {
-             // Nacional (SOMA OBRIGATÓRIA)
+             // Lógica Nacional (SOMA O MANUSEIO)
              const bestEconomy = candidates.find(o => 
                 o.name.toLowerCase().includes('pac') || 
                 o.name.toLowerCase().includes('econômico') || 
@@ -295,15 +294,21 @@ export default function Cart() {
           <div className="flex-1 space-y-8">
             {/* PRODUTOS */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
-                {items.map((item) => (
+                {items.map((item) => {
+                  const productSlug = item.slug?.current || item.slug;
+                  return (
                     <div key={item.sku || item._id} className="flex gap-4">
                       <div className="w-20 h-20 bg-white border rounded-lg p-2">
-                          <img src={item.image} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
+                          <Link to={productSlug ? `/produto/${productSlug}` : '#'}>
+                             <img src={item.image} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
+                          </Link>
                       </div>
                       <div className="flex-1 flex flex-col justify-between">
                         <div className="flex justify-between">
                             <div>
-                                <h3 className="font-medium text-gray-900">{item.title}</h3>
+                                <Link to={productSlug ? `/produto/${productSlug}` : '#'} className="font-medium text-gray-900 hover:text-orange-600 transition-colors">
+                                    {item.title}
+                                </Link>
                                 {item.variantName && <p className="text-xs text-gray-500 mt-1">{item.variantName}</p>}
                             </div>
                             <button onClick={() => removeItem(item._id, item.sku)} className="text-red-500"><Trash2 size={18}/></button>
@@ -318,7 +323,8 @@ export default function Cart() {
                         </div>
                       </div>
                     </div>
-                ))}
+                  );
+                })}
             </div>
 
             {/* ENTREGA */}
@@ -389,8 +395,8 @@ export default function Cart() {
                 </div>
 
                 <div className="border-t pt-4 mb-6 space-y-2">
-                    <label className="flex items-center gap-2 p-2 border rounded cursor-pointer"><input type="radio" checked={tipoPagamento === 'pix'} onChange={() => setTipoPagamento('pix')}/> PIX</label>
-                    <label className="flex items-center gap-2 p-2 border rounded cursor-pointer"><input type="radio" checked={tipoPagamento === 'cartao'} onChange={() => setTipoPagamento('cartao')}/> Cartão</label>
+                    <label className="flex items-center gap-2 p-2 border rounded cursor-pointer"><input type="radio" checked={tipoPagamento === 'pix'} onChange={() => setTipoPagamento('pix')}/> PIX <QrCode size={16} className="text-green-600 ml-auto"/></label>
+                    <label className="flex items-center gap-2 p-2 border rounded cursor-pointer"><input type="radio" checked={tipoPagamento === 'cartao'} onChange={() => setTipoPagamento('cartao')}/> Cartão <CreditCard size={16} className="text-blue-600 ml-auto"/></label>
                 </div>
                 <div className="flex justify-between items-end mb-6">
                     <span className="font-medium">Total</span>
