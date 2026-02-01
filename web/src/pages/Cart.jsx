@@ -47,9 +47,21 @@ export default function Cart() {
     tipoPagamento, setTipoPagamento, globalCep, clearCart
   } = useCartStore();
   
+  // =================================================================
+  // 💰 LÓGICA FINANCEIRA (SUBTOTAL, DESCONTO PIX, FRETE, TOTAL)
+  // =================================================================
+  
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
-  const totalFinal = subtotal + shippingCost;
+  
+  // Se o tipo de pagamento for 'pix', aplica 10%. Se não, 0.
+  const isPix = tipoPagamento === 'pix';
+  const discount = isPix ? subtotal * 0.10 : 0;
+  
+  // Total Final subtraindo o desconto
+  const totalFinal = subtotal - discount + shippingCost;
+
+  // =================================================================
 
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
@@ -57,7 +69,7 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- RECALCULAR FRETE ---
+  // --- RECALCULAR FRETE (Lógica Blindada) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -72,7 +84,6 @@ export default function Cart() {
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
         
-        // Cálculo de Manuseio
         const maxHandlingTime = items.reduce((max, item) => {
              const h = parseInt(item.handlingTime) || 4; 
              return Math.max(max, h);
@@ -98,17 +109,14 @@ export default function Cart() {
         
         const rawOptions = await response.json();
 
-        // --- LÓGICA DE FRETE ---
         if (Array.isArray(rawOptions) && rawOptions.length > 0) {
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000';
-          // Lista de Vizinhança
           const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanZip.startsWith(p));
 
-          const extraDays = isNearby ? 4 : maxHandlingTime; // Força 4 dias se for vizinho
+          const extraDays = isNearby ? 4 : maxHandlingTime; 
           const postingDays = 1;
 
-          // --- MAPEAMENTO E CORREÇÃO DE PREÇOS ---
           const candidates = rawOptions.map(opt => {
               let val = opt.custom_price || opt.price || opt.valor || 0;
               if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
@@ -116,7 +124,7 @@ export default function Cart() {
               let finalPrice = Number(val);
               const nameLower = (opt.name || '').toLowerCase();
 
-              // SE PREÇO ZERO + VIZINHO = CORRIGE PREÇO (Salva Simões Filho/Centro)
+              // CORREÇÃO DE PREÇO ZERADO PARA REGIÃO
               if (finalPrice === 0 && isNearby) {
                   if (nameLower.includes('pac') || nameLower.includes('econômico')) finalPrice = 16.90;
                   if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
@@ -129,7 +137,7 @@ export default function Cart() {
                 cleanName: nameLower
               };
           })
-          .filter(c => c.price > 0) // Filtra zerados (mas os corrigidos acima passam)
+          .filter(c => c.price > 0) 
           .sort((a, b) => a.price - b.price);
 
           let finalOptions = [];
@@ -149,7 +157,6 @@ export default function Cart() {
              const sedexBuffer = isNearby ? 0 : 1;
 
              if (pac) {
-                // Padronização: Base mínima de 7 dias para vizinhos
                 let basePac = isNearby ? Math.max(7, pac.days) : pac.days;
                 finalOptions.push({
                     name: "PAC (Econômico)",
@@ -162,12 +169,10 @@ export default function Cart() {
              if (sedex) {
                 let baseSedex = isNearby ? Math.max(2, sedex.days) : sedex.days;
                 let finalSedexDays = baseSedex + extraDays + postingDays + sedexBuffer;
-                
                 if (pac) {
                     let pacRef = (isNearby ? Math.max(7, pac.days) : pac.days) + extraDays + postingDays + pacBuffer;
                     if (finalSedexDays >= pacRef) finalSedexDays = Math.max(2, pacRef - 2);
                 }
-
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: sedex.price,
@@ -176,7 +181,6 @@ export default function Cart() {
                 });
              }
              
-             // Fallback
              if (finalOptions.length === 0 && candidates.length > 0) {
                  finalOptions.push({
                     name: candidates[0].name,
@@ -206,7 +210,6 @@ export default function Cart() {
     };
     
     recalculate();
-    
   }, [customer.activeAddressId, items.length, globalCep]);
 
   const handleSaveAddress = () => {
@@ -249,7 +252,7 @@ export default function Cart() {
         billingAddress: activeAddress,
         carrier: selectedShipping.name,
         shippingCost: parseFloat(selectedShipping.price),
-        totalAmount: totalFinal,
+        totalAmount: totalFinal, // ENVIA O TOTAL JÁ COM DESCONTO
         paymentMethod: tipoPagamento,
         internalNotes: `Venda Site (Prazo: ${selectedShipping.delivery_time} dias)`
       };
@@ -397,6 +400,14 @@ export default function Cart() {
                 <div className="space-y-3 text-sm mb-6">
                     <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                     
+                    {/* LINHA DO DESCONTO PIX */}
+                    {isPix && discount > 0 && (
+                       <div className="flex justify-between text-green-600 font-bold bg-green-50 p-1 rounded">
+                           <span>Desconto PIX (10%)</span>
+                           <span>-{formatCurrency(discount)}</span>
+                       </div>
+                    )}
+
                     <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-center">
                             <span className="flex gap-1"><Truck size={14}/> Frete</span>
@@ -415,15 +426,36 @@ export default function Cart() {
                     </div>
                 </div>
 
+                {/* SELEÇÃO DE PAGAMENTO COM BLOQUEIO */}
                 <div className="border-t pt-4 mb-6 space-y-2">
-                    <label className="flex items-center gap-2 p-2 border rounded cursor-pointer"><input type="radio" checked={tipoPagamento === 'pix'} onChange={() => setTipoPagamento('pix')}/> PIX <QrCode size={16} className="text-green-600 ml-auto"/></label>
-                    <label className="flex items-center gap-2 p-2 border rounded cursor-pointer"><input type="radio" checked={tipoPagamento === 'cartao'} onChange={() => setTipoPagamento('cartao')}/> Cartão <CreditCard size={16} className="text-blue-600 ml-auto"/></label>
+                    <label className={`flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition-all ${isPix ? 'border-green-500 bg-green-50 ring-1 ring-green-500' : 'hover:bg-gray-50'}`}>
+                        <input 
+                            type="radio" 
+                            name="paymentMethod" // Name igual garante que apenas um seja selecionado
+                            checked={isPix} 
+                            onChange={() => setTipoPagamento('pix')}
+                        /> 
+                        <span className="font-bold text-gray-900">PIX (-10%)</span> 
+                        <QrCode size={16} className="text-green-600 ml-auto"/>
+                    </label>
+
+                    <label className={`flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition-all ${!isPix ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'hover:bg-gray-50'}`}>
+                        <input 
+                            type="radio" 
+                            name="paymentMethod" 
+                            checked={!isPix} 
+                            onChange={() => setTipoPagamento('cartao')}
+                        /> 
+                        <span className="font-medium text-gray-700">Cartão de Crédito</span> 
+                        <CreditCard size={16} className="text-blue-600 ml-auto"/>
+                    </label>
                 </div>
-                <div className="flex justify-between items-end mb-6">
-                    <span className="font-medium">Total</span>
-                    <span className="text-3xl font-black">{formatCurrency(totalFinal)}</span>
+
+                <div className="flex justify-between items-end mb-6 pt-4 border-t">
+                    <span className="font-medium">Total Final</span>
+                    <span className="text-3xl font-black text-gray-900">{formatCurrency(totalFinal)}</span>
                 </div>
-                <button onClick={handleCheckout} disabled={loading || !selectedShipping || !activeAddress || !customer.document || !customerName} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300">
+                <button onClick={handleCheckout} disabled={loading || !selectedShipping || !activeAddress || !customer.document || !customerName} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300 transition-all">
                     {loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/>
                 </button>
                 <MercadoPagoTrust />
