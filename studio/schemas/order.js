@@ -36,16 +36,15 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- CAMPOS FANTASMAS (SOLUÇÃO DOS ERROS VERMELHOS) ---
-    // O Sanity vai parar de dar erro nestes campos, mas não vai mostrá-los.
+    // --- CAMPOS LEGADOS (PARA EVITAR ERROS) ---
     { name: 'cpf', type: 'string', hidden: true },
-    { name: 'document', type: 'string', hidden: true },
     { name: 'customerDocument', type: 'string', hidden: true },
     { name: 'customerEmail', type: 'string', hidden: true },
     { name: 'alias', type: 'string', hidden: true },
     { name: 'id', type: 'string', hidden: true },
+    { name: 'document', type: 'string', hidden: true },
 
-    // --- CLIENTE (ESTRUTURA CORRETA) ---
+    // --- CLIENTE ---
     {
       name: 'customer',
       title: 'Dados do Cliente',
@@ -71,16 +70,13 @@ export default {
           title: 'Produto',
           fields: [
             { name: 'productName', title: 'Nome do Produto', type: 'string' },
-            { name: 'variantName', title: 'Variação Completa', type: 'string' }, 
-            
+            { name: 'variantName', title: 'Variação', type: 'string' }, 
             { name: 'color', title: 'Cor', type: 'string' }, 
             { name: 'size', title: 'Tamanho', type: 'string' }, 
             { name: 'sku', title: 'SKU', type: 'string' }, 
-            
             { name: 'quantity', title: 'Quantidade', type: 'number' },
             { name: 'price', title: 'Preço', type: 'number' },
             { name: 'imageUrl', title: 'Imagem URL', type: 'string' },
-            
             { name: 'product', title: 'Ref. Produto', type: 'reference', to: [{type: 'product'}] },
           ],
           preview: {
@@ -92,15 +88,13 @@ export default {
               qty: 'quantity'
             },
             prepare({title, subtitle, color, size, qty}) {
-              // Lógica para garantir que apareça algo mesmo se faltar dado
               let details = [];
               if (subtitle && subtitle !== 'Padrão') details.push(subtitle);
               if (color) details.push(`Cor: ${color}`);
               if (size) details.push(`Tam: ${size}`);
-
               return { 
-                title: `${qty}x ${title || 'PRODUTO SEM NOME (Verificar)'}`, 
-                subtitle: details.join(' | ') || 'Item Padrão'
+                title: `${qty}x ${title || 'PRODUTO SEM NOME'}`, 
+                subtitle: details.join(' - ') || 'Sem detalhes'
               }
             }
           }
@@ -108,7 +102,7 @@ export default {
       ]
     },
 
-    // --- ENDEREÇO DE ENTREGA ---
+    // --- MÓDULO 1: ENDEREÇO DE ENTREGA ---
     {
       name: 'shippingAddress',
       title: 'Endereço de Entrega',
@@ -119,38 +113,36 @@ export default {
         { name: 'street', type: 'string', title: 'Rua' },
         { name: 'number', type: 'string', title: 'Número' },
         { name: 'neighborhood', type: 'string', title: 'Bairro' },
-        { name: 'city', type: 'string', title: 'Cidade' },
-        { name: 'state', type: 'string', title: 'Estado' },
-        { name: 'complement', type: 'string', title: 'Complemento' }
-      ]
-    },
-
-    // --- FATURAMENTO ---
-    {
-      name: 'billingAddress',
-      title: 'Endereço de Faturamento',
-      type: 'object',
-      group: 'billing',
-      options: { collapsible: true, collapsed: true },
-      fields: [
-        { name: 'zip', type: 'string', title: 'CEP' },
-        { name: 'street', type: 'string', title: 'Rua' },
-        { name: 'number', type: 'string', title: 'Número' },
-        { name: 'neighborhood', type: 'string', title: 'Bairro' },
+        { name: 'complement', type: 'string', title: 'Complemento' },
         { name: 'city', type: 'string', title: 'Cidade' },
         { name: 'state', type: 'string', title: 'Estado' }
       ]
     },
 
-    // --- LOGÍSTICA E VALORES ---
+    // --- MÓDULO 2: ENDEREÇO DE FATURAMENTO (IGUAL AO DE CIMA) ---
+    {
+      name: 'billingAddress',
+      title: 'Endereço de Faturamento',
+      type: 'object',
+      group: 'billing',
+      options: { collapsible: true, collapsed: false },
+      fields: [
+        { name: 'zip', type: 'string', title: 'CEP' },
+        { name: 'street', type: 'string', title: 'Rua' },
+        { name: 'number', type: 'string', title: 'Número' },
+        { name: 'neighborhood', type: 'string', title: 'Bairro' },
+        { name: 'complement', type: 'string', title: 'Complemento' },
+        { name: 'city', type: 'string', title: 'Cidade' },
+        { name: 'state', type: 'string', title: 'Estado' }
+      ]
+    },
+
+    // --- LOGÍSTICA E FINANCEIRO ---
     { name: 'trackingCode', title: 'Código de Rastreio', type: 'string', group: 'logistics' },
-    { name: 'trackingUrl', title: 'Link de Rastreio', type: 'url', group: 'logistics' },
     { name: 'carrier', title: 'Transportadora', type: 'string', group: 'logistics' },
     { name: 'shippingCost', title: 'Custo do Frete', type: 'number', group: 'billing' },
     { name: 'totalAmount', title: 'Valor Total', type: 'number', group: 'billing' },
     { name: 'paymentMethod', title: 'Método Pagamento', type: 'string', group: 'billing' },
-    
-    // --- ADMIN ---
     { name: 'internalNotes', title: 'Anotações Internas', type: 'text', group: 'admin' },
     { name: 'hasUnreadMessage', title: 'Mensagem Não Lida', type: 'boolean', initialValue: false, group: 'admin' }
   ],
@@ -165,10 +157,9 @@ export default {
       const statusIcons = {
         pending: '🟡', paid: '🟢', invoiced: '📄', shipped: '🚚', delivered: '🏠', cancelled: '❌'
       };
-      const valor = total ? `R$ ${total.toFixed(2)}` : '';
       return {
         title: `${statusIcons[status] || '⚪'} ${title || 'Novo'} - ${customer || 'Cliente'}`,
-        subtitle: valor
+        subtitle: total ? `R$ ${total.toFixed(2)}` : ''
       }
     }
   }

@@ -9,7 +9,7 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CONFIGURAÇÃO SANITY ---
+// --- CLIENTE SANITY ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -38,7 +38,8 @@ export default function Cart() {
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   
   const [showAddressForm, setShowAddressForm] = useState(false);
-  const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
+  // ADICIONADO: Campo 'complement' no estado do novo endereço
+  const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   
   const { 
     items, removeItem, updateQuantity, selectedShipping, setShipping,
@@ -115,13 +116,14 @@ export default function Cart() {
   }, [customer.activeAddressId, items.length, globalCep]);
 
   const handleSaveAddress = () => {
-    if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados.");
+    if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
     addAddress({ ...newAddr, id: Math.random().toString(36).substr(2, 9) });
     setShowAddressForm(false);
-    setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
+    // Limpa form
+    setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   };
 
-  // --- FINALIZAR COMPRA ---
+  // --- FINALIZAR COMPRA ALINHADA ---
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Frete/Endereço?");
@@ -132,13 +134,10 @@ export default function Cart() {
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      // 1. HIGIENIZAÇÃO DOS DADOS (Evita "Undefined" e "Unknown fields")
+      // 1. ITENS (Higienizados)
       const sanitizedItems = items.map(item => ({
          _key: Math.random().toString(36).substring(7),
-         
-         // AQUI RESOLVEMOS O UNDEFINED: Tenta title, depois name, depois texto fixo
          productName: item.title || item.name || "Produto Sem Nome", 
-         
          variantName: item.variantName || "Padrão", 
          color: item.color || "",
          size: item.size || "",
@@ -149,16 +148,19 @@ export default function Cart() {
          product: { _type: 'reference', _ref: item._id }
       }));
 
-      const cleanAddress = {
+      // 2. ENDEREÇO (ALINHADO COM O SCHEMA)
+      // Extraímos exatamente os campos que o schema pede
+      const finalAddress = {
         zip: activeAddress.zip,
         street: activeAddress.street,
         number: activeAddress.number,
         neighborhood: activeAddress.neighborhood,
         city: activeAddress.city,
         state: activeAddress.state,
-        complement: ""
+        complement: activeAddress.complement || "" // Garante que vai string vazia se não tiver
       };
 
+      // 3. DADOS DO CLIENTE
       const cleanCustomer = {
         name: user.fullName || "Cliente Site",
         email: user.primaryEmailAddress?.emailAddress || "",
@@ -166,25 +168,29 @@ export default function Cart() {
         phone: ""
       };
 
-      // 2. CRIA O PEDIDO NO SANITY (CLIENTE SIDE)
+      // 4. CRIA O PEDIDO NO SANITY
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
         status: 'pending',
-        customer: cleanCustomer, // Envia o objeto limpo
-        items: sanitizedItems,   // Envia os itens limpos
-        shippingAddress: cleanAddress,
+        customer: cleanCustomer,
+        items: sanitizedItems,
+        
+        // ENVIA O ENDEREÇO PARA OS DOIS MÓDULOS (Entrega e Faturamento)
+        shippingAddress: finalAddress,
+        billingAddress: finalAddress, // <<-- AQUI GARANTE QUE O MÓDULO DE FATURAMENTO TENHA DADOS
+        
         carrier: selectedShipping.name,
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Checkout V7 - Dados Higienizados"
+        internalNotes: "Venda Site - Endereço Completo"
       };
 
-      console.log("Enviando pedido...", orderDoc);
+      console.log("Enviando...", orderDoc);
       await client.create(orderDoc);
 
-      // 3. CHAMA O WORKER (PAGAMENTO)
+      // 5. CHAMADA DE PAGAMENTO
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
@@ -194,7 +200,7 @@ export default function Cart() {
             shipping: parseFloat(selectedShipping.price), 
             email: cleanCustomer.email, 
             tipoPagamento, 
-            shippingAddress: cleanAddress,
+            shippingAddress: finalAddress,
             customerDocument: cleanCustomer.cpf,
             totalAmount: totalFinal,
             orderId: orderNumber 
@@ -207,7 +213,7 @@ export default function Cart() {
         throw new Error(JSON.stringify(data.details || data.error));
       }
 
-      // 4. REDIRECIONA
+      // 6. REDIRECIONAR
       clearCart();
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
@@ -218,7 +224,7 @@ export default function Cart() {
 
     } catch (error) {
       console.error("Erro Checkout:", error);
-      alert("Erro ao processar: " + error.message);
+      alert("Erro: " + error.message);
     } finally { 
       setLoading(false); 
     }
@@ -277,23 +283,34 @@ export default function Cart() {
                     <button onClick={() => setShowAddressForm(!showAddressForm)} className="text-blue-600 font-bold text-sm">+ Endereço</button>
                 </div>
                 
+                {/* FORMULÁRIO DE ENDEREÇO ATUALIZADO COM COMPLEMENTO */}
                 {showAddressForm && (
                    <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-2 gap-3">
+                      <input placeholder="Apelido (Ex: Casa)" className="p-2 border rounded col-span-2" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
                       <input placeholder="CEP" className="p-2 border rounded" value={newAddr.zip} onChange={e => setNewAddr({...newAddr, zip: e.target.value})} />
                       <input placeholder="Rua" className="p-2 border rounded" value={newAddr.street} onChange={e => setNewAddr({...newAddr, street: e.target.value})} />
                       <input placeholder="Número" className="p-2 border rounded" value={newAddr.number} onChange={e => setNewAddr({...newAddr, number: e.target.value})} />
                       <input placeholder="Bairro" className="p-2 border rounded" value={newAddr.neighborhood} onChange={e => setNewAddr({...newAddr, neighborhood: e.target.value})} />
+                      <input placeholder="Complemento (Ap 101)" className="p-2 border rounded" value={newAddr.complement} onChange={e => setNewAddr({...newAddr, complement: e.target.value})} />
                       <input placeholder="Cidade" className="p-2 border rounded" value={newAddr.city} onChange={e => setNewAddr({...newAddr, city: e.target.value})} />
                       <input placeholder="UF" className="p-2 border rounded" value={newAddr.state} onChange={e => setNewAddr({...newAddr, state: e.target.value})} />
                       <button onClick={handleSaveAddress} className="col-span-2 bg-black text-white py-2 rounded font-bold">Salvar</button>
                    </div>
                 )}
 
+                {/* VISUALIZAÇÃO DO ENDEREÇO ATUALIZADA */}
                 <div className="grid md:grid-cols-2 gap-4">
                     {customer.addresses?.map(addr => (
                         <div key={addr.id} onClick={() => setActiveAddress(addr.id)} className={`p-4 border-2 rounded-lg cursor-pointer ${addr.id === customer.activeAddressId ? 'border-blue-600 bg-blue-50' : 'border-gray-100'}`}>
-                            <p className="font-bold text-sm">{addr.alias || 'Casa'}</p>
-                            <p className="text-xs text-gray-500">{addr.street}, {addr.number} - {addr.city}</p>
+                            <div className="flex justify-between mb-1">
+                                <span className="font-bold text-sm">{addr.alias || 'Local'}</span>
+                                {addr.id === customer.activeAddressId && <div className="w-3 h-3 bg-blue-600 rounded-full"></div>}
+                            </div>
+                            <p className="text-xs text-gray-600">
+                                {addr.street}, {addr.number} {addr.complement ? `- ${addr.complement}` : ''}
+                            </p>
+                            <p className="text-xs text-gray-500">{addr.neighborhood}, {addr.city}/{addr.state}</p>
+                            <p className="text-xs text-gray-400 font-mono">{addr.zip}</p>
                         </div>
                     ))}
                 </div>
