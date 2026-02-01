@@ -48,13 +48,13 @@ export default function Cart() {
   } = useCartStore();
   
   // =================================================================
-  // 💰 LÓGICA FINANCEIRA
+  // 💰 LÓGICA FINANCEIRA (SUBTOTAL, DESCONTO PIX, TOTAL)
   // =================================================================
   
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
   
-  // Regra: Se PIX, 10% de desconto. Se Cartão, 0.
+  // 10% de desconto APENAS se for PIX
   const isPix = tipoPagamento === 'pix';
   const discount = isPix ? subtotal * 0.10 : 0;
   
@@ -66,7 +66,7 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- RECALCULAR FRETE (Blindado) ---
+  // --- RECALCULAR FRETE (COM CORREÇÃO PARA LOCAL 43850000) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -78,6 +78,12 @@ export default function Cart() {
 
       setRecalculatingShipping(true);
       
+      // Variáveis de controle Local
+      const cleanZip = targetZip.replace(/\D/g, '');
+      const isLocal = cleanZip === '43850000';
+      const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanZip.startsWith(p));
+      let finalOptions = [];
+
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
         
@@ -106,11 +112,8 @@ export default function Cart() {
         
         const rawOptions = await response.json();
 
+        // --- PROCESSAMENTO ---
         if (Array.isArray(rawOptions) && rawOptions.length > 0) {
-          const cleanZip = targetZip.replace(/\D/g, '');
-          const isLocal = cleanZip === '43850000';
-          const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanZip.startsWith(p));
-
           const extraDays = isNearby ? 4 : maxHandlingTime; 
           const postingDays = 1;
 
@@ -121,7 +124,7 @@ export default function Cart() {
               let finalPrice = Number(val);
               const nameLower = (opt.name || '').toLowerCase();
 
-              // Correção de preço zerado regional
+              // CORREÇÃO DE PREÇO ZERADO PARA VIZINHOS
               if (finalPrice === 0 && isNearby) {
                   if (nameLower.includes('pac') || nameLower.includes('econômico')) finalPrice = 16.90;
                   if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
@@ -137,16 +140,17 @@ export default function Cart() {
           .filter(c => c.price > 0) 
           .sort((a, b) => a.price - b.price);
 
-          let finalOptions = [];
-
           if (isLocal) {
+             // SE TEM API E É LOCAL, TENTA USAR O PREÇO DA API
+             const bestPrice = candidates[0]?.price > 0 ? candidates[0].price : 15.00;
              finalOptions.push({
                 name: "Palastore Expresso ⚡",
-                price: candidates[0]?.price > 0 ? candidates[0].price : 15.00, 
+                price: bestPrice, 
                 delivery_time: 5, 
                 company: "Própria"
              });
           } else {
+             // LÓGICA PARA OUTROS CEPS
              const pac = candidates.find(o => o.cleanName.includes('pac') || o.cleanName.includes('econômico'));
              const sedex = candidates.find(o => o.cleanName.includes('sedex') || o.cleanName.includes('expresso'));
              
@@ -187,22 +191,33 @@ export default function Cart() {
                  });
              }
           }
-
-          setShippingOptions(finalOptions);
-          
-          if (finalOptions.length > 0) {
-              const currentName = selectedShipping?.name;
-              const sameOption = finalOptions.find(o => o.name === currentName);
-              setShipping(sameOption || finalOptions[0]);
-          } else {
-              setShipping(null);
-          }
         }
-
       } catch (error) {
-        console.error("Erro frete:", error);
-      } finally {
-        setRecalculatingShipping(false);
+        console.error("Erro frete (API falhou):", error);
+      } 
+      
+      // --- RESGATE OBRIGATÓRIO PARA LOCAL (43850000) ---
+      // Se depois de tudo a lista estiver vazia (API falhou ou retornou []), 
+      // e for o CEP local, a gente INSERE NA MARRA.
+      if (isLocal && finalOptions.length === 0) {
+           finalOptions.push({
+              name: "Palastore Expresso ⚡",
+              price: 15.00, // Preço fixo de segurança
+              delivery_time: 5, 
+              company: "Própria"
+           });
+      }
+
+      setShippingOptions(finalOptions);
+      setRecalculatingShipping(false);
+      
+      // Seleciona a primeira opção automaticamente
+      if (finalOptions.length > 0) {
+          const currentName = selectedShipping?.name;
+          const sameOption = finalOptions.find(o => o.name === currentName);
+          setShipping(sameOption || finalOptions[0]);
+      } else {
+          setShipping(null);
       }
     };
     
@@ -423,9 +438,8 @@ export default function Cart() {
                     </div>
                 </div>
 
-                {/* --- SELEÇÃO DE PAGAMENTO VISUAL E BLOQUEADA --- */}
+                {/* --- SELEÇÃO DE PAGAMENTO VISUAL --- */}
                 <div className="grid grid-cols-2 gap-3 mb-6 border-t pt-4">
-                    {/* OPÇÃO PIX */}
                     <label className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-xl cursor-pointer transition-all ${
                         isPix 
                         ? 'border-green-500 bg-green-50 text-green-700 ring-1 ring-green-500' 
@@ -434,7 +448,7 @@ export default function Cart() {
                         <div className="absolute top-2 right-2">
                             <input 
                                 type="radio" 
-                                name="payment_mode" // IMPORTANTE: Mesma name agrupa os dois
+                                name="payment_mode"
                                 checked={isPix} 
                                 onChange={() => setTipoPagamento('pix')}
                                 className="w-4 h-4 text-green-600 focus:ring-green-500"
@@ -445,7 +459,6 @@ export default function Cart() {
                         <span className="text-[10px] font-bold bg-green-200 text-green-800 px-2 py-0.5 rounded-full mt-1">-10% OFF</span>
                     </label>
 
-                    {/* OPÇÃO CARTÃO */}
                     <label className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-xl cursor-pointer transition-all ${
                         !isPix 
                         ? 'border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-500' 

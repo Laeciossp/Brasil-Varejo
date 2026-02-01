@@ -1,5 +1,6 @@
-var src_default = {
+export default {
   async fetch(req, env) {
+    // 1. Configuração de CORS (Permite que seu site acesse o Worker)
     const origin = req.headers.get("Origin") || "*";
     const headers = {
       "Content-Type": "application/json",
@@ -14,162 +15,202 @@ var src_default = {
     try {
       const url = new URL(req.url);
 
-      // --- ROTAS AUXILIARES (FRETE, LOGIN) - MANTIDAS IGUAIS ---
-      if (url.pathname === "/login/melhorenvio") {
-        const client_id = env.MELHORENVIO_CLIENT_ID;
-        const redirect_uri = "https://brasil-varejo-api.laeciossp.workers.dev/callback/melhorenvio";
-        const scope = "shipping-calculate shipping-checkout shipping-info user-read";
-        const authUrl = `https://www.melhorenvio.com.br/oauth/authorize?client_id=${client_id}&redirect_uri=${encodeURIComponent(redirect_uri)}&response_type=code&scope=${encodeURIComponent(scope)}`;
-        return Response.redirect(authUrl, 302);
-      }
-
-      if (url.pathname === "/callback/melhorenvio") {
-        const code = url.searchParams.get("code");
-        const response = await fetch("https://www.melhorenvio.com.br/oauth/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            grant_type: "authorization_code",
-            client_id: env.MELHORENVIO_CLIENT_ID,
-            client_secret: env.MELHORENVIO_CLIENT_SECRET,
-            redirect_uri: "https://brasil-varejo-api.laeciossp.workers.dev/callback/melhorenvio",
-            code
-          })
-        });
-        const data = await response.json();
-        if (data.access_token) {
-          await env.CARRINHO.put("MELHORENVIO_TOKEN", data.access_token);
-          return new Response("Autorizado!", { headers });
-        }
-        return new Response(JSON.stringify({ error: "Erro auth" }), { status: 400, headers });
-      }
-
-      if (req.method === "POST" && url.pathname.includes("shipping")) {
+      // =================================================================
+      // ROTA 1: CÁLCULO DE FRETE (MELHOR ENVIO / CORREIOS)
+      // =================================================================
+      if (url.pathname === "/shipping") {
         const body = await req.json();
-        // Lógica de frete... (assumindo que já está configurada)
-        // Aqui você pode manter sua lógica de frete original
-        const token = await env.CARRINHO.get("MELHORENVIO_TOKEN");
-        if (!token) return new Response(JSON.stringify([]), { headers });
-        
+        const { to, products } = body; 
+
+        // Token do Melhor Envio
+        const meToken = env.MELHORENVIO_TOKEN; 
+
+        // Monta o payload para a API do Melhor Envio
         const payload = {
-          from: { postal_code: "43805000" },
-          to: { postal_code: (body.to?.postal_code || "").replace(/\D/g, "") },
-          products: (body.products || []).map(p => ({
-            id: p.id, width: 15, height: 15, length: 15, weight: 0.5, insurance_value: p.insurance_value, quantity: p.quantity
-          }))
+            from: { postal_code: "43805000" }, // Seu CEP de Origem
+            to: { postal_code: to.postal_code },
+            products: products.map(p => ({
+                id: p.id,
+                width: p.width || 15,
+                height: p.height || 15,
+                length: p.length || 15,
+                weight: p.weight || 0.5,
+                insurance_value: p.insurance_value || 50,
+                quantity: p.quantity || 1
+            })),
+            options: { receipt: false, own_hand: false },
+            services: "1,2" // 1=PAC, 2=SEDEX
         };
-        const meResponse = await fetch("https://www.melhorenvio.com.br/api/v2/me/shipment/calculate", {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json", "User-Agent": "Brasil Varejo" },
-          body: JSON.stringify(payload)
+
+        const resp = await fetch("https://melhorenvio.com.br/api/v2/me/shipment/calculate", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${meToken}`,
+                "Accept": "application/json"
+            },
+            body: JSON.stringify(payload)
         });
-        const fretes = await meResponse.json();
-        return new Response(JSON.stringify(fretes), { headers });
+
+        if (!resp.ok) {
+            return new Response(JSON.stringify([]), { headers });
+        }
+
+        const data = await resp.json();
+        return new Response(JSON.stringify(data), { headers });
       }
 
       // =================================================================
-      // 4. ROTA: CHECKOUT (SÓ PAGAMENTO)
+      // ROTA 2: CHECKOUT (MERCADO PAGO) - COM BLOQUEIO DE PAGAMENTO
       // =================================================================
-      if (req.method === "POST" && url.pathname.includes("checkout")) {
-        const reqData = await req.json();
-        const { items, email, shipping, tipoPagamento, orderId, shippingAddress, customerDocument } = reqData;
+      if (url.pathname === "/checkout") {
+        const { 
+            items, 
+            shipping, 
+            email, 
+            tipoPagamento, 
+            shippingAddress, 
+            customerDocument, 
+            totalAmount, 
+            orderId 
+        } = await req.json();
 
-        // IMPORTANTE: Não criamos mais o pedido no Sanity aqui.
-        // Usamos o orderId que veio do Frontend.
+        // 1. Configura quais métodos bloquear
+        let excludedPaymentTypes = [];
+        let maxInstallments = 12;
 
-        const isCashPayment = (tipoPagamento === 'pix' || tipoPagamento === 'boleto');
-        const fatorDesconto = isCashPayment ? 0.9 : 1.0;
+        if (tipoPagamento === 'pix') {
+             // PIX: Bloqueia cartões e boleto
+             excludedPaymentTypes = [
+                 { id: "credit_card" },
+                 { id: "debit_card" },
+                 { id: "ticket" },
+                 { id: "atm" }
+             ];
+             maxInstallments = 1;
+        } else if (tipoPagamento === 'cartao') {
+             // Cartão: Bloqueia PIX e Boleto
+             excludedPaymentTypes = [
+                 { id: "bank_transfer" }, // PIX
+                 { id: "ticket" },
+                 { id: "atm" }
+             ];
+        }
 
-        const mpItems = items.map((item) => ({
-          title: item.title || item.name || "Produto Palastore",
-          quantity: Number(item.quantity || 1),
-          unit_price: Number((Number(item.price) * fatorDesconto).toFixed(2)),
-          currency_id: "BRL"
+        // 2. Calcula desconto se necessário
+        const itemsTotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+        const shippingCost = Number(shipping) || 0;
+        const grossTotal = itemsTotal + shippingCost;
+        
+        let mpItems = items.map(item => ({
+            title: item.title,
+            quantity: Number(item.quantity),
+            currency_id: "BRL",
+            unit_price: Number(item.price)
         }));
 
-        if (Number(shipping) > 0) {
-          mpItems.push({ title: "Frete", quantity: 1, unit_price: Number(Number(shipping).toFixed(2)), currency_id: "BRL" });
+        // Se o total pago for menor que a soma bruta, adiciona desconto
+        if (totalAmount < grossTotal) {
+            const discountDiff = grossTotal - totalAmount;
+            mpItems.push({
+                title: "Desconto PIX (-10%)",
+                quantity: 1,
+                currency_id: "BRL",
+                unit_price: -Number(discountDiff.toFixed(2))
+            });
         }
 
-        const cleanCPF = (customerDocument || "").replace(/\D/g, '');
-        
-        const payerData = {
-            email: email,
-            first_name: shippingAddress?.alias || "Cliente",
-            identification: { type: "CPF", number: cleanCPF }
-        };
-
-        const preferenceData = {
+        // 3. Cria a preferência
+        const preferenceBody = {
           items: mpItems,
-          payer: payerData,
+          shipments: {
+            cost: shippingCost,
+            mode: "not_specified"
+          },
+          payer: {
+            email: email,
+            identification: {
+                type: "CPF",
+                number: customerDocument
+            },
+            address: {
+                zip_code: shippingAddress?.zip || "",
+                street_name: shippingAddress?.street || "",
+                street_number: Number(shippingAddress?.number) || 0,
+                city_name: shippingAddress?.city || "",
+                federal_unit: shippingAddress?.state || ""
+            }
+          },
+          payment_methods: {
+            excluded_payment_types: excludedPaymentTypes,
+            installments: maxInstallments
+          },
           back_urls: {
-            success: "https://palastore.com.br/sucesso", 
-            failure: "https://palastore.com.br/cart",
-            pending: "https://palastore.com.br/sucesso"
+            success: "https://palastore.com.br/sucesso",
+            failure: "https://palastore.com.br/erro",
+            pending: "https://palastore.com.br/pendente"
           },
           auto_return: "approved",
-          external_reference: orderId, // ID DO SANITY VINDO DO FRONT
-          notification_url: "https://brasil-varejo-api.laeciossp.workers.dev/webhook",
-          payment_methods: {
-            excluded_payment_types: tipoPagamento === 'boleto' ? [{ id: "credit_card" }] : [],
-            installments: 12
-          }
+          external_reference: orderId || `ORDER-${Date.now()}`
         };
 
-        const mpResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
+        const mpResp = await fetch("https://api.mercadopago.com/checkout/preferences", {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${env.MP_ACCESS_TOKEN}`,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${env.MP_ACCESS_TOKEN}`
           },
-          body: JSON.stringify(preferenceData)
+          body: JSON.stringify(preferenceBody)
         });
 
-        const mpSession = await mpResponse.json();
-        
-        if (!mpResponse.ok) {
-            return new Response(JSON.stringify({ error: "Erro MP", details: mpSession }), { status: 400, headers });
+        const mpData = await mpResp.json();
+
+        if (!mpResp.ok) {
+           throw new Error(JSON.stringify(mpData));
         }
 
         return new Response(JSON.stringify({ 
-          url: mpSession.init_point,
-          id_preferencia: mpSession.id 
+            url: mpData.init_point, 
+            id_preferencia: mpData.id 
         }), { headers });
       }
 
       // =================================================================
-      // 5. ROTA: WEBHOOK
+      // ROTA 3: WEBHOOK
       // =================================================================
-      if (url.pathname.includes("webhook")) {
-        const urlParams = new URLSearchParams(url.search);
-        const dataId = urlParams.get("data.id") || urlParams.get("id");
+      if (url.pathname === "/webhook" && req.method === "POST") {
+        const query = new URLSearchParams(url.search);
+        const type = query.get("type") || (await req.json()).type;
+        
+        if (type === "payment") {
+          const dataId = query.get("data.id") || (await req.json()).data?.id;
+          
+          if (dataId) {
+             const respPagamento = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
+                headers: { "Authorization": `Bearer ${env.MP_ACCESS_TOKEN}` }
+             });
 
-        if (dataId) {
-          const respPagamento = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
-            headers: { "Authorization": `Bearer ${env.MP_ACCESS_TOKEN}` }
-          });
-
-          if (respPagamento.ok) {
-            const pagamento = await respPagamento.json();
-            if (pagamento.status === "approved") {
-              const sanityId = pagamento.external_reference;
-              
-              if (sanityId && env.SANITY_TOKEN && env.SANITY_PROJECT_ID) {
-                const mutation = {
-                  mutations: [{
-                      patch: {
-                        id: sanityId,
-                        set: { status: "paid", paymentMethod: pagamento.payment_method_id }
-                      }
-                  }]
-                };
-                await fetch(`https://${env.SANITY_PROJECT_ID}.api.sanity.io/v2021-06-07/data/mutate/${env.SANITY_DATASET || 'production'}`, {
-                  method: "POST",
-                  headers: { "Authorization": `Bearer ${env.SANITY_TOKEN}`, "Content-Type": "application/json" },
-                  body: JSON.stringify(mutation)
-                });
-              }
-            }
+             if (respPagamento.ok) {
+                const pagamento = await respPagamento.json();
+                if (pagamento.status === "approved") {
+                    const sanityId = pagamento.external_reference;
+                    if (sanityId && env.SANITY_TOKEN && env.SANITY_PROJECT_ID) {
+                        const mutation = {
+                            mutations: [{
+                                patch: {
+                                    id: sanityId,
+                                    set: { status: "paid", paymentMethod: pagamento.payment_method_id }
+                                }
+                            }]
+                        };
+                        await fetch(`https://${env.SANITY_PROJECT_ID}.api.sanity.io/v2021-06-07/data/mutate/${env.SANITY_DATASET || 'production'}`, {
+                            method: "POST",
+                            headers: { "Authorization": `Bearer ${env.SANITY_TOKEN}`, "Content-Type": "application/json" },
+                            body: JSON.stringify(mutation)
+                        });
+                    }
+                }
+             }
           }
         }
         return new Response("OK", { status: 200 });
@@ -178,8 +219,7 @@ var src_default = {
       return new Response(JSON.stringify({ status: "Online" }), { status: 200, headers });
 
     } catch (err) {
-      return new Response(JSON.stringify({ erro: err.message }), { status: 500, headers });
+      return new Response(JSON.stringify({ error: err.message }), { status: 500, headers });
     }
-  }
+  },
 };
-export { src_default as default };

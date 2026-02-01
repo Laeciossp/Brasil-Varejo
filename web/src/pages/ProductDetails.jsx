@@ -253,49 +253,54 @@ export default function ProductDetails() {
     }
   }, [product, globalCep, handlingDays]); 
 
-  const handleCalculateShipping = async (cepOverride) => {
-    const targetCep = typeof cepOverride === 'string' ? cepOverride : cep;
-    const cleanCep = targetCep.replace(/\D/g, '');
-    if (cleanCep.length !== 8) return;
+ const handleCalculateShipping = async (e) => {
+    // Se for evento de form (enter), previne reload. Se for chamada direta, ignora.
+    if (e && e.preventDefault) e.preventDefault();
     
+    // Usa o valor do argumento ou o state 'cep'
+    const targetCep = typeof e === 'string' ? e : cep;
+    
+    if (!targetCep) return;
+
     setCalculating(true);
     setShippingOptions([]);
 
     try {
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
-      const workerUrl = `${baseUrl}/shipping`;
-
-      const response = await fetch(workerUrl, { 
+      
+      const response = await fetch(`${baseUrl}/shipping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           from: { postal_code: "43805000" },
-          to: { postal_code: cleanCep },
-          products: [{ 
-            id: product._id, 
-            width: product.logistics?.width || 15,
-            height: product.logistics?.height || 15,
-            length: product.logistics?.length || 15,
-            weight: product.logistics?.weight || 0.5, 
-            insurance_value: currentPrice, 
-            quantity: 1 
+          to: { postal_code: targetCep },
+          products: [{
+            id: product._id,
+            width: product.width || 15,
+            height: product.height || 15,
+            length: product.length || 15,
+            weight: product.weight || 0.5,
+            insurance_value: product.price || 50,
+            quantity: 1
           }]
         })
       });
-     const rawOptions = await response.json();
 
-    if (Array.isArray(rawOptions) && rawOptions.length > 0) {
-          const cleanCep = targetCep.replace(/\D/g, '');
-          const isLocal = cleanCep === '43850000';
-          
-          // Lista da Vizinhança
-          const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanCep.startsWith(p));
+      const rawOptions = await response.json();
+      
+      // --- PREPARAÇÃO DE VARIÁVEIS ---
+      const cleanCep = targetCep.replace(/\D/g, '');
+      const isLocal = cleanCep === '43850000';
+      const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanCep.startsWith(p));
+      
+      const sanityDays = Number(product.handlingTime) || 4;
+      const extraDays = isNearby ? 4 : sanityDays; 
+      const postingDays = 1;
 
-          const sanityDays = Number(handlingDays) || 0;
-          const extraDays = isNearby ? 4 : sanityDays; 
-          const postingDays = 1; 
+      let finalOptions = [];
 
-          // --- MAPEAR E CORRIGIR PREÇOS ZERADOS ---
+      // --- PROCESSAMENTO DA API ---
+      if (Array.isArray(rawOptions) && rawOptions.length > 0) {
           const candidates = rawOptions.map(opt => {
              let p = opt.custom_price || opt.price || opt.valor || 0;
              if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
@@ -303,7 +308,7 @@ export default function ProductDetails() {
              let finalPrice = Number(p);
              const nameLower = (opt.name || '').toLowerCase();
 
-             // AQUI ESTÁ A MÁGICA: Se o preço veio 0 e é vizinho (Simões Filho/Centro), a gente conserta.
+             // CORREÇÃO DE PREÇO ZERADO
              if (finalPrice === 0 && isNearby) {
                  if (nameLower.includes('pac') || nameLower.includes('econômico')) finalPrice = 16.90;
                  if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
@@ -316,31 +321,25 @@ export default function ProductDetails() {
                cleanName: nameLower
              };
           })
-          // Agora filtramos. Simões Filho vai passar porque corrigimos o preço para 16.90/19.90
           .filter(c => c.price > 0 || (product && product.freeShipping))
           .sort((a, b) => a.price - b.price);
 
-          let finalOptions = [];
-
           if (isLocal) {
-              const bestLocal = candidates.find(c => c.price > 0) || candidates[0];
-              if (bestLocal) {
-                  finalOptions.push({
-                     name: "Expresso Palastore ⚡",
-                     price: bestLocal.price > 0 ? bestLocal.price : 15.00, 
-                     delivery_time: 5, 
-                     company: "Própria"
-                  });
-              }
+              const bestPrice = candidates[0]?.price > 0 ? candidates[0].price : 15.00;
+              finalOptions.push({
+                 name: "Palastore Expresso ⚡",
+                 price: bestPrice, 
+                 delivery_time: 5, 
+                 company: "Própria"
+              });
           } else {
               const pac = candidates.find(o => o.cleanName.includes('pac') || o.cleanName.includes('econômico'));
               const sedex = candidates.find(o => o.cleanName.includes('sedex') || o.cleanName.includes('expresso'));
-
+              
               const pacBuffer = isNearby ? 0 : 3;
               const sedexBuffer = isNearby ? 0 : 1;
 
               if (pac) {
-                 // Padronização de prazo (Mínimo 7 dias de base para vizinhos)
                  let basePac = isNearby ? Math.max(7, pac.days) : pac.days;
                  finalOptions.push({
                      name: "PAC (Econômico)",
@@ -353,12 +352,10 @@ export default function ProductDetails() {
               if (sedex) {
                  let baseSedex = isNearby ? Math.max(2, sedex.days) : sedex.days;
                  let finalSedexDays = baseSedex + extraDays + postingDays + sedexBuffer;
-
                  if (pac) {
                     let pacRef = (isNearby ? Math.max(7, pac.days) : pac.days) + extraDays + postingDays + pacBuffer;
                     if (finalSedexDays >= pacRef) finalSedexDays = Math.max(2, pacRef - 2);
                  }
-
                  finalOptions.push({
                      name: "SEDEX (Expresso)",
                      price: sedex.price,
@@ -367,7 +364,7 @@ export default function ProductDetails() {
                  });
               }
 
-              // Fallback para quem não tem PAC/SEDEX
+              // Fallback
               if (finalOptions.length === 0 && candidates.length > 0) {
                   finalOptions.push({
                       name: candidates[0].name || "Entrega Padrão",
@@ -377,13 +374,32 @@ export default function ProductDetails() {
                   });
               }
           }
-          setShippingOptions(finalOptions);
-      } else {
-          setShippingOptions([]);
+      } 
+      
+      // --- O RESGATE FINAL (AQUI QUE O MÁGICA ACONTECE) ---
+      // Se a lista estiver vazia (API falhou ou retornou []), mas for o CEP local:
+      if (finalOptions.length === 0 && isLocal) {
+           finalOptions.push({
+              name: "Palastore Expresso ⚡",
+              price: 15.00, 
+              delivery_time: 5, 
+              company: "Própria"
+           });
       }
-    } catch (err) {
-      console.error(err);
-      setShippingOptions([]); 
+
+      setShippingOptions(finalOptions);
+
+    } catch (error) {
+      console.error("Erro ao calcular frete:", error);
+      // Resgate de Emergência no Catch
+      if (typeof targetCep === 'string' && targetCep.replace(/\D/g, '') === '43850000') {
+          setShippingOptions([{
+              name: "Palastore Expresso ⚡",
+              price: 15.00, 
+              delivery_time: 5, 
+              company: "Própria"
+          }]);
+      }
     } finally {
       setCalculating(false);
     }
