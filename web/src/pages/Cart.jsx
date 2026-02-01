@@ -51,10 +51,9 @@ export default function Cart() {
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
   
-  // Desconto de 10% APENAS se for PIX
+  // Desconto PIX 10%
   const isPix = tipoPagamento === 'pix';
   const discount = isPix ? subtotal * 0.10 : 0;
-  
   const totalFinal = subtotal - discount + shippingCost;
 
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
@@ -63,7 +62,7 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- RECALCULAR FRETE (COM TODAS AS REGRAS DE RESGATE) ---
+  // --- RECALCULAR FRETE (COM RESGATE NACIONAL) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -75,12 +74,10 @@ export default function Cart() {
 
       setRecalculatingShipping(true);
       
-      // Definição de Variáveis de Controle
       const cleanZip = targetZip.replace(/\D/g, '');
       const isLocal = cleanZip === '43850000';
       const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanZip.startsWith(p));
       
-      // Manuseio do carrinho
       const maxHandlingTime = items.reduce((max, item) => {
              const h = parseInt(item.handlingTime) || 4; 
              return Math.max(max, h);
@@ -113,7 +110,6 @@ export default function Cart() {
         
         const rawOptions = await response.json();
 
-        // --- PROCESSAMENTO API ---
         if (Array.isArray(rawOptions) && rawOptions.length > 0) {
           const candidates = rawOptions.map(opt => {
               let val = opt.custom_price || opt.price || opt.valor || 0;
@@ -122,7 +118,6 @@ export default function Cart() {
               let finalPrice = Number(val);
               const nameLower = (opt.name || '').toLowerCase();
 
-              // CORREÇÃO: Se veio R$ 0,00 e é Vizinho -> Força Preço
               if (finalPrice === 0 && isNearby) {
                   if (nameLower.includes('pac') || nameLower.includes('econômico')) finalPrice = 16.90;
                   if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
@@ -139,7 +134,6 @@ export default function Cart() {
           .sort((a, b) => a.price - b.price);
 
           if (isLocal) {
-             // LOCAL (SÃO SEBASTIÃO)
              finalOptions.push({
                 name: "Palastore Expresso ⚡",
                 price: candidates[0]?.price > 0 ? candidates[0].price : 15.00, 
@@ -147,10 +141,8 @@ export default function Cart() {
                 company: "Própria"
              });
           } else {
-             // VIZINHOS E RESTO DO BRASIL
              const pac = candidates.find(o => o.cleanName.includes('pac') || o.cleanName.includes('econômico'));
              const sedex = candidates.find(o => o.cleanName.includes('sedex') || o.cleanName.includes('expresso'));
-             
              const pacBuffer = isNearby ? 0 : 3;
              const sedexBuffer = isNearby ? 0 : 1;
 
@@ -179,7 +171,6 @@ export default function Cart() {
                 });
              }
              
-             // Fallback Nacional (Se API retornou transportadora mas não correios)
              if (finalOptions.length === 0 && candidates.length > 0) {
                  finalOptions.push({
                     name: candidates[0].name,
@@ -194,8 +185,7 @@ export default function Cart() {
         console.error("Erro frete API:", error);
       } 
       
-      // --- O RESGATE TOTAL (TRAVA DE SEGURANÇA) ---
-      // Se a lista estiver vazia (API falhou, retornou [], ou deu erro de rede)
+      // --- RESGATE TOTAL ---
       if (finalOptions.length === 0) {
            if (isLocal) {
                finalOptions.push({
@@ -205,7 +195,6 @@ export default function Cart() {
                   company: "Própria"
                });
            } else if (isNearby) {
-               // Resgate Salvador/Simões Filho
                finalOptions.push({
                   name: "PAC (Econômico)",
                   price: 16.90,
@@ -218,13 +207,20 @@ export default function Cart() {
                   delivery_time: 7,
                   company: "Correios"
                });
+           } else {
+               // FALLBACK NACIONAL (Pra quando a API falha em SP/RJ/etc)
+               finalOptions.push({
+                  name: "Entrega Econômica",
+                  price: 35.90, 
+                  delivery_time: 15,
+                  company: "Transportadora"
+               });
            }
       }
 
       setShippingOptions(finalOptions);
       setRecalculatingShipping(false);
       
-      // Auto-Select
       if (finalOptions.length > 0) {
           const currentName = selectedShipping?.name;
           const sameOption = finalOptions.find(o => o.name === currentName);
