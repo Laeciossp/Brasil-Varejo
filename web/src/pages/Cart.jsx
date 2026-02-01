@@ -9,7 +9,7 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CONFIGURAÇÃO DO SANITY (TOKEN DE ESCRITA OBRIGATÓRIO) ---
+// --- CONFIGURAÇÃO DO SANITY ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -43,19 +43,25 @@ export default function Cart() {
   
   const { 
     items, removeItem, updateQuantity, selectedShipping, setShipping,
-    getTotalPrice, customer, setActiveAddress, addAddress, setDocument, 
+    customer, setActiveAddress, addAddress, setDocument, 
     tipoPagamento, setTipoPagamento, globalCep, clearCart
   } = useCartStore();
   
-  const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const totalFinal = getTotalPrice();
+  // --- CORREÇÃO DO CÁLCULO (FIM DO NAN) ---
+  // Forçamos tudo a ser número (Number) para evitar erros de texto
+  const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
+  const shippingCost = selectedShipping?.price ? Number(selectedShipping.price) : 0;
+  const totalFinal = subtotal + shippingCost;
+
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
   useEffect(() => {
-    if (user && !customerName) setCustomerName(user.fullName || '');
+    if (user && !customerName) {
+        setCustomerName(user.fullName || '');
+    }
   }, [user]);
 
-  // --- FRETE (MANTIDO) ---
+  // --- RECALCULAR FRETE ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -78,49 +84,66 @@ export default function Cart() {
             }))
           })
         });
+        
         const options = await response.json();
+
         if (Array.isArray(options) && options.length > 0) {
+          const PRAZO_MANUSEIO_PADRAO = 5; 
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
+
           const optionsAdjusted = options.map(opt => {
             let finalName = opt.name;
             let finalDays = parseInt(opt.delivery_time) || 0;
             const lowerName = (opt.name || '').toLowerCase();
-            if (isLocal) finalName = "Expresso Palastore ⚡";
-            else if (lowerName.includes('pac')) finalName = "PAC (Econômico)";
-            else if (lowerName.includes('sedex')) finalName = "SEDEX (Expresso)";
+
+            if (isLocal) {
+                finalName = "Expresso Palastore ⚡";
+            } else if (lowerName.includes('pac')) {
+                finalName = "PAC (Econômico)";
+            } else if (lowerName.includes('sedex')) {
+                finalName = "SEDEX (Expresso)";
+            }
+
             if (!isLocal) finalDays += 5; 
+
             return { ...opt, name: finalName, delivery_time: finalDays };
           });
-          const filteredOptions = isLocal ? optionsAdjusted.filter(opt => !opt.name.toLowerCase().includes('pac')) : optionsAdjusted;
+
+          const filteredOptions = isLocal 
+            ? optionsAdjusted.filter(opt => !opt.name.toLowerCase().includes('pac')) 
+            : optionsAdjusted;
+
           setShipping(filteredOptions[0]);
         }
-      } catch (error) { console.error("Erro frete", error); } 
-      finally { setRecalculatingShipping(false); }
+      } catch (error) {
+        console.error("Erro frete", error);
+      } finally {
+        setRecalculatingShipping(false);
+      }
     };
     recalculate();
   }, [customer.activeAddressId, items.length, globalCep]);
 
   const handleSaveAddress = () => {
-    if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados.");
+    if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
     addAddress({ ...newAddr, id: Math.random().toString(36).substr(2, 9) });
     setShowAddressForm(false);
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   };
 
-  // --- CHECKOUT (SITE CRIA PEDIDO -> CHAMA WORKER) ---
+  // --- CHECKOUT ---
   const handleCheckout = async () => {
-    if (!isLoaded || !user) return alert("Faça login.");
-    if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Frete/Endereço?");
-    if (!customer.document) return alert("CPF obrigatório.");
-    if (!customerName) return alert("Nome obrigatório.");
+    if (!isLoaded || !user) return alert("Faça login para continuar.");
+    if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
+    if (!customer.document) return alert("Informe o CPF.");
+    if (!customerName) return alert("Informe seu nome.");
 
     setLoading(true);
 
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      // 1. DADOS SANITIZADOS
       const cleanCustomer = {
         name: customerName,
         email: user.primaryEmailAddress?.emailAddress || "",
@@ -151,7 +174,6 @@ export default function Cart() {
          product: { _type: 'reference', _ref: item._id }
       }));
 
-      // 2. CRIA PEDIDO NO SANITY (O SITE GARANTE A ESTRUTURA)
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
@@ -159,20 +181,18 @@ export default function Cart() {
         customer: cleanCustomer,
         items: sanitizedItems,
         shippingAddress: cleanAddress,
-        billingAddress: cleanAddress, // Duplica para garantir faturamento
+        billingAddress: cleanAddress,
         carrier: selectedShipping.name,
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Venda Site - Estrutura Fixa"
+        internalNotes: "Criado pelo Site (Organizado)"
       };
 
-      console.log("Criando Pedido no Sanity:", orderDoc);
-      // Cria e pega o ID do documento criado
+      console.log("Criando pedido no Sanity...", orderDoc);
       const createdOrder = await client.create(orderDoc);
       const sanityId = createdOrder._id;
 
-      // 3. CHAMA WORKER SÓ PARA PAGAMENTO (Passando o ID do Sanity)
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
@@ -185,9 +205,6 @@ export default function Cart() {
             shippingAddress: cleanAddress,
             customerDocument: cleanCustomer.cpf,
             totalAmount: totalFinal,
-            
-            // O MAIS IMPORTANTE: Passamos o ID do documento que acabamos de criar
-            // O Worker vai usar esse ID para o link do Mercado Pago
             orderId: sanityId 
         })
       });
@@ -260,15 +277,16 @@ export default function Cart() {
                 ))}
             </div>
 
-            {/* ENTREGA */}
+            {/* ENTREGA E DADOS */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
                 <div className="flex justify-between items-center">
                     <h2 className="text-lg font-bold flex gap-2"><MapPin className="text-orange-500"/> Entrega</h2>
                     <button onClick={() => setShowAddressForm(!showAddressForm)} className="text-blue-600 font-bold text-sm">+ Endereço</button>
                 </div>
+                
                 {showAddressForm && (
                    <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-2 gap-3">
-                      <input placeholder="Apelido" className="p-2 border rounded col-span-2" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
+                      <input placeholder="Apelido (Ex: Casa)" className="p-2 border rounded col-span-2" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
                       <input placeholder="CEP" className="p-2 border rounded" value={newAddr.zip} onChange={e => setNewAddr({...newAddr, zip: e.target.value})} />
                       <input placeholder="Rua" className="p-2 border rounded" value={newAddr.street} onChange={e => setNewAddr({...newAddr, street: e.target.value})} />
                       <input placeholder="Número" className="p-2 border rounded" value={newAddr.number} onChange={e => setNewAddr({...newAddr, number: e.target.value})} />
@@ -279,6 +297,7 @@ export default function Cart() {
                       <button onClick={handleSaveAddress} className="col-span-2 bg-black text-white py-2 rounded font-bold">Salvar</button>
                    </div>
                 )}
+
                 <div className="grid md:grid-cols-2 gap-4">
                     {customer.addresses?.map(addr => (
                         <div key={addr.id} onClick={() => setActiveAddress(addr.id)} className={`p-4 border-2 rounded-lg cursor-pointer ${addr.id === customer.activeAddressId ? 'border-blue-600 bg-blue-50' : 'border-gray-100'}`}>
@@ -288,10 +307,17 @@ export default function Cart() {
                         </div>
                     ))}
                 </div>
+
                 <div className="pt-4 border-t space-y-3">
-                    <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados</h2>
-                    <input placeholder="Nome Completo" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
-                    <input placeholder="CPF / CNPJ" value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
+                    <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados para Nota</h2>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome Completo</label>
+                        <input placeholder="Seu Nome" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">CPF / CNPJ</label>
+                        <input placeholder="000.000.000-00" value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
+                    </div>
                 </div>
             </div>
           </div>
@@ -301,11 +327,19 @@ export default function Cart() {
                 <h3 className="text-lg font-bold mb-6">Resumo</h3>
                 <div className="space-y-3 text-sm mb-6">
                     <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-                    <div className="flex justify-between font-bold"><span>Total</span><span>{formatCurrency(totalFinal)}</span></div>
+                    <div className="flex justify-between items-center">
+                        <span className="flex gap-1"><Truck size={14}/> Frete</span>
+                        {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? formatCurrency(selectedShipping.price) : '--'}</span>}
+                    </div>
+                    {selectedShipping && <div className="text-xs text-right text-gray-400">{selectedShipping.name}</div>}
                 </div>
                 <div className="border-t pt-4 mb-6 space-y-2">
                     <label className="flex items-center gap-2 p-2 border rounded cursor-pointer"><input type="radio" checked={tipoPagamento === 'pix'} onChange={() => setTipoPagamento('pix')}/> PIX</label>
                     <label className="flex items-center gap-2 p-2 border rounded cursor-pointer"><input type="radio" checked={tipoPagamento === 'cartao'} onChange={() => setTipoPagamento('cartao')}/> Cartão</label>
+                </div>
+                <div className="flex justify-between items-end mb-6">
+                    <span className="font-medium">Total</span>
+                    <span className="text-3xl font-black">{formatCurrency(totalFinal)}</span>
                 </div>
                 <button onClick={handleCheckout} disabled={loading || !selectedShipping || !activeAddress || !customer.document || !customerName} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300">
                     {loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/>
