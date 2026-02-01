@@ -47,14 +47,11 @@ export default function Cart() {
     tipoPagamento, setTipoPagamento, globalCep, clearCart
   } = useCartStore();
   
-  // =================================================================
-  // 💰 LÓGICA FINANCEIRA (SUBTOTAL, DESCONTO PIX, TOTAL)
-  // =================================================================
-  
+  // --- CÁLCULOS FINANCEIROS ---
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
   
-  // 10% de desconto APENAS se for PIX
+  // Desconto de 10% APENAS se for PIX
   const isPix = tipoPagamento === 'pix';
   const discount = isPix ? subtotal * 0.10 : 0;
   
@@ -66,7 +63,7 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- RECALCULAR FRETE (COM CORREÇÃO PARA LOCAL 43850000) ---
+  // --- RECALCULAR FRETE (COM TODAS AS REGRAS DE RESGATE) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -78,20 +75,24 @@ export default function Cart() {
 
       setRecalculatingShipping(true);
       
-      // Variáveis de controle Local
+      // Definição de Variáveis de Controle
       const cleanZip = targetZip.replace(/\D/g, '');
       const isLocal = cleanZip === '43850000';
       const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanZip.startsWith(p));
+      
+      // Manuseio do carrinho
+      const maxHandlingTime = items.reduce((max, item) => {
+             const h = parseInt(item.handlingTime) || 4; 
+             return Math.max(max, h);
+      }, 4);
+      const extraDays = isNearby ? 4 : maxHandlingTime; 
+      const postingDays = 1;
+
       let finalOptions = [];
 
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
         
-        const maxHandlingTime = items.reduce((max, item) => {
-             const h = parseInt(item.handlingTime) || 4; 
-             return Math.max(max, h);
-        }, 4);
-
         const response = await fetch(`${baseUrl}/shipping`, { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -112,11 +113,8 @@ export default function Cart() {
         
         const rawOptions = await response.json();
 
-        // --- PROCESSAMENTO ---
+        // --- PROCESSAMENTO API ---
         if (Array.isArray(rawOptions) && rawOptions.length > 0) {
-          const extraDays = isNearby ? 4 : maxHandlingTime; 
-          const postingDays = 1;
-
           const candidates = rawOptions.map(opt => {
               let val = opt.custom_price || opt.price || opt.valor || 0;
               if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
@@ -124,7 +122,7 @@ export default function Cart() {
               let finalPrice = Number(val);
               const nameLower = (opt.name || '').toLowerCase();
 
-              // CORREÇÃO DE PREÇO ZERADO PARA VIZINHOS
+              // CORREÇÃO: Se veio R$ 0,00 e é Vizinho -> Força Preço
               if (finalPrice === 0 && isNearby) {
                   if (nameLower.includes('pac') || nameLower.includes('econômico')) finalPrice = 16.90;
                   if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
@@ -141,16 +139,15 @@ export default function Cart() {
           .sort((a, b) => a.price - b.price);
 
           if (isLocal) {
-             // SE TEM API E É LOCAL, TENTA USAR O PREÇO DA API
-             const bestPrice = candidates[0]?.price > 0 ? candidates[0].price : 15.00;
+             // LOCAL (SÃO SEBASTIÃO)
              finalOptions.push({
                 name: "Palastore Expresso ⚡",
-                price: bestPrice, 
+                price: candidates[0]?.price > 0 ? candidates[0].price : 15.00, 
                 delivery_time: 5, 
                 company: "Própria"
              });
           } else {
-             // LÓGICA PARA OUTROS CEPS
+             // VIZINHOS E RESTO DO BRASIL
              const pac = candidates.find(o => o.cleanName.includes('pac') || o.cleanName.includes('econômico'));
              const sedex = candidates.find(o => o.cleanName.includes('sedex') || o.cleanName.includes('expresso'));
              
@@ -182,6 +179,7 @@ export default function Cart() {
                 });
              }
              
+             // Fallback Nacional (Se API retornou transportadora mas não correios)
              if (finalOptions.length === 0 && candidates.length > 0) {
                  finalOptions.push({
                     name: candidates[0].name,
@@ -193,25 +191,40 @@ export default function Cart() {
           }
         }
       } catch (error) {
-        console.error("Erro frete (API falhou):", error);
+        console.error("Erro frete API:", error);
       } 
       
-      // --- RESGATE OBRIGATÓRIO PARA LOCAL (43850000) ---
-      // Se depois de tudo a lista estiver vazia (API falhou ou retornou []), 
-      // e for o CEP local, a gente INSERE NA MARRA.
-      if (isLocal && finalOptions.length === 0) {
-           finalOptions.push({
-              name: "Palastore Expresso ⚡",
-              price: 15.00, // Preço fixo de segurança
-              delivery_time: 5, 
-              company: "Própria"
-           });
+      // --- O RESGATE TOTAL (TRAVA DE SEGURANÇA) ---
+      // Se a lista estiver vazia (API falhou, retornou [], ou deu erro de rede)
+      if (finalOptions.length === 0) {
+           if (isLocal) {
+               finalOptions.push({
+                  name: "Palastore Expresso ⚡",
+                  price: 15.00, 
+                  delivery_time: 5, 
+                  company: "Própria"
+               });
+           } else if (isNearby) {
+               // Resgate Salvador/Simões Filho
+               finalOptions.push({
+                  name: "PAC (Econômico)",
+                  price: 16.90,
+                  delivery_time: 12,
+                  company: "Correios"
+               });
+               finalOptions.push({
+                  name: "SEDEX (Expresso)",
+                  price: 19.90,
+                  delivery_time: 7,
+                  company: "Correios"
+               });
+           }
       }
 
       setShippingOptions(finalOptions);
       setRecalculatingShipping(false);
       
-      // Seleciona a primeira opção automaticamente
+      // Auto-Select
       if (finalOptions.length > 0) {
           const currentName = selectedShipping?.name;
           const sameOption = finalOptions.find(o => o.name === currentName);
@@ -438,7 +451,7 @@ export default function Cart() {
                     </div>
                 </div>
 
-                {/* --- SELEÇÃO DE PAGAMENTO VISUAL --- */}
+                {/* --- SELEÇÃO DE PAGAMENTO VISUAL (Cards) --- */}
                 <div className="grid grid-cols-2 gap-3 mb-6 border-t pt-4">
                     <label className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-xl cursor-pointer transition-all ${
                         isPix 

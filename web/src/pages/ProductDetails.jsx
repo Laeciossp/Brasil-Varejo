@@ -254,16 +254,28 @@ export default function ProductDetails() {
   }, [product, globalCep, handlingDays]); 
 
  const handleCalculateShipping = async (e) => {
-    // Se for evento de form (enter), previne reload. Se for chamada direta, ignora.
+    // Previne comportamento padrão de form
     if (e && e.preventDefault) e.preventDefault();
     
-    // Usa o valor do argumento ou o state 'cep'
+    // Suporta chamada manual (string) ou evento
     const targetCep = typeof e === 'string' ? e : cep;
     
     if (!targetCep) return;
 
     setCalculating(true);
     setShippingOptions([]);
+
+    // --- 1. DEFINIÇÃO DE VARIÁVEIS (Fora do Try) ---
+    const cleanCep = targetCep.replace(/\D/g, '');
+    const isLocal = cleanCep === '43850000';
+    // Região Metropolitana + Interior Próximo
+    const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanCep.startsWith(p));
+    
+    const sanityDays = Number(product.handlingTime) || 4;
+    const extraDays = isNearby ? 4 : sanityDays; // Vizinhos sempre 4 dias
+    const postingDays = 1;
+
+    let finalOptions = [];
 
     try {
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
@@ -288,18 +300,7 @@ export default function ProductDetails() {
 
       const rawOptions = await response.json();
       
-      // --- PREPARAÇÃO DE VARIÁVEIS ---
-      const cleanCep = targetCep.replace(/\D/g, '');
-      const isLocal = cleanCep === '43850000';
-      const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanCep.startsWith(p));
-      
-      const sanityDays = Number(product.handlingTime) || 4;
-      const extraDays = isNearby ? 4 : sanityDays; 
-      const postingDays = 1;
-
-      let finalOptions = [];
-
-      // --- PROCESSAMENTO DA API ---
+      // --- 2. PROCESSAMENTO API ---
       if (Array.isArray(rawOptions) && rawOptions.length > 0) {
           const candidates = rawOptions.map(opt => {
              let p = opt.custom_price || opt.price || opt.valor || 0;
@@ -308,7 +309,7 @@ export default function ProductDetails() {
              let finalPrice = Number(p);
              const nameLower = (opt.name || '').toLowerCase();
 
-             // CORREÇÃO DE PREÇO ZERADO
+             // CORREÇÃO ZERO (Salvador/Simões Filho)
              if (finalPrice === 0 && isNearby) {
                  if (nameLower.includes('pac') || nameLower.includes('econômico')) finalPrice = 16.90;
                  if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
@@ -325,6 +326,7 @@ export default function ProductDetails() {
           .sort((a, b) => a.price - b.price);
 
           if (isLocal) {
+              // LOCAL
               const bestPrice = candidates[0]?.price > 0 ? candidates[0].price : 15.00;
               finalOptions.push({
                  name: "Palastore Expresso ⚡",
@@ -333,6 +335,7 @@ export default function ProductDetails() {
                  company: "Própria"
               });
           } else {
+              // GERAL
               const pac = candidates.find(o => o.cleanName.includes('pac') || o.cleanName.includes('econômico'));
               const sedex = candidates.find(o => o.cleanName.includes('sedex') || o.cleanName.includes('expresso'));
               
@@ -375,34 +378,37 @@ export default function ProductDetails() {
               }
           }
       } 
-      
-      // --- O RESGATE FINAL (AQUI QUE O MÁGICA ACONTECE) ---
-      // Se a lista estiver vazia (API falhou ou retornou []), mas for o CEP local:
-      if (finalOptions.length === 0 && isLocal) {
-           finalOptions.push({
-              name: "Palastore Expresso ⚡",
-              price: 15.00, 
-              delivery_time: 5, 
-              company: "Própria"
-           });
-      }
-
-      setShippingOptions(finalOptions);
-
     } catch (error) {
-      console.error("Erro ao calcular frete:", error);
-      // Resgate de Emergência no Catch
-      if (typeof targetCep === 'string' && targetCep.replace(/\D/g, '') === '43850000') {
-          setShippingOptions([{
-              name: "Palastore Expresso ⚡",
-              price: 15.00, 
-              delivery_time: 5, 
-              company: "Própria"
-          }]);
-      }
-    } finally {
-      setCalculating(false);
+      console.error("Erro API Frete:", error);
     }
+
+    // --- 3. RESGATE TOTAL (BLINDAGEM CONTRA FALHAS) ---
+    if (finalOptions.length === 0) {
+         if (isLocal) {
+             finalOptions.push({
+                name: "Palastore Expresso ⚡",
+                price: 15.00, 
+                delivery_time: 5, 
+                company: "Própria"
+             });
+         } else if (isNearby) {
+             finalOptions.push({
+                name: "PAC (Econômico)",
+                price: 16.90,
+                delivery_time: 12,
+                company: "Correios"
+             });
+             finalOptions.push({
+                name: "SEDEX (Expresso)",
+                price: 19.90,
+                delivery_time: 7,
+                company: "Correios"
+             });
+         }
+    }
+
+    setShippingOptions(finalOptions);
+    setCalculating(false);
   };
 
   const createCartItem = () => {
