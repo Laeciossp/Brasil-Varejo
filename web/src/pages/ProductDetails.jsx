@@ -133,8 +133,8 @@ export default function ProductDetails() {
                     oldPrice: productOldPrice,
                     stock: sizeObj.stock,
                     sku: sizeObj.sku,
-                    color: item.colorName, // IMPORTANTE: Captura a COR
-                    size: sizeObj.size,    // IMPORTANTE: Captura o TAMANHO
+                    color: item.colorName,
+                    size: sizeObj.size,
                     variantImage: groupImage
                 });
             });
@@ -147,8 +147,8 @@ export default function ProductDetails() {
                 oldPrice: item.oldPrice || productOldPrice,
                 stock: item.stock,
                 sku: item.sku,
-                color: item.colorName, // IMPORTANTE: Captura a COR
-                size: item.size || item.variantName, // IMPORTANTE: Captura o TAMANHO
+                color: item.colorName,
+                size: item.size || item.variantName,
                 variantImage: item.variantImage
             });
         }
@@ -188,7 +188,7 @@ export default function ProductDetails() {
         const data = await client.fetch(query, { slug });
 
         if (data && data.product) {
-          setHandlingDays(data.settings?.handlingTime || 0);
+          setHandlingDays(Number(data.settings?.handlingTime) || 0);
           setCarrierRules(data.carrierConfig?.carriers || []);
 
           const productData = data.product;
@@ -262,12 +262,15 @@ export default function ProductDetails() {
     }
   }, [product, globalCep]);
 
+  // --- 3. CÁLCULO DE FRETE (A CORREÇÃO DA BAGUNÇA É AQUI) ---
   const handleCalculateShipping = async (cepOverride) => {
     const targetCep = typeof cepOverride === 'string' ? cepOverride : cep;
     const cleanCep = targetCep.replace(/\D/g, '');
     if (cleanCep.length !== 8) return;
     
     setCalculating(true);
+    setShippingOptions([]);
+
     try {
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const workerUrl = `${baseUrl}/shipping`;
@@ -289,8 +292,78 @@ export default function ProductDetails() {
           }]
         })
       });
-      const data = await response.json();
-      setShippingOptions(Array.isArray(data) ? data : []);
+      const rawOptions = await response.json();
+
+      if (Array.isArray(rawOptions) && rawOptions.length > 0) {
+          const isLocal = cleanCep === '43850000'; 
+
+          // --- FASE 1: PADRONIZAR DADOS (Preço vira Número) ---
+          const candidates = rawOptions.map(opt => {
+             let p = opt.custom_price || opt.price || 0;
+             if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
+             return {
+               ...opt,
+               price: Number(p),
+               days: parseInt(opt.delivery_time) || 0
+             };
+          });
+
+          // Ordenar por preço (Menor primeiro)
+          candidates.sort((a, b) => a.price - b.price);
+
+          let finalOptions = [];
+
+          if (isLocal) {
+             // REGRA LOCAL: Pega o mais barato e fixa dados
+             const cheapest = candidates[0];
+             finalOptions.push({
+                name: "Expresso Palastore ⚡",
+                price: cheapest ? cheapest.price : 0, 
+                delivery_time: 5, // Prazo FIXO
+                company: "Própria"
+             });
+          } else {
+             // REGRA NACIONAL: PENEIRA FINA (1 PAC, 1 SEDEX)
+             
+             // Encontra o MELHOR Econômico
+             const bestEconomy = candidates.find(o => 
+                o.name.toLowerCase().includes('pac') || 
+                o.name.toLowerCase().includes('econômico') ||
+                o.name.toLowerCase().includes('normal')
+             );
+
+             // Encontra o MELHOR Expresso
+             const bestExpress = candidates.find(o => 
+                o.name.toLowerCase().includes('sedex') || 
+                o.name.toLowerCase().includes('expresso')
+             );
+
+             // Adiciona na lista com o prazo somado
+             if (bestEconomy) {
+                finalOptions.push({
+                    name: "PAC (Econômico)",
+                    price: bestEconomy.price,
+                    delivery_time: bestEconomy.days + handlingDays, // + Manuseio
+                    company: "Correios/Jadlog"
+                });
+             }
+
+             if (bestExpress && bestExpress.name !== bestEconomy?.name) {
+                finalOptions.push({
+                    name: "SEDEX (Expresso)",
+                    price: bestExpress.price,
+                    delivery_time: bestExpress.days + handlingDays, // + Manuseio
+                    company: "Correios/Jadlog"
+                });
+             }
+          }
+
+          // Se a lista filtrou tudo e ficou vazia, mostra a original (fallback)
+          setShippingOptions(finalOptions.length > 0 ? finalOptions : []);
+      } else {
+          setShippingOptions([]);
+      }
+
     } catch (err) {
       console.error(err);
       setShippingOptions([]); 
@@ -299,22 +372,18 @@ export default function ProductDetails() {
     }
   };
 
-  // --- FUNÇÃO CORRIGIDA: COMPRAR AGORA ---
   const handleBuyNow = () => {
     if (!product) return;
     if (!selectedShipping) return alert("Por favor, calcule o frete para continuar.");
     
     const finalSku = selectedVariant ? (selectedVariant.sku || selectedVariant._key) : product._id;
 
-    // AQUI ESTÁ A CORREÇÃO: Enviamos 'color' e 'size' separados para o gestor
     const cartItem = {
       _id: product._id,
-      title: product.title, // Nome do Produto (Limpo)
+      title: product.title, 
       slug: product.slug,
       price: currentPrice,
       image: activeMedia ? urlFor(activeMedia.asset).url() : '',
-      
-      // DADOS DA VARIAÇÃO COMPLETOS
       variantName: selectedVariant ? selectedVariant.variantName : null,
       sku: finalSku,
       color: selectedVariant ? selectedVariant.color : null,
@@ -325,7 +394,6 @@ export default function ProductDetails() {
     window.location.href = '/cart'; 
   };
 
-  // --- FUNÇÃO CORRIGIDA: ADICIONAR AO CARRINHO ---
   const handleAddToCart = () => {
     if (!product) return;
     if (!selectedShipping) return alert("Por favor, calcule o frete para adicionar.");
@@ -334,12 +402,10 @@ export default function ProductDetails() {
 
     const cartItem = {
       _id: product._id,
-      title: product.title, // Nome do Produto (Limpo)
+      title: product.title, 
       slug: product.slug,
       price: currentPrice,
       image: activeMedia ? urlFor(activeMedia.asset).url() : '',
-      
-      // DADOS DA VARIAÇÃO COMPLETOS
       variantName: selectedVariant ? selectedVariant.variantName : null,
       sku: finalSku,
       color: selectedVariant ? selectedVariant.color : null,
@@ -611,78 +677,23 @@ export default function ProductDetails() {
                 </div>
                 {shippingOptions && shippingOptions.length > 0 && (
                     <div className="space-y-1">
-                        {shippingOptions.filter(o => !o.error).filter(opt => {
-                            const apiNameNormal = normalize(opt.name);
-                            const apiCompanyNormal = normalize(opt.company?.name);
-
-                            // --- FILTRO DE BLINDAGEM (SÓ CORREIOS) ---
-                            // Aceita qualquer coisa que tenha SEDEX, PAC ou CORREIOS no nome/empresa
-                            const isSedex = apiNameNormal.includes('sedex');
-                            const isPac = apiNameNormal.includes('pac');
-                            const isCorreios = apiCompanyNormal.includes('correios');
-
-                            // SÓ PASSA SE FOR CORREIOS (OU SERVIÇOS DE CORREIOS)
-                            return isSedex || isPac || isCorreios;
-
-                        }).map((opt, idx) => {
-                            const isSelected = selectedShipping?.name === opt.name && selectedShipping?.price === opt.price;
-                            const apiNameNormal = normalize(opt.name);
-                            const cleanCurrentCep = cep.replace(/\D/g, '');
-                            const isLocal = cleanCurrentCep === '43850000';
-
-                            // --- REGRA LOCAL: OCULTAR O PAC (O LENTO) ---
-                            // Se for local e o nome for PAC (ou se for o genérico com prazo longo), não renderiza (retorna null)
-                            if (isLocal && (apiNameNormal.includes('pac') || (apiNameNormal.includes('correios') && parseInt(opt.delivery_time) > 7))) {
-                                return null;
-                            }
-
-                            // Tenta achar regra SÓ PARA PEGAR O LOGO (Sem filtrar)
-                            const anyCorreiosRule = carrierRules.find(r => normalize(r.name).includes("correios"));
-                            let logoUrl = anyCorreiosRule?.logoUrl;
-
-                            let displayName = opt.name;
-
-                            // --- NOMES PADRONIZADOS ---
-                            if (isLocal) {
-                                // Se passou pelo filtro acima, é o SEDEX (ou o mais rápido)
-                                displayName = "Expresso Palastore ⚡";
-                            } 
-                            else if (apiNameNormal.includes("pac")) {
-                                displayName = "PAC (Econômico)";
-                            }
-                            else if (apiNameNormal.includes("sedex")) {
-                                displayName = "SEDEX (Expresso)";
-                            }
-
-                            // --- DIAS ADICIONAIS ---
-                            let additionalDays = 0;
-                            // Se tiver config de dias extras nos correios, aplica
-                            if (anyCorreiosRule) additionalDays = anyCorreiosRule.additionalDays || 0;
-
-                            let finalDays = parseInt(opt.delivery_time) || 0;
-                            // Só soma handling se não for local
-                            if (!isLocal) finalDays += handlingDays;
-                            finalDays += additionalDays;
-
+                        {shippingOptions.map((opt, idx) => {
+                            const isSelected = selectedShipping?.name === opt.name;
                             return (
                                 <div 
                                     key={idx} 
-                                    onClick={() => setShipping({...opt, delivery_time: finalDays})} 
+                                    onClick={() => setShipping(opt)} 
                                     className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer text-xs ${isSelected ? 'border-blue-500 bg-blue-50/50' : 'border-gray-100'}`}
                                 >
-                                    {logoUrl ? (
-                                        <img src={logoUrl} alt={displayName} className="w-8 h-8 object-contain mix-blend-multiply" />
-                                    ) : (
-                                        <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
-                                            <Truck size={16} className="text-gray-400" />
-                                        </div>
-                                    )}
+                                    <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
+                                        <Truck size={16} className="text-gray-400" />
+                                    </div>
                                     <div className="flex flex-col flex-1">
-                                        <span className="font-bold text-gray-700 uppercase">{displayName}</span>
-                                        <span className="text-[10px] text-gray-400 font-medium">Em até {finalDays} dias úteis</span>
+                                        <span className="font-bold text-gray-700 uppercase">{opt.name}</span>
+                                        <span className="text-[10px] text-gray-400 font-medium">Em até {opt.delivery_time} dias úteis</span>
                                     </div>
                                     <span className="font-black text-gray-900 self-center">
-                                        {parseFloat(opt.price) === 0 ? 'Grátis' : formatCurrency(opt.price)}
+                                        {opt.price === 0 ? 'Grátis' : formatCurrency(opt.price)}
                                     </span>
                                 </div>
                             );
