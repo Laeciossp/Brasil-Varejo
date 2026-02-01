@@ -127,18 +127,23 @@ export default function Cart() {
           let finalOptions = [];
 
           if (isLocal) {
-             // === REGRA LOCAL (FERRO E FOGO) ===
-             const cheapest = candidates[0];
-             if (cheapest) {
+             // === REGRA LOCAL (PALASTORE) ===
+             // Busca a opção mais barata que NÃO SEJA ZERO
+             const paidOptions = candidates.filter(c => c.price > 0);
+             paidOptions.sort((a, b) => a.price - b.price);
+             
+             const bestLocal = paidOptions.length > 0 ? paidOptions[0] : candidates[0];
+             
+             if (bestLocal) {
                  finalOptions.push({
                     name: "Expresso Palastore ⚡",
-                    price: cheapest.price, 
-                    delivery_time: 5, // !!! FIXO 5 DIAS !!!
+                    price: bestLocal.price, // PREÇO CORRETO
+                    delivery_time: 5, // FIXO 5 DIAS
                     company: "Própria"
                  });
              }
           } else {
-             // === REGRA NACIONAL (FILTRO RIGOROSO) ===
+             // === REGRA NACIONAL ===
              
              // 1. Melhor PAC
              const bestEconomy = candidates.find(o => 

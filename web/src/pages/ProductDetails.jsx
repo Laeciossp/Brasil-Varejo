@@ -298,50 +298,52 @@ export default function ProductDetails() {
           let finalOptions = [];
 
           if (isLocal) {
-             // === REGRA LOCAL (FERRO E FOGO) ===
-             // Ignora nomes da API. Pega o primeiro (mais barato) e força os dados da Palastore.
-             const cheapest = candidates[0];
+             // === REGRA LOCAL (PALASTORE) ===
+             // Busca a opção mais barata que NÃO SEJA ZERO (para evitar Retirada/Grátis indesejado)
+             const paidOptions = candidates.filter(c => c.price > 0);
+             paidOptions.sort((a, b) => a.price - b.price);
              
-             if (cheapest) {
+             // Se tiver opção paga, usa ela. Se não, usa a primeira (grátis)
+             const bestLocal = paidOptions.length > 0 ? paidOptions[0] : candidates[0];
+             
+             if (bestLocal) {
                  finalOptions.push({
                     name: "Expresso Palastore ⚡",
-                    price: cheapest.price, // Usa o preço da API
-                    delivery_time: 5, // !!! FIXO 5 DIAS !!!
+                    price: bestLocal.price, // PREÇO CORRETO AGORA
+                    delivery_time: 5, // FIXO 5 DIAS
                     company: "Própria"
                  });
              }
           } else {
-             // === REGRA NACIONAL (FILTRO RIGOROSO) ===
+             // === REGRA NACIONAL ===
              
-             // 1. Acha o primeiro PAC (o mais barato, pois já ordenamos)
+             // 1. Melhor PAC
              const bestEconomy = candidates.find(o => 
                 o.cleanName.includes('pac') || 
                 o.cleanName.includes('econômico') ||
                 o.cleanName.includes('normal')
              );
              
-             // 2. Acha o primeiro SEDEX (o mais barato)
+             // 2. Melhor SEDEX
              const bestExpress = candidates.find(o => 
                 o.cleanName.includes('sedex') || 
                 o.cleanName.includes('expresso')
              );
 
-             // Adiciona PAC (se existir)
              if (bestEconomy) {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    delivery_time: bestEconomy.days + handlingDays, // SOMA O PRAZO
+                    delivery_time: bestEconomy.days + handlingDays,
                     company: "Correios"
                 });
              }
              
-             // Adiciona SEDEX (se existir e não for igual ao PAC)
              if (bestExpress && bestExpress.cleanName !== bestEconomy?.cleanName) {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    delivery_time: bestExpress.days + handlingDays, // SOMA O PRAZO
+                    delivery_time: bestExpress.days + handlingDays,
                     company: "Correios"
                 });
              }
