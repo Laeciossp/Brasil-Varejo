@@ -12,7 +12,7 @@ import { formatCurrency } from '../lib/utils';
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  useCdn: false, // Dados frescos sempre
+  useCdn: false, // False = Sempre pega dados novos
   apiVersion: '2023-05-03',
   token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
 });
@@ -37,10 +37,10 @@ export default function Cart() {
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   const [shippingOptions, setShippingOptions] = useState([]); 
   
-  // Estado que guarda as dimensões REAIS baixadas do Sanity
+  // Estado para guardar os dados frescos (Medidas e Dias)
   const [cartContext, setCartContext] = useState({
     handlingTime: 0,
-    itemsLogistics: {}, // Mapa de ID -> {width, height, ...}
+    itemsLogistics: {}, // Vai guardar { "id_do_produto": { width: 50, height: 30... } }
     isReady: false
   });
 
@@ -60,59 +60,53 @@ export default function Cart() {
 
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // --- 1. PREPARAÇÃO DE DADOS (CRÍTICO) ---
-  // Busca Dias de Manuseio E Medidas Reais antes de deixar calcular o frete
+  // --- 1. O PUL DO GATO: BUSCAR MEDIDAS REAIS NO SANITY ---
   useEffect(() => {
-    const prepareCartData = async () => {
-      if (items.length === 0) return;
-
+    const fetchRealData = async () => {
       try {
-        // A. Configurações Gerais
-        const settingsQuery = `*[_type == "shippingSettings"][0]`;
-        const settings = await client.fetch(settingsQuery);
-        const handlingTime = settings?.handlingTime ? Number(settings.handlingTime) : 0;
+        // A. Busca Dias de Manuseio
+        const settings = await client.fetch(`*[_type == "shippingSettings"][0]`);
+        const days = settings?.handlingTime ? Number(settings.handlingTime) : 0;
 
-        // B. Medidas Reais dos Produtos no Carrinho
-        const ids = items.map(i => i._id).map(id => `"${id}"`).join(',');
-        const productsQuery = `*[_type == "product" && _id in [${ids}]]{
-            _id,
-            logistics { width, height, length, weight }
-        }`;
-        const productsData = await client.fetch(productsQuery);
-        
-        const logisticsMap = {};
-        productsData.forEach(p => {
-            logisticsMap[p._id] = p.logistics;
-        });
+        // B. Busca Medidas Reais dos Itens (Para corrigir o peso/tamanho)
+        let logisticsMap = {};
+        if (items.length > 0) {
+            const ids = items.map(i => `"${i._id}"`).join(',');
+            const query = `*[_type == "product" && _id in [${ids}]]{ _id, logistics { width, height, length, weight } }`;
+            const productsData = await client.fetch(query);
+            
+            productsData.forEach(p => {
+                if (p.logistics) logisticsMap[p._id] = p.logistics;
+            });
+        }
 
-        // Salva tudo e marca como PRONTO
+        // Salva tudo e diz que está pronto para calcular
         setCartContext({
-            handlingTime,
+            handlingTime: days,
             itemsLogistics: logisticsMap,
             isReady: true
         });
 
-      } catch (e) { 
-        console.error("Erro preparando carrinho:", e);
-        // Fallback para não travar
+      } catch (e) {
+        console.error("Erro buscando dados reais:", e);
+        // Em caso de erro, libera o cálculo com dados padrão
         setCartContext(prev => ({ ...prev, isReady: true }));
       }
     };
 
-    prepareCartData();
-  }, [items.length]); 
+    fetchRealData();
+  }, [items.length]); // Roda sempre que adicionar/remover itens
 
-  // Auto-preencher nome
   useEffect(() => {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- 2. CÁLCULO DE FRETE ---
+  // --- 2. CÁLCULO DE FRETE (USANDO DADOS REAIS) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
       
-      // Bloqueia cálculo se: sem CEP, carrinho vazio OU dados do Sanity não carregaram ainda
+      // Só calcula se tiver CEP, Itens e se os DADOS REAIS JÁ CHEGARAM (isReady)
       if (!targetZip || items.length === 0 || !cartContext.isReady) {
           if (!targetZip || items.length === 0) setShipping(null);
           return;
@@ -122,25 +116,28 @@ export default function Cart() {
       
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
+        
+        // Monta os produtos usando as medidas do Sanity (cartContext) em vez das do carrinho
+        const cleanProducts = items.map(p => {
+            const real = cartContext.itemsLogistics[p._id] || {};
+            return {
+              id: p._id,
+              width: Number(real.width) || 15,
+              height: Number(real.height) || 15,
+              length: Number(real.length) || 15,
+              weight: Number(real.weight) || 0.5,
+              insurance_value: Number(p.price),
+              quantity: Number(p.quantity)
+            };
+        });
+
         const response = await fetch(`${baseUrl}/shipping`, { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             from: { postal_code: "43805000" }, 
             to: { postal_code: targetZip },
-            // Mapeia usando as MEDIDAS REAIS baixadas do Sanity (itemsLogistics)
-            products: items.map(p => {
-              const realLogistics = cartContext.itemsLogistics[p._id] || {};
-              return {
-                id: p._id,
-                width: Number(realLogistics.width) || Number(p.width) || 15,
-                height: Number(realLogistics.height) || Number(p.height) || 15,
-                length: Number(realLogistics.length) || Number(p.length) || 15,
-                weight: Number(realLogistics.weight) || Number(p.weight) || 0.5,
-                insurance_value: Number(p.price),
-                quantity: Number(p.quantity)
-              };
-            })
+            products: cleanProducts
           })
         });
         
@@ -167,24 +164,22 @@ export default function Cart() {
           let finalOptions = [];
 
           if (isLocal) {
-             // --- REGRA PALASTORE (PRESERVADA) ---
-             // Ignora R$ 0,00 (retiradas) e pega o menor preço real
+             // --- REGRA PALASTORE (INTACTA) ---
              const paidOptions = candidates.filter(c => c.price > 0);
              paidOptions.sort((a, b) => a.price - b.price);
              
-             const cheapest = paidOptions.length > 0 ? paidOptions[0] : null;
-             // Se não achar nada pago, usa o primeiro da lista geral ou 20.00
-             const finalPrice = cheapest ? cheapest.price : (candidates[0]?.price || 20.00);
+             // Pega o mais barato real
+             const cheapest = paidOptions.length > 0 ? paidOptions[0] : (candidates[0] || {price: 20});
 
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
-                price: finalPrice, 
-                delivery_time: 5, // Fixo
+                price: cheapest.price, 
+                delivery_time: 5, // Fixo 5 dias
                 company: "Própria"
              });
 
           } else {
-             // --- REGRA NACIONAL (CORRIGIDA) ---
+             // --- REGRA NACIONAL (AGORA COM MEDIDAS REAIS + MANUSEIO) ---
              
              const bestEconomy = candidates.find(o => 
                 o.name.toLowerCase().includes('pac') || 
@@ -203,7 +198,7 @@ export default function Cart() {
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
                     delivery_time: bestEconomy.days + cartContext.handlingTime, 
-                    company: "Correios/Jadlog"
+                    company: "Correios"
                 });
              }
 
@@ -212,7 +207,7 @@ export default function Cart() {
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
                     delivery_time: bestExpress.days + cartContext.handlingTime, 
-                    company: "Correios/Jadlog"
+                    company: "Correios"
                 });
              }
           }
@@ -235,7 +230,7 @@ export default function Cart() {
     
     recalculate();
     
-  }, [customer.activeAddressId, items.length, globalCep, cartContext.isReady]); // Depende se o contexto está pronto
+  }, [customer.activeAddressId, items.length, globalCep, cartContext.isReady]); // Só recalcula quando estiver PRONTO
 
   const handleSaveAddress = () => {
     if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
