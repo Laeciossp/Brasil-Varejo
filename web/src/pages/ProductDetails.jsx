@@ -10,7 +10,6 @@ import useCartStore from '../store/useCartStore';
 import { useZipCode } from '../context/ZipCodeContext';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
-// --- COMPONENTES AUXILIARES ---
 const ZoomImage = ({ src, alt }) => {
   const [zoomParams, setZoomParams] = useState({ show: false, x: 0, y: 0 });
   const imgRef = useRef(null);
@@ -249,6 +248,7 @@ export default function ProductDetails() {
     }
   }, [product, globalCep]);
 
+  // --- CÁLCULO DE FRETE (PENEIRA FINA + REGRA LOCAL) ---
   const handleCalculateShipping = async (cepOverride) => {
     const targetCep = typeof cepOverride === 'string' ? cepOverride : cep;
     const cleanCep = targetCep.replace(/\D/g, '');
@@ -297,19 +297,20 @@ export default function ProductDetails() {
 
           if (isLocal) {
              // --- REGRA LOCAL: PREÇO DE SEDEX ---
-             let baseOption = candidates.find(o => 
+             // Tenta achar qualquer coisa com nome de SEDEX ou Expresso
+             let sedexOption = candidates.find(o => 
                 o.name.toLowerCase().includes('sedex') || 
                 o.name.toLowerCase().includes('expresso')
              );
-             
-             if (!baseOption) {
-                 candidates.sort((a, b) => b.price - a.price); // fallback
-                 baseOption = candidates[0];
+
+             if (!sedexOption) {
+                 candidates.sort((a, b) => b.price - a.price); // Do maior pro menor
+                 sedexOption = candidates[0];
              }
 
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
-                price: baseOption ? baseOption.price : 20.00, 
+                price: sedexOption ? sedexOption.price : 20.00, 
                 delivery_time: 5,
                 company: "Própria"
              });
