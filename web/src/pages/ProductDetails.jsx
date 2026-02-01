@@ -210,7 +210,8 @@ export default function ProductDetails() {
               *[_type == "product" && references($catId) && _id != $id && isActive == true][0...50] {
                 _id, title, slug, price, oldPrice,
                 "imageUrl": images[0].asset->url,
-                variants 
+                variants,
+                logistics
               }
             `;
             const related = await client.fetch(relatedQuery, { catId, id: productData._id });
@@ -248,7 +249,6 @@ export default function ProductDetails() {
     }
   }, [product, globalCep]);
 
-  // --- CÁLCULO DE FRETE (PENEIRA FINA + REGRA LOCAL) ---
   const handleCalculateShipping = async (cepOverride) => {
     const targetCep = typeof cepOverride === 'string' ? cepOverride : cep;
     const cleanCep = targetCep.replace(/\D/g, '');
@@ -293,24 +293,16 @@ export default function ProductDetails() {
              };
           });
 
+          // Ordenar (Menor preço primeiro)
+          candidates.sort((a, b) => a.price - b.price);
+
           let finalOptions = [];
 
           if (isLocal) {
-             // --- REGRA LOCAL: PREÇO DE SEDEX ---
-             // Tenta achar qualquer coisa com nome de SEDEX ou Expresso
-             let sedexOption = candidates.find(o => 
-                o.name.toLowerCase().includes('sedex') || 
-                o.name.toLowerCase().includes('expresso')
-             );
-
-             if (!sedexOption) {
-                 candidates.sort((a, b) => b.price - a.price); // Do maior pro menor
-                 sedexOption = candidates[0];
-             }
-
+             const cheapest = candidates[0];
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
-                price: sedexOption ? sedexOption.price : 20.00, 
+                price: cheapest ? cheapest.price : 0, 
                 delivery_time: 5,
                 company: "Própria"
              });
@@ -354,6 +346,7 @@ export default function ProductDetails() {
     }
   };
 
+  // --- AQUI ESTÁ A MÁGICA: ENVIAR DADOS COMPLETOS ---
   const createCartItem = () => {
       const finalSku = selectedVariant ? (selectedVariant.sku || selectedVariant._key) : product._id;
       return {
@@ -366,6 +359,7 @@ export default function ProductDetails() {
         sku: finalSku,
         color: selectedVariant ? selectedVariant.color : null,
         size: selectedVariant ? selectedVariant.size : null,
+        // DADOS DE FRETE INJETADOS NO CARRINHO
         width: product.logistics?.width || 15,
         height: product.logistics?.height || 15,
         length: product.logistics?.length || 15,
@@ -401,7 +395,11 @@ export default function ProductDetails() {
             image: prod.imageUrl,
             sku: prod._id,
             variantName: null,
-            width: 15, height: 15, length: 15, weight: 0.5
+            // Quick Add também precisa de dados se tiver
+            width: prod.logistics?.width || 15,
+            height: prod.logistics?.height || 15,
+            length: prod.logistics?.length || 15,
+            weight: prod.logistics?.weight || 0.5
         });
         alert("Adicionado ao carrinho!");
     }
@@ -505,35 +503,23 @@ export default function ProductDetails() {
                 )
                 )}
 
+                {/* BOTÕES DE NAVEGAÇÃO IMAGEM */}
                 {product.images?.length > 1 && (
                     <>
                         <button 
                             onClick={(e) => { e.stopPropagation(); navigateImage('prev'); }}
-                            className="flex absolute left-2 lg:left-4 top-1/2 -translate-y-1/2 z-20 
-                                       bg-crocus-deep text-white w-8 h-8 lg:w-10 lg:h-10 rounded-full items-center justify-center 
-                                       shadow-lg shadow-purple-900/20 
-                                       opacity-100 lg:opacity-0 lg:group-hover:opacity-100 
-                                       transition-all duration-300 hover:scale-110 hover:bg-purple-900"
+                            className="flex absolute left-2 lg:left-4 top-1/2 -translate-y-1/2 z-20 bg-crocus-deep text-white w-8 h-8 lg:w-10 lg:h-10 rounded-full items-center justify-center shadow-lg hover:bg-purple-900"
                         >
-                            <ChevronLeft size={20} strokeWidth={3} />
+                            <ChevronLeft size={20} />
                         </button>
                         <button 
                             onClick={(e) => { e.stopPropagation(); navigateImage('next'); }}
-                            className="flex absolute right-2 lg:right-4 top-1/2 -translate-y-1/2 z-20 
-                                       bg-crocus-deep text-white w-8 h-8 lg:w-10 lg:h-10 rounded-full items-center justify-center 
-                                       shadow-lg shadow-purple-900/20 
-                                       opacity-100 lg:opacity-0 lg:group-hover:opacity-100 
-                                       transition-all duration-300 hover:scale-110 hover:bg-purple-900"
+                            className="flex absolute right-2 lg:right-4 top-1/2 -translate-y-1/2 z-20 bg-crocus-deep text-white w-8 h-8 lg:w-10 lg:h-10 rounded-full items-center justify-center shadow-lg hover:bg-purple-900"
                         >
-                            <ChevronRight size={20} strokeWidth={3} />
+                            <ChevronRight size={20} />
                         </button>
                     </>
                 )}
-                <div className="lg:hidden absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                      {product.images?.map((_, idx) => (
-                          <div key={idx} className={`h-1.5 rounded-full transition-all ${activeMedia?._key === product.images[idx]._key ? 'w-4 bg-orange-500' : 'w-1.5 bg-gray-300'}`}></div>
-                      ))}
-                </div>
             </div>
             <div className="flex gap-2 overflow-x-auto justify-center pb-2">
                 {product.images?.map((media) => (
