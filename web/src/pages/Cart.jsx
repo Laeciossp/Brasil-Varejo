@@ -50,14 +50,12 @@ export default function Cart() {
   const totalFinal = getTotalPrice();
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // Preenche dados do cliente automaticamente se logado
+  // --- DADOS DO CLIENTE (MANUAL + AUTOMÁTICO) ---
   const [customerName, setCustomerName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
-
+  
   useEffect(() => {
-    if (user) {
+    if (user && !customerName) {
         setCustomerName(user.fullName || '');
-        setCustomerEmail(user.primaryEmailAddress?.emailAddress || '');
     }
   }, [user]);
 
@@ -132,79 +130,74 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   };
 
-  // --- FINALIZAR COMPRA (CORREÇÃO DE DADOS) ---
+  // --- CHECKOUT (AQUI ESTÁ A CORREÇÃO PRINCIPAL) ---
   const handleCheckout = async () => {
-    if (!isLoaded) return; // Aguarda carregar
-    
-    // Validações
-    if (items.length === 0) return alert("Seu carrinho está vazio.");
-    if (!selectedShipping) return alert("Selecione um frete.");
-    if (!activeAddress) return alert("Selecione um endereço de entrega.");
-    if (!customer.document) return alert("Por favor, informe seu CPF para a Nota Fiscal.");
-    if (!customerName) return alert("Por favor, informe seu Nome.");
+    if (!isLoaded || !user) return alert("Faça login para continuar.");
+    if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
+    if (!customer.document) return alert("Informe o CPF para a Nota Fiscal.");
+    if (!customerName) return alert("Informe seu nome.");
 
     setLoading(true);
 
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      // 1. HIGIENIZAÇÃO DOS ITENS
-      // Aqui garantimos que o Título sempre vai preenchido
+      // 1. DADOS DO CLIENTE (ORGANIZADOS)
+      const cleanCustomer = {
+        name: customerName,
+        email: user.primaryEmailAddress?.emailAddress || "",
+        cpf: customer.document, // CPF vai aqui dentro
+        phone: ""
+      };
+
+      // 2. ITENS (GARANTINDO NOME)
       const sanitizedItems = items.map(item => ({
          _key: Math.random().toString(36).substring(7),
-         productName: item.title || item.name || "Produto Sem Nome", 
-         variantName: item.variantName || "Padrão", 
+         productName: item.title || item.name || "Produto Sem Nome", // Fallback triplo
+         variantName: item.variantName || "Padrão",
          color: item.color || "",
          size: item.size || "",
          sku: item.sku || item._id,
          quantity: item.quantity,
          price: item.price,
-         imageUrl: item.image || "", 
+         imageUrl: item.image || "",
          product: { _type: 'reference', _ref: item._id }
       }));
 
-      // 2. HIGIENIZAÇÃO DO ENDEREÇO
-      const cleanAddress = {
+      // 3. ENDEREÇO (FORMATO DO SCHEMA)
+      const finalAddress = {
         zip: activeAddress.zip,
         street: activeAddress.street,
         number: activeAddress.number,
-        complement: activeAddress.complement || "", // Garante string
+        complement: activeAddress.complement || "",
         neighborhood: activeAddress.neighborhood,
         city: activeAddress.city,
         state: activeAddress.state
       };
 
-      // 3. HIGIENIZAÇÃO DO CLIENTE (Dados do Input)
-      const cleanCustomer = {
-        name: customerName, // Usa o nome do input/estado
-        email: customerEmail || "cliente@sememail.com",
-        cpf: customer.document,
-        phone: ""
-      };
-
-      // 4. CRIAÇÃO DO PEDIDO NO SANITY
+      // 4. CRIAÇÃO DO PEDIDO (SANITY)
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
         status: 'pending',
-        customer: cleanCustomer,
+        customer: cleanCustomer, // Manda o objeto completo
         items: sanitizedItems,
         
-        // Manda o mesmo endereço para os dois campos
-        shippingAddress: cleanAddress,
-        billingAddress: cleanAddress, 
+        // Manda o endereço para os DOIS campos (Entrega e Faturamento)
+        shippingAddress: finalAddress,
+        billingAddress: finalAddress,
         
         carrier: selectedShipping.name,
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Venda Site - Dados Completos"
+        internalNotes: "Pedido via Site - Dados Verificados"
       };
 
-      console.log("Enviando para o Sanity:", orderDoc);
+      console.log("Enviando Pedido:", orderDoc);
       await client.create(orderDoc);
 
-      // 5. CHAMADA DE PAGAMENTO (WORKER)
+      // 5. WORKER DE PAGAMENTO
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
@@ -214,7 +207,7 @@ export default function Cart() {
             shipping: parseFloat(selectedShipping.price), 
             email: cleanCustomer.email, 
             tipoPagamento, 
-            shippingAddress: cleanAddress,
+            shippingAddress: finalAddress,
             customerDocument: cleanCustomer.cpf,
             totalAmount: totalFinal,
             orderId: orderNumber 
@@ -227,8 +220,8 @@ export default function Cart() {
         throw new Error(JSON.stringify(data.details || data.error));
       }
 
-      // 6. REDIRECIONAR
       clearCart();
+      
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
         mp.checkout({ preference: { id: data.id_preferencia } }).open(); 
@@ -238,7 +231,7 @@ export default function Cart() {
 
     } catch (error) {
       console.error("Erro Checkout:", error);
-      alert("Erro ao processar pedido: " + error.message);
+      alert("Erro ao processar: " + error.message);
     } finally { 
       setLoading(false); 
     }
@@ -249,7 +242,7 @@ export default function Cart() {
       <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6">
         <ShoppingCart size={40} className="text-gray-300" />
       </div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">Carrinho Vazio</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-2">Seu carrinho está vazio</h2>
       <Link to="/" className="bg-gray-900 text-white px-8 py-3 rounded-lg font-bold">Comprar</Link>
     </div>
   );
@@ -290,14 +283,13 @@ export default function Cart() {
                 ))}
             </div>
 
-            {/* ENTREGA, DADOS E CPF */}
+            {/* ENTREGA E DADOS */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
                 <div className="flex justify-between items-center">
                     <h2 className="text-lg font-bold flex gap-2"><MapPin className="text-orange-500"/> Entrega</h2>
                     <button onClick={() => setShowAddressForm(!showAddressForm)} className="text-blue-600 font-bold text-sm">+ Endereço</button>
                 </div>
                 
-                {/* FORMULÁRIO ENDEREÇO */}
                 {showAddressForm && (
                    <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-2 gap-3">
                       <input placeholder="Apelido (Ex: Casa)" className="p-2 border rounded col-span-2" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
@@ -312,7 +304,6 @@ export default function Cart() {
                    </div>
                 )}
 
-                {/* LISTA DE ENDEREÇOS */}
                 <div className="grid md:grid-cols-2 gap-4">
                     {customer.addresses?.map(addr => (
                         <div key={addr.id} onClick={() => setActiveAddress(addr.id)} className={`p-4 border-2 rounded-lg cursor-pointer ${addr.id === customer.activeAddressId ? 'border-blue-600 bg-blue-50' : 'border-gray-100'}`}>
@@ -327,14 +318,13 @@ export default function Cart() {
                     ))}
                 </div>
 
-                {/* DADOS PESSOAIS */}
                 <div className="pt-4 border-t space-y-3">
                     <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados para Nota</h2>
                     
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Seu Nome</label>
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome Completo</label>
                         <input 
-                            placeholder="Nome Completo" 
+                            placeholder="Seu Nome" 
                             value={customerName} 
                             onChange={e => setCustomerName(e.target.value)}
                             className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-orange-500"
@@ -354,7 +344,7 @@ export default function Cart() {
             </div>
           </div>
 
-          {/* RESUMO E PAGAMENTO */}
+          {/* RESUMO */}
           <div className="lg:w-[380px] h-fit sticky top-6">
             <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
                 <h3 className="text-lg font-bold mb-6">Resumo</h3>

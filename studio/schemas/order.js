@@ -9,7 +9,7 @@ export default {
     { name: 'admin', title: '⚙️ Admin' }
   ],
   fields: [
-    // --- IDENTIFICAÇÃO ---
+    // --- 1. IDENTIFICAÇÃO ---
     {
       name: 'orderNumber',
       title: 'Número do Pedido',
@@ -36,8 +36,8 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- CAMPOS OCULTOS (BLINDAGEM CONTRA ERROS) ---
-    // Estes campos aceitam os dados "errados" antigos para o painel não travar
+    // --- 2. CAMPOS "FANTASMAS" (Para corrigir o erro vermelho) ---
+    // Estes campos escondem os dados enviados errados anteriormente
     { name: 'cpf', type: 'string', hidden: true },
     { name: 'document', type: 'string', hidden: true },
     { name: 'customerDocument', type: 'string', hidden: true },
@@ -45,7 +45,7 @@ export default {
     { name: 'alias', type: 'string', hidden: true },
     { name: 'id', type: 'string', hidden: true },
 
-    // --- CLIENTE (ESTRUTURA CORRETA) ---
+    // --- 3. DADOS DO CLIENTE (Onde o CPF deve ir) ---
     {
       name: 'customer',
       title: 'Dados do Cliente',
@@ -59,7 +59,7 @@ export default {
       ]
     },
 
-    // --- ITENS DO PEDIDO ---
+    // --- 4. ITENS DO PEDIDO ---
     {
       name: 'items',
       title: 'Itens do Pedido',
@@ -89,13 +89,10 @@ export default {
               qty: 'quantity'
             },
             prepare({title, subtitle, color, size, qty}) {
-              let details = [];
-              if (subtitle && subtitle !== 'Padrão') details.push(subtitle);
-              if (color) details.push(`Cor: ${color}`);
-              if (size) details.push(`Tam: ${size}`);
+              const details = [subtitle, color, size].filter(Boolean).join(' - ');
               return { 
-                title: `${qty}x ${title || 'PRODUTO SEM NOME'}`, 
-                subtitle: details.join(' | ') || 'Sem variações'
+                title: `${qty}x ${title || 'Item sem nome'}`, 
+                subtitle: details || 'Padrão'
               }
             }
           }
@@ -103,7 +100,7 @@ export default {
       ]
     },
 
-    // --- ENDEREÇO DE ENTREGA ---
+    // --- 5. ENDEREÇOS (Estrutura Obrigatória) ---
     {
       name: 'shippingAddress',
       title: 'Endereço de Entrega',
@@ -119,14 +116,11 @@ export default {
         { name: 'state', type: 'string', title: 'Estado' }
       ]
     },
-
-    // --- ENDEREÇO DE FATURAMENTO ---
     {
       name: 'billingAddress',
       title: 'Endereço de Faturamento',
       type: 'object',
       group: 'billing',
-      options: { collapsible: true, collapsed: false },
       fields: [
         { name: 'zip', type: 'string', title: 'CEP' },
         { name: 'street', type: 'string', title: 'Rua' },
@@ -138,7 +132,7 @@ export default {
       ]
     },
 
-    // --- LOGÍSTICA E PAGAMENTO ---
+    // --- 6. FINANCEIRO E LOGÍSTICA ---
     { name: 'trackingCode', title: 'Código de Rastreio', type: 'string', group: 'logistics' },
     { name: 'carrier', title: 'Transportadora', type: 'string', group: 'logistics' },
     { name: 'shippingCost', title: 'Custo do Frete', type: 'number', group: 'billing' },
@@ -146,22 +140,5 @@ export default {
     { name: 'paymentMethod', title: 'Método Pagamento', type: 'string', group: 'billing' },
     { name: 'internalNotes', title: 'Anotações Internas', type: 'text', group: 'admin' },
     { name: 'hasUnreadMessage', title: 'Mensagem Não Lida', type: 'boolean', initialValue: false, group: 'admin' }
-  ],
-  preview: {
-    select: { 
-      title: 'orderNumber', 
-      customer: 'customer.name', 
-      status: 'status',
-      total: 'totalAmount'
-    },
-    prepare({title, customer, status, total}) {
-      const statusIcons = {
-        pending: '🟡', paid: '🟢', invoiced: '📄', shipped: '🚚', delivered: '🏠', cancelled: '❌'
-      };
-      return {
-        title: `${statusIcons[status] || '⚪'} ${title || 'Novo'} - ${customer || 'Cliente'}`,
-        subtitle: total ? `R$ ${total.toFixed(2)}` : ''
-      }
-    }
-  }
+  ]
 }
