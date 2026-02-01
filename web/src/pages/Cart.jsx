@@ -9,7 +9,7 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CONFIGURAÇÃO DO CLIENTE SANITY ---
+// --- CONFIGURAÇÃO SANITY ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -121,7 +121,7 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
   };
 
-  // --- FINALIZAR COMPRA (CORREÇÃO DE DADOS) ---
+  // --- FINALIZAR COMPRA ---
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Frete/Endereço?");
@@ -132,19 +132,13 @@ export default function Cart() {
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      // 1. DADOS SANITIZADOS DO CLIENTE (PARA EVITAR UNKNOWN FIELDS)
-      const cleanCustomer = {
-        name: user.fullName || "Cliente Site",
-        email: user.primaryEmailAddress?.emailAddress || "",
-        cpf: customer.document, // CPF VAI AQUI DENTRO
-        phone: "" 
-      };
-
-      // 2. DADOS SANITIZADOS DOS ITENS (PARA EVITAR UNDEFINED)
+      // 1. HIGIENIZAÇÃO DOS DADOS (Evita "Undefined" e "Unknown fields")
       const sanitizedItems = items.map(item => ({
          _key: Math.random().toString(36).substring(7),
-         // Garante que SEMPRE vai ter um nome
+         
+         // AQUI RESOLVEMOS O UNDEFINED: Tenta title, depois name, depois texto fixo
          productName: item.title || item.name || "Produto Sem Nome", 
+         
          variantName: item.variantName || "Padrão", 
          color: item.color || "",
          size: item.size || "",
@@ -155,7 +149,6 @@ export default function Cart() {
          product: { _type: 'reference', _ref: item._id }
       }));
 
-      // 3. DADOS SANITIZADOS DO ENDEREÇO
       const cleanAddress = {
         zip: activeAddress.zip,
         street: activeAddress.street,
@@ -166,7 +159,14 @@ export default function Cart() {
         complement: ""
       };
 
-      // 4. CRIAR PEDIDO NO SANITY
+      const cleanCustomer = {
+        name: user.fullName || "Cliente Site",
+        email: user.primaryEmailAddress?.emailAddress || "",
+        cpf: customer.document,
+        phone: ""
+      };
+
+      // 2. CRIA O PEDIDO NO SANITY (CLIENTE SIDE)
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
@@ -178,14 +178,13 @@ export default function Cart() {
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Criado via Site v6"
+        internalNotes: "Checkout V7 - Dados Higienizados"
       };
 
-      console.log("Salvando pedido...", orderDoc);
-      // Aqui salvamos no banco
+      console.log("Enviando pedido...", orderDoc);
       await client.create(orderDoc);
 
-      // 5. CHAMAR WORKER PARA PAGAMENTO
+      // 3. CHAMA O WORKER (PAGAMENTO)
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
@@ -208,7 +207,7 @@ export default function Cart() {
         throw new Error(JSON.stringify(data.details || data.error));
       }
 
-      // 6. REDIRECIONAR
+      // 4. REDIRECIONA
       clearCart();
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });

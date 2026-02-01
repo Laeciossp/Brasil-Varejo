@@ -1,4 +1,3 @@
-// schemas/order.js
 export default {
   name: 'order',
   title: '📦 Pedidos',
@@ -37,16 +36,16 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- CAMPOS FANTASMAS (PARA SUMIR COM OS ERROS VERMELHOS) ---
-    // O Sanity vai aceitar esses dados antigos mas não vai mostrar nem dar erro.
+    // --- CAMPOS FANTASMAS (SOLUÇÃO DOS ERROS VERMELHOS) ---
+    // O Sanity vai parar de dar erro nestes campos, mas não vai mostrá-los.
     { name: 'cpf', type: 'string', hidden: true },
+    { name: 'document', type: 'string', hidden: true },
     { name: 'customerDocument', type: 'string', hidden: true },
     { name: 'customerEmail', type: 'string', hidden: true },
     { name: 'alias', type: 'string', hidden: true },
     { name: 'id', type: 'string', hidden: true },
-    { name: 'document', type: 'string', hidden: true },
 
-    // --- CLIENTE (ONDE OS DADOS DEVEM FICAR) ---
+    // --- CLIENTE (ESTRUTURA CORRETA) ---
     {
       name: 'customer',
       title: 'Dados do Cliente',
@@ -72,9 +71,8 @@ export default {
           title: 'Produto',
           fields: [
             { name: 'productName', title: 'Nome do Produto', type: 'string' },
-            { name: 'variantName', title: 'Variação', type: 'string' }, 
+            { name: 'variantName', title: 'Variação Completa', type: 'string' }, 
             
-            // Detalhes separados
             { name: 'color', title: 'Cor', type: 'string' }, 
             { name: 'size', title: 'Tamanho', type: 'string' }, 
             { name: 'sku', title: 'SKU', type: 'string' }, 
@@ -94,14 +92,15 @@ export default {
               qty: 'quantity'
             },
             prepare({title, subtitle, color, size, qty}) {
+              // Lógica para garantir que apareça algo mesmo se faltar dado
               let details = [];
               if (subtitle && subtitle !== 'Padrão') details.push(subtitle);
               if (color) details.push(`Cor: ${color}`);
               if (size) details.push(`Tam: ${size}`);
 
               return { 
-                title: `${qty}x ${title || 'PRODUTO SEM NOME'}`, 
-                subtitle: details.join(' - ') || 'Sem detalhes'
+                title: `${qty}x ${title || 'PRODUTO SEM NOME (Verificar)'}`, 
+                subtitle: details.join(' | ') || 'Item Padrão'
               }
             }
           }
@@ -109,7 +108,7 @@ export default {
       ]
     },
 
-    // --- ENDEREÇO ---
+    // --- ENDEREÇO DE ENTREGA ---
     {
       name: 'shippingAddress',
       title: 'Endereço de Entrega',
@@ -143,7 +142,7 @@ export default {
       ]
     },
 
-    // --- LOGÍSTICA/FINANCEIRO ---
+    // --- LOGÍSTICA E VALORES ---
     { name: 'trackingCode', title: 'Código de Rastreio', type: 'string', group: 'logistics' },
     { name: 'trackingUrl', title: 'Link de Rastreio', type: 'url', group: 'logistics' },
     { name: 'carrier', title: 'Transportadora', type: 'string', group: 'logistics' },
