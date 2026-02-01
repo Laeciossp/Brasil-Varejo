@@ -352,7 +352,7 @@ export default function ProductDetails() {
     }
   };
 
-  // --- AQUI ESTÁ A ÚNICA ALTERAÇÃO CRÍTICA: ENVIO O handlingTime PARA O CART ---
+  // --- AQUI: ENVIAR DADOS DE LOGÍSTICA PARA O CARRINHO ---
   const createCartItem = () => {
       const finalSku = selectedVariant ? (selectedVariant.sku || selectedVariant._key) : product._id;
       return {
@@ -366,7 +366,7 @@ export default function ProductDetails() {
         color: selectedVariant ? selectedVariant.color : null,
         size: selectedVariant ? selectedVariant.size : null,
         
-        // ENVIA A VARIÁVEL QUE JÁ EXISTE NO SEU CÓDIGO
+        // ENVIO DO MANUSEIO AQUI:
         handlingTime: handlingDays, 
         
         width: product.logistics?.width || 15,
@@ -404,7 +404,7 @@ export default function ProductDetails() {
             image: prod.imageUrl,
             sku: prod._id,
             variantName: null,
-            // ENVIA AQUI TAMBÉM
+            // ENVIO DO MANUSEIO AQUI TAMBÉM:
             handlingTime: handlingDays,
             width: prod.logistics?.width || 15,
             height: prod.logistics?.height || 15,
