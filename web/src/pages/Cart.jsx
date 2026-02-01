@@ -9,7 +9,7 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CLIENTE SANITY PARA SALVAR O PEDIDO ---
+// --- CLIENTE SANITY (TOKEN DE ESCRITA) ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -50,7 +50,7 @@ export default function Cart() {
   const totalFinal = getTotalPrice();
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // --- RECALCULO DE FRETE ---
+  // --- RECALCULAR FRETE ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -67,10 +67,7 @@ export default function Cart() {
             to: { postal_code: targetZip },
             products: items.map(p => ({
               id: p._id,
-              width: p.logistics?.width || 15,
-              height: p.logistics?.height || 15,
-              length: p.logistics?.length || 15,
-              weight: p.logistics?.weight || 0.5,
+              width: 15, height: 15, length: 15, weight: 0.5,
               insurance_value: p.price,
               quantity: p.quantity
             }))
@@ -97,9 +94,7 @@ export default function Cart() {
                 finalName = "SEDEX (Expresso)";
             }
 
-            if (!isLocal) {
-                finalDays += PRAZO_MANUSEIO_PADRAO;
-            }
+            if (!isLocal) finalDays += PRAZO_MANUSEIO_PADRAO;
 
             return { ...opt, name: finalName, delivery_time: finalDays };
           });
@@ -108,9 +103,7 @@ export default function Cart() {
             ? optionsAdjusted.filter(opt => !opt.name.toLowerCase().includes('pac')) 
             : optionsAdjusted;
 
-          const currentName = selectedShipping?.name;
-          const sameOption = filteredOptions.find(o => o.name === currentName);
-          setShipping(sameOption || filteredOptions[0]);
+          setShipping(filteredOptions[0]);
         }
       } catch (error) {
         console.error("Erro frete", error);
@@ -122,36 +115,39 @@ export default function Cart() {
   }, [customer.activeAddressId, items.length, globalCep]);
 
   const handleSaveAddress = () => {
-    if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
+    if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados.");
     addAddress({ ...newAddr, id: Math.random().toString(36).substr(2, 9) });
     setShowAddressForm(false);
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
   };
 
-  // --- FUNÇÃO PRINCIPAL: SALVA NO SANITY E VAI PRO MERCADO PAGO ---
+  // --- FINALIZAR COMPRA (CORRIGIDO: SALVA NO SANITY E REDIRECIONA) ---
   const handleCheckout = async () => {
-    if (!isLoaded || !user) return alert("Faça login para continuar.");
-    if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
-    if (!customer.document) return alert("CPF/CNPJ obrigatório para a Nota Fiscal.");
+    if (!isLoaded || !user) return alert("Faça login.");
+    if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Frete/Endereço?");
+    if (!customer.document) return alert("CPF obrigatório.");
 
     setLoading(true);
 
     try {
-      // 1. DADOS SANITIZADOS PARA O BANCO DE DADOS (SANITY)
+      const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
+
+      // 1. PREPARAR ITEM (HIGIENIZAÇÃO DOS DADOS)
       const sanitizedItems = items.map(item => ({
          _key: Math.random().toString(36).substring(7),
-         productName: item.title || item.name || "Produto", 
+         productName: item.title || item.name || "Produto", // Força o nome
          variantName: item.variantName || "Padrão", 
          color: item.color || "",
          size: item.size || "",
          sku: item.sku || item._id,
          quantity: item.quantity,
          price: item.price,
-         imageUrl: item.image,
+         imageUrl: item.image || "", 
          product: { _type: 'reference', _ref: item._id },
          productSlug: item.slug?.current || item.slug || ""
       }));
 
+      // 2. PREPARAR ENDEREÇO (LIMPO)
       const cleanAddress = {
         zip: activeAddress.zip,
         street: activeAddress.street,
@@ -162,9 +158,8 @@ export default function Cart() {
         complement: ""
       };
 
-      const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
-
-      // 2. CRIA O PEDIDO NO SANITY (Para seu painel funcionar)
+      // 3. SALVAR NO SANITY (CLIENTE SIDE)
+      // Isso garante que os dados cheguem no painel exatamente como estão aqui
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
@@ -172,7 +167,7 @@ export default function Cart() {
         customer: {
             name: user.fullName || "Cliente Site",
             email: user.primaryEmailAddress?.emailAddress || "",
-            cpf: customer.document, 
+            cpf: customer.document,
             phone: "" 
         },
         items: sanitizedItems,
@@ -181,29 +176,27 @@ export default function Cart() {
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        hasUnreadMessage: true,
-        internalNotes: "Aguardando pagamento..."
+        internalNotes: "Criado via Site v4 (Direct Sanity)"
       };
 
-      console.log("Salvando pedido no Sanity...");
+      console.log("Salvando pedido...", orderDoc);
       await client.create(orderDoc);
-      console.log("Pedido salvo. Iniciando pagamento...");
 
-      // 3. CHAMA O WORKER PARA GERAR PAGAMENTO (Para o cliente pagar)
+      // 4. CHAMAR WORKER APENAS PARA O PAGAMENTO
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
-      
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            items: sanitizedItems, // Envia os itens limpos
+            // Enviamos dados básicos para o Worker gerar o pagamento
+            items: sanitizedItems,
             shipping: parseFloat(selectedShipping.price), 
             email: user.primaryEmailAddress?.emailAddress, 
             tipoPagamento, 
             shippingAddress: cleanAddress,
             customerDocument: customer.document,
             totalAmount: totalFinal,
-            orderId: orderNumber // Manda o ID para referência
+            orderId: orderNumber 
         })
       });
 
@@ -213,8 +206,8 @@ export default function Cart() {
         throw new Error(JSON.stringify(data.details || data.error));
       }
 
-      // 4. REDIRECIONA PARA PAGAMENTO
-      clearCart(); // Limpa o carrinho antes de ir
+      // 5. REDIRECIONAR
+      clearCart();
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
         mp.checkout({ preference: { id: data.id_preferencia } }).open(); 
@@ -223,7 +216,7 @@ export default function Cart() {
       }
 
     } catch (error) {
-      console.error("Erro no Checkout:", error);
+      console.error("Erro Checkout:", error);
       alert("Erro ao processar: " + error.message);
     } finally { 
       setLoading(false); 
@@ -246,192 +239,118 @@ export default function Cart() {
   return (
     <div className="bg-gray-50 min-h-screen py-10 font-sans">
       <div className="container mx-auto px-4 max-w-6xl">
-        <h1 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-2">
-            Meu Carrinho <span className="text-gray-400 text-lg font-normal">({items.length} itens)</span>
-        </h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-2">Carrinho ({items.length})</h1>
 
         <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
           
-          {/* --- COLUNA PRINCIPAL (ESQUERDA) --- */}
           <div className="flex-1 space-y-8">
-            
-            {/* LISTA DE ITENS */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="p-6 space-y-6">
-                {items.map((item) => {
-                  const productSlug = item.slug?.current || item.slug;
-
-                  return (
-                    <div key={item.sku || item._id} className="flex gap-4 sm:gap-6">
-                      
-                      {/* FOTO */}
-                      <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white border border-gray-100 rounded-lg flex-shrink-0 p-2 relative">
-                          {productSlug ? (
-                             <Link to={`/product/${productSlug}`} className="block w-full h-full">
-                                <img src={item.image} className="w-full h-full object-contain mix-blend-multiply hover:scale-105 transition-transform" alt={item.title} />
-                             </Link>
-                          ) : (
-                             <img src={item.image} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
-                          )}
+            {/* PRODUTOS */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
+                {items.map((item) => (
+                    <div key={item.sku || item._id} className="flex gap-4">
+                      <div className="w-20 h-20 bg-white border rounded-lg p-2">
+                          <img src={item.image} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
                       </div>
-
                       <div className="flex-1 flex flex-col justify-between">
-                        <div className="flex justify-between items-start gap-2">
-                            {/* NOME E VARIAÇÃO */}
+                        <div className="flex justify-between">
                             <div>
-                                <h3 className="font-medium text-gray-900 line-clamp-2 text-sm sm:text-base">
-                                  {productSlug ? (
-                                    <Link to={`/product/${productSlug}`} className="hover:text-orange-600 transition-colors">
-                                      {item.title}
-                                    </Link>
-                                  ) : item.title}
-                                </h3>
-                                {/* EXIBE VARIAÇÃO SE HOUVER */}
-                                {item.variantName && (
-                                    <p className="text-xs text-gray-500 font-medium mt-1">Opção: {item.variantName}</p>
-                                )}
+                                <h3 className="font-medium text-gray-900">{item.title}</h3>
+                                {item.variantName && <p className="text-xs text-gray-500 mt-1">{item.variantName}</p>}
                             </div>
-
-                            <button onClick={() => removeItem(item._id, item.sku)} className="text-gray-400 hover:text-red-500 transition-colors">
-                              <Trash2 size={18}/>
-                            </button>
+                            <button onClick={() => removeItem(item._id, item.sku)} className="text-red-500"><Trash2 size={18}/></button>
                         </div>
-                        
-                        <div className="flex justify-between items-end mt-2">
-                            <div className="flex items-center border border-gray-200 rounded-lg">
-                              <button onClick={() => updateQuantity(item._id, item.quantity - 1, item.sku)} disabled={item.quantity <= 1} className="px-3 py-1 text-gray-500 hover:bg-gray-50 disabled:opacity-50">-</button>
-                              <span className="px-2 text-sm font-bold text-gray-900">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item._id, item.quantity + 1, item.sku)} className="px-3 py-1 text-gray-500 hover:bg-gray-50">+</button>
+                        <div className="flex justify-between items-end">
+                            <div className="flex items-center border rounded-lg">
+                              <button onClick={() => updateQuantity(item._id, item.quantity - 1, item.sku)} disabled={item.quantity <= 1} className="px-3 py-1">-</button>
+                              <span className="px-2 text-sm font-bold">{item.quantity}</span>
+                              <button onClick={() => updateQuantity(item._id, item.quantity + 1, item.sku)} className="px-3 py-1">+</button>
                             </div>
-                            
-                            <div className="text-right">
-                                <p className="text-lg font-bold text-gray-900">{formatCurrency(item.price)}</p>
-                                {item.quantity > 1 && <span className="text-xs text-gray-400 block">{formatCurrency(item.price * item.quantity)} total</span>}
-                            </div>
+                            <p className="text-lg font-bold text-gray-900">{formatCurrency(item.price * item.quantity)}</p>
                         </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                ))}
             </div>
 
-            {/* ENDEREÇO DE ENTREGA */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                        <MapPin size={20} className="text-orange-500"/> Entrega
-                    </h2>
-                    <button onClick={() => setShowAddressForm(!showAddressForm)} className="text-blue-600 text-sm font-bold hover:underline">
-                        + Novo Endereço
-                    </button>
+            {/* ENTREGA E CPF */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
+                <div className="flex justify-between items-center">
+                    <h2 className="text-lg font-bold flex gap-2"><MapPin className="text-orange-500"/> Entrega</h2>
+                    <button onClick={() => setShowAddressForm(!showAddressForm)} className="text-blue-600 font-bold text-sm">+ Endereço</button>
                 </div>
-
+                
                 {showAddressForm && (
-                   <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <input placeholder="Apelido (Ex: Casa)" className="p-2 rounded border" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
-                      <input placeholder="CEP" className="p-2 rounded border" value={newAddr.zip} onChange={e => setNewAddr({...newAddr, zip: e.target.value})} />
-                      <input placeholder="Rua" className="p-2 rounded border" value={newAddr.street} onChange={e => setNewAddr({...newAddr, street: e.target.value})} />
-                      <input placeholder="Número" className="p-2 rounded border" value={newAddr.number} onChange={e => setNewAddr({...newAddr, number: e.target.value})} />
-                      <input placeholder="Bairro" className="p-2 rounded border" value={newAddr.neighborhood} onChange={e => setNewAddr({...newAddr, neighborhood: e.target.value})} />
-                      <input placeholder="Cidade" className="p-2 rounded border" value={newAddr.city} onChange={e => setNewAddr({...newAddr, city: e.target.value})} />
-                      <input placeholder="UF" className="p-2 rounded border" maxLength={2} value={newAddr.state} onChange={e => setNewAddr({...newAddr, state: e.target.value})} />
-                      <button onClick={handleSaveAddress} className="col-span-full bg-gray-900 text-white py-2 rounded font-bold text-sm">Salvar Endereço</button>
+                   <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-2 gap-3">
+                      <input placeholder="CEP" className="p-2 border rounded" value={newAddr.zip} onChange={e => setNewAddr({...newAddr, zip: e.target.value})} />
+                      <input placeholder="Rua" className="p-2 border rounded" value={newAddr.street} onChange={e => setNewAddr({...newAddr, street: e.target.value})} />
+                      <input placeholder="Número" className="p-2 border rounded" value={newAddr.number} onChange={e => setNewAddr({...newAddr, number: e.target.value})} />
+                      <input placeholder="Bairro" className="p-2 border rounded" value={newAddr.neighborhood} onChange={e => setNewAddr({...newAddr, neighborhood: e.target.value})} />
+                      <input placeholder="Cidade" className="p-2 border rounded" value={newAddr.city} onChange={e => setNewAddr({...newAddr, city: e.target.value})} />
+                      <input placeholder="UF" className="p-2 border rounded" value={newAddr.state} onChange={e => setNewAddr({...newAddr, state: e.target.value})} />
+                      <button onClick={handleSaveAddress} className="col-span-2 bg-black text-white py-2 rounded font-bold">Salvar</button>
                    </div>
                 )}
 
                 <div className="grid md:grid-cols-2 gap-4">
                     {customer.addresses?.map(addr => (
-                        <div 
-                            key={addr.id} 
-                            onClick={() => setActiveAddress(addr.id)} 
-                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all relative ${addr.id === customer.activeAddressId ? 'border-blue-600 bg-blue-50/30' : 'border-gray-100 hover:border-gray-300'}`}
-                        >
-                            <div className="flex justify-between mb-1">
-                                <span className="font-bold text-gray-800 text-sm">{addr.alias || 'Local'}</span>
-                                {addr.id === customer.activeAddressId && <div className="w-3 h-3 bg-blue-600 rounded-full"></div>}
-                            </div>
-                            <p className="text-xs text-gray-500">{addr.street}, {addr.number}</p>
-                            <p className="text-xs text-gray-400">{addr.city}/{addr.state} - {addr.zip}</p>
+                        <div key={addr.id} onClick={() => setActiveAddress(addr.id)} className={`p-4 border-2 rounded-lg cursor-pointer ${addr.id === customer.activeAddressId ? 'border-blue-600 bg-blue-50' : 'border-gray-100'}`}>
+                            <p className="font-bold text-sm">{addr.alias || 'Casa'}</p>
+                            <p className="text-xs text-gray-500">{addr.street}, {addr.number} - {addr.city}</p>
                         </div>
                     ))}
                 </div>
-            </div>
 
-            {/* DOCUMENTO PARA NF */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ShieldCheck size={20} className="text-gray-400"/> Nota Fiscal</h2>
-                <input 
-                    type="text" 
-                    placeholder="CPF ou CNPJ para a nota" 
-                    value={customer.document || ''} 
-                    onChange={e => setDocument(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 p-3 rounded-lg text-gray-900 outline-none focus:border-orange-500 transition-colors"
-                />
+                <div className="pt-4 border-t">
+                    <h2 className="text-lg font-bold mb-2 flex gap-2"><ShieldCheck className="text-gray-400"/> CPF na Nota</h2>
+                    <input 
+                        placeholder="000.000.000-00" 
+                        value={customer.document || ''} 
+                        onChange={e => setDocument(e.target.value)}
+                        className="w-full p-3 border rounded-lg bg-gray-50"
+                    />
+                </div>
             </div>
           </div>
 
-          {/* --- RESUMO DO PEDIDO --- */}
+          {/* RESUMO E PAGAMENTO */}
           <div className="lg:w-[380px] h-fit sticky top-6">
             <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                <h3 className="text-lg font-bold text-gray-900 mb-6">Resumo</h3>
-                
-                <div className="space-y-3 mb-6 text-sm">
-                    <div className="flex justify-between text-gray-500">
-                        <span>Subtotal</span>
-                        <span>{formatCurrency(subtotal)}</span>
+                <h3 className="text-lg font-bold mb-6">Resumo</h3>
+                <div className="space-y-3 text-sm mb-6">
+                    <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                    <div className="flex justify-between items-center">
+                        <span className="flex gap-1"><Truck size={14}/> Frete</span>
+                        {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? formatCurrency(selectedShipping.price) : '--'}</span>}
                     </div>
-                    <div className="flex justify-between text-gray-500 items-center">
-                        <span className="flex items-center gap-1"><Truck size={14}/> Frete</span>
-                        {recalculatingShipping 
-                            ? <span className="text-orange-500 animate-pulse text-xs">Calculando...</span> 
-                            : <span className="font-bold text-gray-800">{selectedShipping ? formatCurrency(selectedShipping.price) : '---'}</span>
-                        }
-                    </div>
-                    {selectedShipping && (
-                        <div className="text-xs text-right text-gray-400">
-                            Via {selectedShipping.name} ({selectedShipping.delivery_time} dias úteis)
-                        </div>
-                    )}
+                    {selectedShipping && <div className="text-xs text-right text-gray-400">{selectedShipping.name}</div>}
                 </div>
 
-                <div className="border-t border-gray-100 pt-4 mb-6">
-                    <p className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wide">Pagamento</p>
+                <div className="border-t pt-4 mb-6">
+                    <p className="text-xs font-bold text-gray-500 mb-3 uppercase">Pagamento</p>
                     <div className="space-y-2">
-                        <label className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer ${tipoPagamento === 'pix' ? 'border-green-500 bg-green-50/50' : 'border-gray-200'}`}>
-                            <div className="flex items-center gap-2">
-                                <input type="radio" checked={tipoPagamento === 'pix'} onChange={() => setTipoPagamento('pix')} className="text-green-600 focus:ring-green-500"/>
-                                <span className="text-sm font-medium text-gray-700">PIX</span>
-                            </div>
+                        <label className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer ${tipoPagamento === 'pix' ? 'border-green-500 bg-green-50' : ''}`}>
+                            <div className="flex items-center gap-2"><input type="radio" checked={tipoPagamento === 'pix'} onChange={() => setTipoPagamento('pix')}/> PIX</div>
                             <QrCode size={16} className="text-green-600"/>
                         </label>
-                        <label className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer ${tipoPagamento === 'cartao' ? 'border-blue-500 bg-blue-50/50' : 'border-gray-200'}`}>
-                            <div className="flex items-center gap-2">
-                                <input type="radio" checked={tipoPagamento === 'cartao'} onChange={() => setTipoPagamento('cartao')} className="text-blue-600 focus:ring-blue-500"/>
-                                <span className="text-sm font-medium text-gray-700">Cartão de Crédito</span>
-                            </div>
+                        <label className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer ${tipoPagamento === 'cartao' ? 'border-blue-500 bg-blue-50' : ''}`}>
+                            <div className="flex items-center gap-2"><input type="radio" checked={tipoPagamento === 'cartao'} onChange={() => setTipoPagamento('cartao')}/> Cartão</div>
                             <CreditCard size={16} className="text-blue-600"/>
                         </label>
                     </div>
                 </div>
 
                 <div className="flex justify-between items-end mb-6">
-                    <span className="text-gray-500 font-medium">Total</span>
-                    <span className="text-3xl font-black text-gray-900 tracking-tight">{formatCurrency(totalFinal)}</span>
+                    <span className="font-medium">Total</span>
+                    <span className="text-3xl font-black">{formatCurrency(totalFinal)}</span>
                 </div>
 
                 <button 
                     onClick={handleCheckout} 
                     disabled={loading || !selectedShipping || !activeAddress || !customer.document} 
-                    className={`w-full py-4 rounded-xl font-bold uppercase tracking-wide text-sm flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-[0.98] ${
-                        !selectedShipping || !activeAddress || !customer.document
-                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
-                        : 'bg-orange-600 hover:bg-orange-700 text-white shadow-orange-500/30'
-                    }`}
+                    className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300"
                 >
                     {loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/>
                 </button>
-
                 <MercadoPagoTrust />
             </div>
           </div>
