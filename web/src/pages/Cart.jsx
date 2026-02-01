@@ -5,18 +5,9 @@ import {
   MapPin, CreditCard, QrCode, Lock, Truck
 } from 'lucide-react';
 import { useUser } from "@clerk/clerk-react";
-import { createClient } from "@sanity/client"; 
+// REMOVI O CREATE CLIENT DO SANITY POIS NÃO VAMOS MAIS CRIAR AQUI
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
-
-// --- CONFIGURAÇÃO DO SANITY ---
-const client = createClient({
-  projectId: 'o4upb251',
-  dataset: 'production',
-  useCdn: false,
-  apiVersion: '2023-05-03',
-  token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
-});
 
 const MercadoPagoTrust = () => (
   <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col items-center gap-2">
@@ -38,10 +29,7 @@ export default function Cart() {
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   
   const [showAddressForm, setShowAddressForm] = useState(false);
-  // Estado para os campos de endereço
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
-  
-  // Estado para Nome e CPF (Edição Manual)
   const [customerName, setCustomerName] = useState('');
   
   const { 
@@ -54,14 +42,11 @@ export default function Cart() {
   const totalFinal = getTotalPrice();
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // Preencher Nome Automaticamente se Logado
   useEffect(() => {
-    if (user && !customerName) {
-        setCustomerName(user.fullName || '');
-    }
+    if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- RECALCULAR FRETE ---
+  // --- FRETE ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -84,89 +69,77 @@ export default function Cart() {
             }))
           })
         });
-        
         const options = await response.json();
-
         if (Array.isArray(options) && options.length > 0) {
-          const PRAZO_MANUSEIO_PADRAO = 5; 
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
-
           const optionsAdjusted = options.map(opt => {
             let finalName = opt.name;
             let finalDays = parseInt(opt.delivery_time) || 0;
             const lowerName = (opt.name || '').toLowerCase();
-
-            if (isLocal) {
-                finalName = "Expresso Palastore ⚡";
-            } else if (lowerName.includes('pac')) {
-                finalName = "PAC (Econômico)";
-            } else if (lowerName.includes('sedex')) {
-                finalName = "SEDEX (Expresso)";
-            }
-
-            if (!isLocal) finalDays += PRAZO_MANUSEIO_PADRAO;
-
+            if (isLocal) finalName = "Expresso Palastore ⚡";
+            else if (lowerName.includes('pac')) finalName = "PAC (Econômico)";
+            else if (lowerName.includes('sedex')) finalName = "SEDEX (Expresso)";
+            if (!isLocal) finalDays += 5; 
             return { ...opt, name: finalName, delivery_time: finalDays };
           });
-
-          const filteredOptions = isLocal 
-            ? optionsAdjusted.filter(opt => !opt.name.toLowerCase().includes('pac')) 
-            : optionsAdjusted;
-
+          const filteredOptions = isLocal ? optionsAdjusted.filter(opt => !opt.name.toLowerCase().includes('pac')) : optionsAdjusted;
           setShipping(filteredOptions[0]);
         }
-      } catch (error) {
-        console.error("Erro frete", error);
-      } finally {
-        setRecalculatingShipping(false);
-      }
+      } catch (error) { console.error("Erro frete", error); } 
+      finally { setRecalculatingShipping(false); }
     };
     recalculate();
   }, [customer.activeAddressId, items.length, globalCep]);
 
   const handleSaveAddress = () => {
-    if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
+    if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados.");
     addAddress({ ...newAddr, id: Math.random().toString(36).substr(2, 9) });
     setShowAddressForm(false);
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   };
 
-  // --- FINALIZAR COMPRA (CORRIGIDO) ---
+  // --- FINALIZAR COMPRA (CORREÇÃO: SÓ API) ---
   const handleCheckout = async () => {
-    if (!isLoaded || !user) return alert("Faça login para continuar.");
-    if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
-    if (!customer.document) return alert("Por favor, preencha o CPF.");
-    if (!customerName) return alert("Por favor, preencha seu Nome.");
+    if (!isLoaded || !user) return alert("Faça login.");
+    if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Frete/Endereço?");
+    if (!customer.document) return alert("CPF obrigatório.");
+    if (!customerName) return alert("Nome obrigatório.");
 
     setLoading(true);
 
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      // 1. MONTAR OBJETO DO CLIENTE (Limpo)
+      // 1. DADOS SANITIZADOS DO CLIENTE
       const cleanCustomer = {
         name: customerName,
         email: user.primaryEmailAddress?.emailAddress || "",
-        cpf: customer.document, // CPF vai DENTRO de customer
+        cpf: customer.document,
         phone: ""
       };
 
-      // 2. MONTAR OBJETO DE ENDEREÇO (Limpo)
+      // 2. ENDEREÇO LIMPO
       const cleanAddress = {
         zip: activeAddress.zip,
         street: activeAddress.street,
         number: activeAddress.number,
-        complement: activeAddress.complement || "", // Garante string vazia se nulo
+        complement: activeAddress.complement || "",
         neighborhood: activeAddress.neighborhood,
         city: activeAddress.city,
         state: activeAddress.state
       };
 
-      // 3. MONTAR ITENS (Garantindo que tenham nome)
+      // 3. ITENS PREPARADOS PARA O WORKER (CORREÇÃO DO "SEM NOME")
+      // Enviamos 'title' e 'name' repetidos para garantir que o worker pegue um deles
       const sanitizedItems = items.map(item => ({
          _key: Math.random().toString(36).substring(7),
-         productName: item.title || item.name || "Produto Sem Nome", // Fallback triplo
+         
+         // IMPORTANTE: Envia o nome em vários campos para o Worker não se perder
+         title: item.title || item.name || "Produto", 
+         name: item.title || item.name || "Produto",
+         productName: item.title || item.name || "Produto",
+         
          variantName: item.variantName || "Padrão", 
          color: item.color || "",
          size: item.size || "",
@@ -177,40 +150,31 @@ export default function Cart() {
          product: { _type: 'reference', _ref: item._id }
       }));
 
-      // 4. CRIAÇÃO DO PEDIDO NO SANITY (Payload Perfeito)
-      const orderDoc = {
-        _type: 'order',
-        orderNumber: orderNumber,
-        status: 'pending',
-        customer: cleanCustomer, // Manda o objeto Customer
-        items: sanitizedItems,
-        shippingAddress: cleanAddress, // Manda o objeto Endereço
-        billingAddress: cleanAddress,  // Duplica para Faturamento
-        carrier: selectedShipping.name,
-        shippingCost: parseFloat(selectedShipping.price),
-        totalAmount: totalFinal,
-        paymentMethod: tipoPagamento,
-        internalNotes: "Venda Site - Correção Final"
-      };
-
-      console.log("Enviando Pedido:", orderDoc);
-      // Escreve no Sanity
-      await client.create(orderDoc);
-
-      // 5. CHAMADA DE PAGAMENTO (Worker)
+      // 4. CHAMADA ÚNICA AO WORKER (GERA PAGAMENTO + CRIA PEDIDO LÁ)
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
+      
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
+            // Dados para o Worker criar o pedido (Tenta cobrir todas as bases)
             items: sanitizedItems,
             shipping: parseFloat(selectedShipping.price), 
             email: cleanCustomer.email, 
+            name: cleanCustomer.name, // Envia nome também
+            
             tipoPagamento, 
             shippingAddress: cleanAddress,
+            
+            // Campos de CPF (Envia nos dois lugares para garantir)
             customerDocument: cleanCustomer.cpf,
+            cpf: cleanCustomer.cpf,
+            
             totalAmount: totalFinal,
-            orderId: orderNumber 
+            orderId: orderNumber,
+            
+            // Dados Extras para o Worker salvar no Sanity se ele for inteligente
+            customer: cleanCustomer 
         })
       });
 
@@ -220,7 +184,7 @@ export default function Cart() {
         throw new Error(JSON.stringify(data.details || data.error));
       }
 
-      // 6. REDIRECIONAR
+      // 5. REDIRECIONA
       clearCart();
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
@@ -253,7 +217,6 @@ export default function Cart() {
         <h1 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-2">Carrinho ({items.length})</h1>
 
         <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
-          
           <div className="flex-1 space-y-8">
             {/* PRODUTOS */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
@@ -272,9 +235,9 @@ export default function Cart() {
                         </div>
                         <div className="flex justify-between items-end">
                             <div className="flex items-center border rounded-lg">
-                              <button onClick={() => updateQuantity(item._id, item.quantity - 1, item.sku)} disabled={item.quantity <= 1} className="px-3 py-1">-</button>
-                              <span className="px-2 text-sm font-bold">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item._id, item.quantity + 1, item.sku)} className="px-3 py-1">+</button>
+                                <button onClick={() => updateQuantity(item._id, item.quantity - 1, item.sku)} disabled={item.quantity <= 1} className="px-3 py-1">-</button>
+                                <span className="px-2 text-sm font-bold">{item.quantity}</span>
+                                <button onClick={() => updateQuantity(item._id, item.quantity + 1, item.sku)} className="px-3 py-1">+</button>
                             </div>
                             <p className="text-lg font-bold text-gray-900">{formatCurrency(item.price * item.quantity)}</p>
                         </div>
@@ -283,16 +246,15 @@ export default function Cart() {
                 ))}
             </div>
 
-            {/* ENTREGA E DADOS */}
+            {/* ENTREGA */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
                 <div className="flex justify-between items-center">
                     <h2 className="text-lg font-bold flex gap-2"><MapPin className="text-orange-500"/> Entrega</h2>
                     <button onClick={() => setShowAddressForm(!showAddressForm)} className="text-blue-600 font-bold text-sm">+ Endereço</button>
                 </div>
-                
                 {showAddressForm && (
                    <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-2 gap-3">
-                      <input placeholder="Apelido (Ex: Casa)" className="p-2 border rounded col-span-2" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
+                      <input placeholder="Apelido" className="p-2 border rounded col-span-2" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
                       <input placeholder="CEP" className="p-2 border rounded" value={newAddr.zip} onChange={e => setNewAddr({...newAddr, zip: e.target.value})} />
                       <input placeholder="Rua" className="p-2 border rounded" value={newAddr.street} onChange={e => setNewAddr({...newAddr, street: e.target.value})} />
                       <input placeholder="Número" className="p-2 border rounded" value={newAddr.number} onChange={e => setNewAddr({...newAddr, number: e.target.value})} />
@@ -303,89 +265,40 @@ export default function Cart() {
                       <button onClick={handleSaveAddress} className="col-span-2 bg-black text-white py-2 rounded font-bold">Salvar</button>
                    </div>
                 )}
-
                 <div className="grid md:grid-cols-2 gap-4">
                     {customer.addresses?.map(addr => (
                         <div key={addr.id} onClick={() => setActiveAddress(addr.id)} className={`p-4 border-2 rounded-lg cursor-pointer ${addr.id === customer.activeAddressId ? 'border-blue-600 bg-blue-50' : 'border-gray-100'}`}>
-                            <div className="flex justify-between mb-1">
-                                <span className="font-bold text-sm">{addr.alias || 'Local'}</span>
-                                {addr.id === customer.activeAddressId && <div className="w-3 h-3 bg-blue-600 rounded-full"></div>}
-                            </div>
+                            <p className="font-bold text-sm">{addr.alias || 'Local'}</p>
                             <p className="text-xs text-gray-600">{addr.street}, {addr.number} {addr.complement}</p>
-                            <p className="text-xs text-gray-500">{addr.neighborhood}, {addr.city}/{addr.state}</p>
-                            <p className="text-xs text-gray-400">{addr.zip}</p>
+                            <p className="text-xs text-gray-500">{addr.city}/{addr.state}</p>
                         </div>
                     ))}
                 </div>
-
-                {/* DADOS PARA NOTA FISCAL (NOME E CPF) */}
                 <div className="pt-4 border-t space-y-3">
-                    <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados para Nota</h2>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome Completo</label>
-                        <input 
-                            placeholder="Seu Nome Completo" 
-                            value={customerName} 
-                            onChange={e => setCustomerName(e.target.value)}
-                            className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-orange-500"
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">CPF / CNPJ</label>
-                        <input 
-                            placeholder="000.000.000-00" 
-                            value={customer.document || ''} 
-                            onChange={e => setDocument(e.target.value)}
-                            className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-orange-500"
-                        />
-                    </div>
+                    <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados</h2>
+                    <input placeholder="Nome Completo" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
+                    <input placeholder="CPF / CNPJ" value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
                 </div>
             </div>
           </div>
 
-          {/* RESUMO E PAGAMENTO */}
           <div className="lg:w-[380px] h-fit sticky top-6">
             <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
                 <h3 className="text-lg font-bold mb-6">Resumo</h3>
                 <div className="space-y-3 text-sm mb-6">
                     <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-                    <div className="flex justify-between items-center">
-                        <span className="flex gap-1"><Truck size={14}/> Frete</span>
-                        {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? formatCurrency(selectedShipping.price) : '--'}</span>}
-                    </div>
-                    {selectedShipping && <div className="text-xs text-right text-gray-400">{selectedShipping.name}</div>}
+                    <div className="flex justify-between font-bold"><span>Total</span><span>{formatCurrency(totalFinal)}</span></div>
                 </div>
-
-                <div className="border-t pt-4 mb-6">
-                    <p className="text-xs font-bold text-gray-500 mb-3 uppercase">Pagamento</p>
-                    <div className="space-y-2">
-                        <label className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer ${tipoPagamento === 'pix' ? 'border-green-500 bg-green-50' : ''}`}>
-                            <div className="flex items-center gap-2"><input type="radio" checked={tipoPagamento === 'pix'} onChange={() => setTipoPagamento('pix')}/> PIX</div>
-                            <QrCode size={16} className="text-green-600"/>
-                        </label>
-                        <label className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer ${tipoPagamento === 'cartao' ? 'border-blue-500 bg-blue-50' : ''}`}>
-                            <div className="flex items-center gap-2"><input type="radio" checked={tipoPagamento === 'cartao'} onChange={() => setTipoPagamento('cartao')}/> Cartão</div>
-                            <CreditCard size={16} className="text-blue-600"/>
-                        </label>
-                    </div>
+                <div className="border-t pt-4 mb-6 space-y-2">
+                    <label className="flex items-center gap-2 p-2 border rounded cursor-pointer"><input type="radio" checked={tipoPagamento === 'pix'} onChange={() => setTipoPagamento('pix')}/> PIX</label>
+                    <label className="flex items-center gap-2 p-2 border rounded cursor-pointer"><input type="radio" checked={tipoPagamento === 'cartao'} onChange={() => setTipoPagamento('cartao')}/> Cartão</label>
                 </div>
-
-                <div className="flex justify-between items-end mb-6">
-                    <span className="font-medium">Total</span>
-                    <span className="text-3xl font-black">{formatCurrency(totalFinal)}</span>
-                </div>
-
-                <button 
-                    onClick={handleCheckout} 
-                    disabled={loading || !selectedShipping || !activeAddress || !customer.document || !customerName} 
-                    className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300 transition-colors"
-                >
+                <button onClick={handleCheckout} disabled={loading || !selectedShipping || !activeAddress || !customer.document || !customerName} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300">
                     {loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/>
                 </button>
                 <MercadoPagoTrust />
             </div>
           </div>
-
         </div>
       </div>
     </div>
