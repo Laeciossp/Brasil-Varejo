@@ -12,7 +12,7 @@ import { formatCurrency } from '../lib/utils';
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  useCdn: false, // Importante: false para não pegar cache velho
+  useCdn: false, // False para garantir dados frescos
   apiVersion: '2023-05-03',
   token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
 });
@@ -37,7 +37,7 @@ export default function Cart() {
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   const [shippingOptions, setShippingOptions] = useState([]); 
   
-  // Inicia como null para saber que ainda não carregou
+  // Inicia null para garantir que aguardamos o carregamento
   const [globalHandlingTime, setGlobalHandlingTime] = useState(null);
 
   const [showAddressForm, setShowAddressForm] = useState(false);
@@ -50,28 +50,25 @@ export default function Cart() {
     tipoPagamento, setTipoPagamento, globalCep, clearCart
   } = useCartStore();
   
-  // --- CÁLCULOS BLINDADOS ---
+  // --- CÁLCULOS TOTAIS ---
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
-  
-  // Se selectedShipping for inválido, usa 0
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
-  
   const totalFinal = subtotal + shippingCost;
 
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // 1. BUSCAR CONFIGURAÇÃO DE MANUSEIO DO SANITY
+  // 1. BUSCAR DIAS DE MANUSEIO (Igual ProductDetails)
   useEffect(() => {
     const fetchSettings = async () => {
       try {
         const query = `*[_type == "shippingSettings"][0]`;
         const settings = await client.fetch(query);
         const days = settings?.handlingTime ? Number(settings.handlingTime) : 0;
-        console.log("Dias de Manuseio Carregados:", days);
+        console.log("Dias de Manuseio (Carrinho):", days);
         setGlobalHandlingTime(days);
       } catch (e) { 
         console.error("Erro config:", e);
-        setGlobalHandlingTime(0); // Fallback se der erro
+        setGlobalHandlingTime(0);
       }
     };
     fetchSettings();
@@ -81,12 +78,12 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- 2. CÁLCULO DE FRETE (LÓGICA IDÊNTICA À PÁGINA DO PRODUTO) ---
+  // --- 2. CÁLCULO DE FRETE (CÓPIA DA LÓGICA DA PÁGINA DE PRODUTO) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
       
-      // Só roda se tiver CEP, itens E se a config de dias já carregou (não é null)
+      // Só calcula se tiver CEP, Itens E se a config de dias já carregou
       if (!targetZip || items.length === 0 || globalHandlingTime === null) {
           if (!targetZip || items.length === 0) setShipping(null);
           return;
@@ -102,7 +99,7 @@ export default function Cart() {
           body: JSON.stringify({
             from: { postal_code: "43805000" }, 
             to: { postal_code: targetZip },
-            // Usa as medidas salvas no item (mesma lógica do ProductDetails)
+            // Mapeia os itens usando as dimensões salvas (fallback para 15 se for item velho)
             products: items.map(p => ({
               id: p._id,
               width: Number(p.width) || 15,
@@ -121,7 +118,7 @@ export default function Cart() {
           const cleanZip = targetZip.replace(/\D/g, '');
           const isLocal = cleanZip === '43850000'; 
 
-          // 1. LIMPEZA E PADRONIZAÇÃO (Igual ProductDetails)
+          // LIMPEZA E PADRONIZAÇÃO
           const candidates = rawOptions.map(opt => {
              let val = opt.custom_price || opt.price || 0;
              if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
@@ -138,39 +135,39 @@ export default function Cart() {
           let finalOptions = [];
 
           if (isLocal) {
-             // --- REGRA LOCAL: IGUAL À PÁGINA DE PRODUTO ---
-             // Pega o primeiro da lista (o mais barato de todos) e usa como base
+             // --- REGRA LOCAL (Igual ProductDetails) ---
+             // Pega a opção mais barata disponível e fixa o prazo em 5 dias
              const cheapest = candidates[0];
-             
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
                 price: cheapest ? cheapest.price : 0, 
-                delivery_time: 5, // Prazo Fixo Local
+                delivery_time: 5, // Prazo FIXO
                 company: "Própria"
              });
 
           } else {
-             // --- REGRA NACIONAL: PENEIRA FINA ---
+             // --- REGRA NACIONAL (Igual ProductDetails) ---
              
-             // Melhor Econômico
+             // Encontra o MELHOR Econômico
              const bestEconomy = candidates.find(o => 
                 o.name.toLowerCase().includes('pac') || 
-                o.name.toLowerCase().includes('econômico') || 
+                o.name.toLowerCase().includes('econômico') ||
                 o.name.toLowerCase().includes('normal')
              );
-             
-             // Melhor Expresso
+
+             // Encontra o MELHOR Expresso
              const bestExpress = candidates.find(o => 
                 o.name.toLowerCase().includes('sedex') || 
                 o.name.toLowerCase().includes('expresso')
              );
 
+             // Adiciona na lista (Somando Manuseio)
              if (bestEconomy) {
                 finalOptions.push({
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
-                    delivery_time: bestEconomy.days + globalHandlingTime, // Soma Manuseio
-                    company: "Correios"
+                    delivery_time: bestEconomy.days + globalHandlingTime, 
+                    company: "Correios/Jadlog"
                 });
              }
 
@@ -178,16 +175,15 @@ export default function Cart() {
                 finalOptions.push({
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
-                    delivery_time: bestExpress.days + globalHandlingTime, // Soma Manuseio
-                    company: "Correios"
+                    delivery_time: bestExpress.days + globalHandlingTime, 
+                    company: "Correios/Jadlog"
                 });
              }
           }
 
           setShippingOptions(finalOptions);
           
-          // --- AUTO SELEÇÃO OBRIGATÓRIA ---
-          // Isso corrige o problema do valor zerar ao trocar endereço
+          // Seleciona automaticamente o primeiro (para não ficar R$ 0,00 ao trocar cep)
           if (finalOptions.length > 0) {
              setShipping(finalOptions[0]);
           } else {
@@ -203,7 +199,7 @@ export default function Cart() {
     
     recalculate();
     
-  }, [customer.activeAddressId, items.length, globalCep, globalHandlingTime]); // Depende do globalHandlingTime agora
+  }, [customer.activeAddressId, items.length, globalCep, globalHandlingTime]);
 
   const handleSaveAddress = () => {
     if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
@@ -247,7 +243,7 @@ export default function Cart() {
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: `Venda Site (Manuseio: ${globalHandlingTime})`
+        internalNotes: `Venda Site (Manuseio: ${globalHandlingTime} dias)`
       };
 
       const createdOrder = await client.create(orderDoc);
