@@ -12,7 +12,7 @@ import { formatCurrency } from '../lib/utils';
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  useCdn: false,
+  useCdn: false, // Dados frescos sempre
   apiVersion: '2023-05-03',
   token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
 });
@@ -37,7 +37,7 @@ export default function Cart() {
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   const [shippingOptions, setShippingOptions] = useState([]); 
   
-  // Dados atualizados (dimensões reais) vindos do Sanity
+  // Dados de "Cura" do carrinho
   const [freshItemsData, setFreshItemsData] = useState({});
   const [globalHandlingTime, setGlobalHandlingTime] = useState(null);
 
@@ -57,17 +57,17 @@ export default function Cart() {
 
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // 1. BUSCAR CONFIGURAÇÕES E ATUALIZAR DADOS DOS ITENS ("CURA" O CARRINHO)
+  // 1. BUSCAR DADOS ATUALIZADOS (MEDIDAS E MANUSEIO)
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // A. Busca Dias de Manuseio
+        // A. Configuração de Manuseio
         const settingsQuery = `*[_type == "shippingSettings"][0]`;
         const settings = await client.fetch(settingsQuery);
         const days = settings?.handlingTime ? Number(settings.handlingTime) : 0;
         setGlobalHandlingTime(days);
 
-        // B. Busca Medidas Reais dos Produtos no Carrinho (Corrige discrepância)
+        // B. Medidas Reais (Para corrigir discrepância)
         if (items.length > 0) {
             const ids = items.map(i => i._id).map(id => `"${id}"`).join(',');
             const productsQuery = `*[_type == "product" && _id in [${ids}]]{
@@ -88,18 +88,18 @@ export default function Cart() {
       }
     };
     fetchData();
-  }, [items.length]); // Roda quando a quantidade de itens muda
+  }, [items.length]);
 
   useEffect(() => {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- 2. CÁLCULO DE FRETE (USANDO DADOS REAIS DO SANITY) ---
+  // --- 2. CÁLCULO DE FRETE ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
       
-      // Só calcula se tiver CEP, Itens e Configurações carregadas
+      // Só calcula se tiver CEP, Itens e Configurações prontas
       if (!targetZip || items.length === 0 || globalHandlingTime === null) {
           if (!targetZip || items.length === 0) setShipping(null);
           return;
@@ -115,9 +115,9 @@ export default function Cart() {
           body: JSON.stringify({
             from: { postal_code: "43805000" }, 
             to: { postal_code: targetZip },
-            // Mapeia usando as dimensões REAIS que acabamos de buscar no Sanity
+            // Usa as medidas reais buscadas no Sanity
             products: items.map(p => {
-              const logistics = freshItemsData[p._id] || {}; // Pega do mapa atualizado
+              const logistics = freshItemsData[p._id] || {};
               return {
                 id: p._id,
                 width: Number(logistics.width) || Number(p.width) || 15,
@@ -148,26 +148,33 @@ export default function Cart() {
              };
           });
 
+          // ORDENA POR PREÇO (MENOR PRIMEIRO)
           candidates.sort((a, b) => a.price - b.price);
 
           let finalOptions = [];
 
           if (isLocal) {
-             // --- REGRA LOCAL: PREÇO BASEADO NO MELHOR ENVIO ---
-             // Se houver opções, pega a mais barata. Se for zero (erro), define R$ 20 fixo.
-             const cheapest = candidates[0];
-             let localPrice = cheapest ? cheapest.price : 20.00;
-             if (localPrice === 0) localPrice = 20.00; // Segurança contra zero
+             // --- REGRA LOCAL: IGUAL À PÁGINA DE PRODUTO ---
+             // 1. Remove os gratuitos (Retirada, etc) para não dar Zero
+             const paidOptions = candidates.filter(c => c.price > 0);
+             paidOptions.sort((a, b) => a.price - b.price);
+
+             // 2. Pega o mais barato real (Ex: 14, 15, 18...)
+             const cheapest = paidOptions.length > 0 ? paidOptions[0] : null;
+             
+             // 3. Define o preço. Se não achar nada pago, aí sim avisa ou usa um mínimo.
+             // Se 'cheapest' existir, usa o preço dele. Se não, tenta o primeiro da lista geral.
+             const finalPrice = cheapest ? cheapest.price : (candidates[0]?.price || 0);
 
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
-                price: localPrice, 
-                delivery_time: 5, // Prazo Fixo Local
+                price: finalPrice, 
+                delivery_time: 5, // Fixo
                 company: "Própria"
              });
 
           } else {
-             // --- REGRA NACIONAL: SOMA MANUSEIO ---
+             // --- REGRA NACIONAL: PENEIRA FINA (Igual Produto) ---
              
              const bestEconomy = candidates.find(o => 
                 o.name.toLowerCase().includes('pac') || 
@@ -185,7 +192,7 @@ export default function Cart() {
                     name: "PAC (Econômico)",
                     price: bestEconomy.price,
                     delivery_time: bestEconomy.days + globalHandlingTime, // Soma Manuseio
-                    company: "Correios"
+                    company: "Correios/Jadlog"
                 });
              }
 
@@ -194,14 +201,14 @@ export default function Cart() {
                     name: "SEDEX (Expresso)",
                     price: bestExpress.price,
                     delivery_time: bestExpress.days + globalHandlingTime, // Soma Manuseio
-                    company: "Correios"
+                    company: "Correios/Jadlog"
                 });
              }
           }
 
           setShippingOptions(finalOptions);
           
-          // Seleciona automaticamente a primeira opção
+          // SELECIONA AUTOMATICAMENTE O PRIMEIRO
           if (finalOptions.length > 0) {
              setShipping(finalOptions[0]);
           } else {
@@ -215,7 +222,6 @@ export default function Cart() {
       }
     };
     
-    // Recalcula se o endereço mudar ou se os dados frescos chegarem
     recalculate();
     
   }, [customer.activeAddressId, items.length, globalCep, globalHandlingTime, freshItemsData]);
@@ -262,7 +268,7 @@ export default function Cart() {
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: `Venda Site (Manuseio: ${globalHandlingTime} dias)`
+        internalNotes: `Venda Site (Manuseio: ${globalHandlingTime})`
       };
 
       const createdOrder = await client.create(orderDoc);
