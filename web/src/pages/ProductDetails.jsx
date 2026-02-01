@@ -107,7 +107,10 @@ export default function ProductDetails() {
   const [calculating, setCalculating] = useState(false);
   const [shippingOptions, setShippingOptions] = useState(null);
 
+  // --- O SEU PRAZO FLEXÍVEL DO SANITY FICA AQUI ---
   const [handlingDays, setHandlingDays] = useState(0);
+  
+  const [carrierRules, setCarrierRules] = useState([]);
 
   const carouselRef = useRef(null);
   const [touchStart, setTouchStart] = useState(null);
@@ -169,13 +172,19 @@ export default function ProductDetails() {
             freeShipping,
             logistics { width, height, length, weight }
           },
-          "settings": *[_type == "shippingSettings"][0]{ handlingTime }
+          // --- AQUI ELE LÊ A SUA CONFIGURAÇÃO DO SANITY ---
+          "settings": *[_type == "shippingSettings"][0]{ handlingTime },
+          "carrierConfig": *[_type == "carrierConfig"][0]{
+            carriers[]{ name, serviceName, additionalDays, isActive, logoUrl }
+          }
         }`;
 
         const data = await client.fetch(query, { slug });
 
         if (data && data.product) {
+          // Salva no estado para usar no carrinho depois
           setHandlingDays(Number(data.settings?.handlingTime) || 0);
+          setCarrierRules(data.carrierConfig?.carriers || []);
 
           const productData = data.product;
           const processedVariants = processVariants(productData.rawVariants, productData.oldPrice);
@@ -278,81 +287,8 @@ export default function ProductDetails() {
           }]
         })
       });
-      const rawOptions = await response.json();
-
-      if (Array.isArray(rawOptions) && rawOptions.length > 0) {
-          const isLocal = cleanCep === '43850000'; 
-
-          // 1. LIMPEZA DOS DADOS E ORDENAÇÃO POR PREÇO
-          const candidates = rawOptions.map(opt => {
-             let p = opt.custom_price || opt.price || 0;
-             if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
-             return {
-               ...opt,
-               price: Number(p),
-               days: parseInt(opt.delivery_time) || 0,
-               cleanName: (opt.name || '').toLowerCase()
-             };
-          }).sort((a, b) => a.price - b.price); // Mais barato primeiro
-
-          let finalOptions = [];
-
-          if (isLocal) {
-             // === REGRA LOCAL (PALASTORE) ===
-             // Busca a opção mais barata que NÃO SEJA ZERO (para evitar Retirada/Grátis indesejado)
-             const paidOptions = candidates.filter(c => c.price > 0);
-             paidOptions.sort((a, b) => a.price - b.price);
-             
-             // Se tiver opção paga, usa ela. Se não, usa a primeira (grátis)
-             const bestLocal = paidOptions.length > 0 ? paidOptions[0] : candidates[0];
-             
-             if (bestLocal) {
-                 finalOptions.push({
-                    name: "Expresso Palastore ⚡",
-                    price: bestLocal.price, // PREÇO CORRETO AGORA
-                    delivery_time: 5, // FIXO 5 DIAS
-                    company: "Própria"
-                 });
-             }
-          } else {
-             // === REGRA NACIONAL ===
-             
-             // 1. Melhor PAC
-             const bestEconomy = candidates.find(o => 
-                o.cleanName.includes('pac') || 
-                o.cleanName.includes('econômico') ||
-                o.cleanName.includes('normal')
-             );
-             
-             // 2. Melhor SEDEX
-             const bestExpress = candidates.find(o => 
-                o.cleanName.includes('sedex') || 
-                o.cleanName.includes('expresso')
-             );
-
-             if (bestEconomy) {
-                finalOptions.push({
-                    name: "PAC (Econômico)",
-                    price: bestEconomy.price,
-                    delivery_time: bestEconomy.days + handlingDays,
-                    company: "Correios"
-                });
-             }
-             
-             if (bestExpress && bestExpress.cleanName !== bestEconomy?.cleanName) {
-                finalOptions.push({
-                    name: "SEDEX (Expresso)",
-                    price: bestExpress.price,
-                    delivery_time: bestExpress.days + handlingDays,
-                    company: "Correios"
-                });
-             }
-          }
-          
-          setShippingOptions(finalOptions);
-      } else {
-          setShippingOptions([]);
-      }
+      const data = await response.json();
+      setShippingOptions(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
       setShippingOptions([]); 
@@ -361,6 +297,7 @@ export default function ProductDetails() {
     }
   };
 
+  // --- AQUI É O PULO DO GATO: ENVIA O DADO DO SANITY PRO CARRINHO ---
   const createCartItem = () => {
       const finalSku = selectedVariant ? (selectedVariant.sku || selectedVariant._key) : product._id;
       return {
@@ -373,7 +310,10 @@ export default function ProductDetails() {
         sku: finalSku,
         color: selectedVariant ? selectedVariant.color : null,
         size: selectedVariant ? selectedVariant.size : null,
-        handlingTime: handlingDays,
+        
+        // ENVIO EXPLÍCITO DO PRAZO CONFIGURADO:
+        handlingTime: handlingDays, 
+        
         width: product.logistics?.width || 15,
         height: product.logistics?.height || 15,
         length: product.logistics?.length || 15,
@@ -409,6 +349,7 @@ export default function ProductDetails() {
             image: prod.imageUrl,
             sku: prod._id,
             variantName: null,
+            // ENVIA AQUI TAMBÉM:
             handlingTime: handlingDays,
             width: prod.logistics?.width || 15,
             height: prod.logistics?.height || 15,
@@ -453,6 +394,10 @@ export default function ProductDetails() {
     if (distance > minSwipeDistance) navigateImage('next');
     if (distance < -minSwipeDistance) navigateImage('prev');
   }
+
+  const normalize = (str) => {
+      return (str || "").toLowerCase().trim(); 
+  };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-orange-500 rounded-full animate-spin"></div></div>;
   if (!product) return <div className="p-10 text-center">Produto não encontrado.</div>;
@@ -651,23 +596,98 @@ export default function ProductDetails() {
                 </div>
                 {shippingOptions && shippingOptions.length > 0 && (
                     <div className="space-y-1">
-                        {shippingOptions.map((opt, idx) => {
-                            const isSelected = selectedShipping?.name === opt.name;
+                        {shippingOptions.filter(o => !o.error).filter(opt => {
+                            const apiNameNormal = normalize(opt.name);
+                            const apiCompanyNormal = normalize(opt.company?.name);
+                            const hasActiveRule = carrierRules.some(r => {
+                                const configName = normalize(r.name);
+                                const configService = normalize(r.serviceName);
+                                const nameMatch = apiNameNormal.includes(configName) || apiCompanyNormal.includes(configName);
+                                const serviceMatch = configService.includes(apiNameNormal) || apiNameNormal.includes(configService);
+                                return (nameMatch || serviceMatch) && r.isActive === true;
+                            });
+                            return hasActiveRule;
+                        }).map((opt, idx) => {
+                            const isSelected = selectedShipping?.name === opt.name && selectedShipping?.price === opt.price;
+                            const apiNameNormal = normalize(opt.name);
+                            const apiCompanyNormal = normalize(opt.company?.name);
+                            const cleanCurrentCep = cep.replace(/\D/g, '');
+                            const isLocal = cleanCurrentCep === '43850000';
+
+                            let bestRule = carrierRules.find(r => {
+                                const configService = normalize(r.serviceName);
+                                return configService.includes(apiNameNormal) || apiNameNormal.includes(configService);
+                            });
+                            if (!bestRule) {
+                                bestRule = carrierRules.find(r => {
+                                    const configName = normalize(r.name);
+                                    return apiNameNormal.includes(configName) || apiCompanyNormal.includes(configName);
+                                });
+                            }
+
+                            let displayName = opt.name;
+                            let logoUrl = bestRule?.logoUrl;
+
+                            if (isLocal) {
+                                displayName = "Expresso Palastore ⚡";
+                            } 
+                            else if (apiNameNormal.includes("pac")) {
+                                displayName = "PAC (Econômico)";
+                            }
+                            else if (apiNameNormal.includes("sedex")) {
+                                displayName = "SEDEX (Expresso)";
+                            }
+                            else if (apiCompanyNormal.includes("correios")) {
+                                if (!logoUrl) {
+                                    const anyCorreiosRule = carrierRules.find(r => normalize(r.name).includes("correios"));
+                                    if (anyCorreiosRule) logoUrl = anyCorreiosRule.logoUrl;
+                                }
+                            }
+                            else if (bestRule) {
+                                displayName = bestRule.serviceName;
+                            }
+
+                            let additionalDays = 0;
+                            const ruleForDays = carrierRules.find(r => {
+                                const configService = normalize(r.serviceName);
+                                if (apiNameNormal.includes("pac") && configService.includes("pac")) return true;
+                                if (apiNameNormal.includes("sedex") && configService.includes("sedex")) return true;
+                                return configService.includes(apiNameNormal) || apiNameNormal.includes(configService);
+                            });
+                            if (ruleForDays) additionalDays = ruleForDays.additionalDays || 0;
+
+                            let finalDays = parseInt(opt.delivery_time) || 0;
+                            
+                            if (!isLocal) {
+                                finalDays += handlingDays;
+                            }
+                            
+                            finalDays += additionalDays;
+
                             return (
                                 <div 
                                     key={idx} 
-                                    onClick={() => setShipping(opt)} 
+                                    onClick={() => setShipping({...opt, delivery_time: finalDays})} 
                                     className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer text-xs ${isSelected ? 'border-blue-500 bg-blue-50/50' : 'border-gray-100'}`}
                                 >
-                                    <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
-                                        <Truck size={16} className="text-gray-400" />
-                                    </div>
+                                    {logoUrl ? (
+                                        <img src={logoUrl} alt={displayName} className="w-8 h-8 object-contain mix-blend-multiply" />
+                                    ) : (
+                                        <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
+                                            <Truck size={16} className="text-gray-400" />
+                                        </div>
+                                    )}
+
                                     <div className="flex flex-col flex-1">
-                                        <span className="font-bold text-gray-700 uppercase">{opt.name}</span>
-                                        <span className="text-[10px] text-gray-400 font-medium">Em até {opt.delivery_time} dias úteis</span>
+                                        <span className="font-bold text-gray-700 uppercase">
+                                            {displayName}
+                                        </span>
+                                        <span className="text-[10px] text-gray-400 font-medium">
+                                            Em até {finalDays} dias úteis
+                                        </span>
                                     </div>
                                     <span className="font-black text-gray-900 self-center">
-                                        {opt.price === 0 ? 'Grátis' : formatCurrency(opt.price)}
+                                        {parseFloat(opt.price) === 0 ? 'Grátis' : formatCurrency(opt.price)}
                                     </span>
                                 </div>
                             );
