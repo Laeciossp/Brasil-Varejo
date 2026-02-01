@@ -48,20 +48,17 @@ export default function Cart() {
   } = useCartStore();
   
   // =================================================================
-  // 💰 LÓGICA FINANCEIRA (SUBTOTAL, DESCONTO PIX, FRETE, TOTAL)
+  // 💰 LÓGICA FINANCEIRA
   // =================================================================
   
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
   
-  // Se o tipo de pagamento for 'pix', aplica 10%. Se não, 0.
+  // Regra: Se PIX, 10% de desconto. Se Cartão, 0.
   const isPix = tipoPagamento === 'pix';
   const discount = isPix ? subtotal * 0.10 : 0;
   
-  // Total Final subtraindo o desconto
   const totalFinal = subtotal - discount + shippingCost;
-
-  // =================================================================
 
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
@@ -69,7 +66,7 @@ export default function Cart() {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
 
-  // --- RECALCULAR FRETE (Lógica Blindada) ---
+  // --- RECALCULAR FRETE (Blindado) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -124,7 +121,7 @@ export default function Cart() {
               let finalPrice = Number(val);
               const nameLower = (opt.name || '').toLowerCase();
 
-              // CORREÇÃO DE PREÇO ZERADO PARA REGIÃO
+              // Correção de preço zerado regional
               if (finalPrice === 0 && isNearby) {
                   if (nameLower.includes('pac') || nameLower.includes('econômico')) finalPrice = 16.90;
                   if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
@@ -252,7 +249,7 @@ export default function Cart() {
         billingAddress: activeAddress,
         carrier: selectedShipping.name,
         shippingCost: parseFloat(selectedShipping.price),
-        totalAmount: totalFinal, // ENVIA O TOTAL JÁ COM DESCONTO
+        totalAmount: totalFinal, 
         paymentMethod: tipoPagamento,
         internalNotes: `Venda Site (Prazo: ${selectedShipping.delivery_time} dias)`
       };
@@ -426,28 +423,46 @@ export default function Cart() {
                     </div>
                 </div>
 
-                {/* SELEÇÃO DE PAGAMENTO COM BLOQUEIO */}
-                <div className="border-t pt-4 mb-6 space-y-2">
-                    <label className={`flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition-all ${isPix ? 'border-green-500 bg-green-50 ring-1 ring-green-500' : 'hover:bg-gray-50'}`}>
-                        <input 
-                            type="radio" 
-                            name="paymentMethod" // Name igual garante que apenas um seja selecionado
-                            checked={isPix} 
-                            onChange={() => setTipoPagamento('pix')}
-                        /> 
-                        <span className="font-bold text-gray-900">PIX (-10%)</span> 
-                        <QrCode size={16} className="text-green-600 ml-auto"/>
+                {/* --- SELEÇÃO DE PAGAMENTO VISUAL E BLOQUEADA --- */}
+                <div className="grid grid-cols-2 gap-3 mb-6 border-t pt-4">
+                    {/* OPÇÃO PIX */}
+                    <label className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                        isPix 
+                        ? 'border-green-500 bg-green-50 text-green-700 ring-1 ring-green-500' 
+                        : 'border-gray-200 hover:border-gray-300 text-gray-400 opacity-60 grayscale'
+                    }`}>
+                        <div className="absolute top-2 right-2">
+                            <input 
+                                type="radio" 
+                                name="payment_mode" // IMPORTANTE: Mesma name agrupa os dois
+                                checked={isPix} 
+                                onChange={() => setTipoPagamento('pix')}
+                                className="w-4 h-4 text-green-600 focus:ring-green-500"
+                            />
+                        </div>
+                        <QrCode size={28} className="mb-2"/>
+                        <span className="font-bold text-sm">PIX</span>
+                        <span className="text-[10px] font-bold bg-green-200 text-green-800 px-2 py-0.5 rounded-full mt-1">-10% OFF</span>
                     </label>
 
-                    <label className={`flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition-all ${!isPix ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'hover:bg-gray-50'}`}>
-                        <input 
-                            type="radio" 
-                            name="paymentMethod" 
-                            checked={!isPix} 
-                            onChange={() => setTipoPagamento('cartao')}
-                        /> 
-                        <span className="font-medium text-gray-700">Cartão de Crédito</span> 
-                        <CreditCard size={16} className="text-blue-600 ml-auto"/>
+                    {/* OPÇÃO CARTÃO */}
+                    <label className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                        !isPix 
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-500' 
+                        : 'border-gray-200 hover:border-gray-300 text-gray-400 opacity-60 grayscale'
+                    }`}>
+                        <div className="absolute top-2 right-2">
+                            <input 
+                                type="radio" 
+                                name="payment_mode" 
+                                checked={!isPix} 
+                                onChange={() => setTipoPagamento('cartao')}
+                                className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                            />
+                        </div>
+                        <CreditCard size={28} className="mb-2"/>
+                        <span className="font-bold text-sm">Cartão</span>
+                        <span className="text-[10px] text-gray-400 mt-1">Até 12x</span>
                     </label>
                 </div>
 
