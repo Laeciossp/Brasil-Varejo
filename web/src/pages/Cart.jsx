@@ -12,7 +12,7 @@ import { formatCurrency } from '../lib/utils';
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  useCdn: false, // False para garantir dados frescos
+  useCdn: false, // Dados sempre frescos
   apiVersion: '2023-05-03',
   token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
 });
@@ -52,10 +52,12 @@ export default function Cart() {
   
   // --- CÁLCULOS BLINDADOS (NUMBER) ---
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
+  
+  // Garante que o custo do frete é um número válido. Se for null/undefined, vira 0.
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
+  
   const totalFinal = subtotal + shippingCost;
 
-  // Endereço ativo no momento
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
   // --- 1. BUSCAR CONFIGURAÇÃO DE MANUSEIO ---
@@ -74,7 +76,6 @@ export default function Cart() {
     fetchSettings();
   }, []);
 
-  // Preencher nome do cliente
   useEffect(() => {
     if (user && !customerName) setCustomerName(user.fullName || '');
   }, [user]);
@@ -82,9 +83,7 @@ export default function Cart() {
   // --- 2. CÁLCULO E FILTRAGEM RIGOROSA DE FRETE ---
   useEffect(() => {
     const recalculate = async () => {
-      // Define CEP: Prioridade para endereço selecionado, senão usa o global
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
-      
       if (!targetZip || items.length === 0) return;
 
       setRecalculatingShipping(true);
@@ -114,7 +113,7 @@ export default function Cart() {
 
           // --- FASE 1: LIMPEZA DE DADOS ---
           const candidates = rawOptions.map(opt => {
-             // Limpa preço (vírgula para ponto)
+             // Limpa preço
              let p = opt.custom_price || opt.price || 0;
              if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
              
@@ -131,60 +130,62 @@ export default function Cart() {
           let finalOptions = [];
 
           if (isLocal) {
-             // --- REGRA LOCAL (43850000) ---
-             // Pega o preço mais barato da API, mas muda o nome e fixa o prazo.
+             // --- REGRA LOCAL ---
              const cheapest = candidates[0]; 
              
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
                 price: cheapest ? cheapest.price : 0, 
-                delivery_time: 5, // <--- PRAZO FIXO 5 DIAS
+                delivery_time: 5, // Prazo FIXO 5 dias
                 company: "Própria"
              });
 
           } else {
-             // --- REGRA NACIONAL (FILTRO "UM DE CADA") ---
+             // --- REGRA NACIONAL (PENEIRA FINA) ---
              
-             // 1. Encontrar o MELHOR Econômico (PAC, Jadlog Package, etc)
-             const bestEconomy = candidates.find(o => 
+             // 1. Pega TODOS que parecem econômicos
+             const allEconomics = candidates.filter(o => 
                 o.name.toLowerCase().includes('pac') || 
                 o.name.toLowerCase().includes('econômico') ||
                 o.name.toLowerCase().includes('normal')
              );
 
-             // 2. Encontrar o MELHOR Expresso (SEDEX, Jadlog .Com, etc)
-             const bestExpress = candidates.find(o => 
+             // 2. Pega TODOS que parecem expressos
+             const allExpress = candidates.filter(o => 
                 o.name.toLowerCase().includes('sedex') || 
                 o.name.toLowerCase().includes('expresso')
              );
 
-             // Adiciona na lista final (aplica manuseio aqui)
-             if (bestEconomy) {
+             // 3. SELECIONA APENAS O CAMPEÃO (MAIS BARATO) DE CADA CATEGORIA
+             if (allEconomics.length > 0) {
+                // Como já ordenamos 'candidates' por preço lá em cima, o primeiro da lista filtrada É o mais barato
+                const bestEco = allEconomics[0]; 
                 finalOptions.push({
                     name: "PAC (Econômico)",
-                    price: bestEconomy.price,
-                    delivery_time: bestEconomy.days + globalHandlingTime, // + Manuseio
-                    company: "Correios/Jadlog"
+                    price: bestEco.price,
+                    delivery_time: bestEco.days + globalHandlingTime,
+                    company: "Correios"
                 });
              }
 
-             // Só adiciona Expresso se for diferente do Econômico (para não duplicar se for a mesma coisa)
-             if (bestExpress && bestExpress.name !== bestEconomy?.name) {
-                finalOptions.push({
-                    name: "SEDEX (Expresso)",
-                    price: bestExpress.price,
-                    delivery_time: bestExpress.days + globalHandlingTime, // + Manuseio
-                    company: "Correios/Jadlog"
-                });
+             if (allExpress.length > 0) {
+                const bestExp = allExpress[0];
+                // Só adiciona se for diferente do econômico (pra não duplicar se for a única opção)
+                if (bestExp.name !== finalOptions[0]?.name) {
+                    finalOptions.push({
+                        name: "SEDEX (Expresso)",
+                        price: bestExp.price,
+                        delivery_time: bestExp.days + globalHandlingTime,
+                        company: "Correios"
+                    });
+                }
              }
           }
 
-          // ATUALIZA A LISTA NA TELA
           setShippingOptions(finalOptions);
           
-          // --- CORREÇÃO DO ZERO/NÃO ATUALIZA ---
+          // --- CORREÇÃO DO "ZERO" ---
           // Força a seleção da primeira opção SEMPRE que recalcular.
-          // Isso garante que se o frete mudar de R$20 para R$30 (novo endereço), o total atualiza.
           if (finalOptions.length > 0) {
              setShipping(finalOptions[0]);
           }
@@ -196,7 +197,6 @@ export default function Cart() {
       }
     };
     
-    // Dispara sempre que o endereço ativo muda
     recalculate();
     
   }, [customer.activeAddressId, items.length, globalCep, globalHandlingTime]);
@@ -208,80 +208,64 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   };
 
-  // --- CHECKOUT ---
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login para continuar.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
     if (!customer.document) return alert("Informe o CPF.");
-    if (!customerName) return alert("Informe seu nome.");
 
     setLoading(true);
 
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      const cleanCustomer = {
-        name: customerName,
-        email: user.primaryEmailAddress?.emailAddress || "",
-        cpf: customer.document,
-        phone: ""
-      };
-
-      const cleanAddress = {
-        zip: activeAddress.zip,
-        street: activeAddress.street,
-        number: activeAddress.number,
-        complement: activeAddress.complement || "",
-        neighborhood: activeAddress.neighborhood,
-        city: activeAddress.city,
-        state: activeAddress.state
-      };
-
-      const sanitizedItems = items.map(item => ({
-         _key: Math.random().toString(36).substring(7),
-         productName: item.title || item.name || "Produto", 
-         variantName: item.variantName || "Padrão", 
-         color: item.color || "",
-         size: item.size || "",
-         sku: item.sku || item._id,
-         quantity: item.quantity,
-         price: item.price,
-         imageUrl: item.image || "", 
-         product: { _type: 'reference', _ref: item._id }
-      }));
-
-      // CRIA PEDIDO NO SANITY
+      // Cria pedido no Sanity primeiro
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
         status: 'pending',
-        customer: cleanCustomer,
-        items: sanitizedItems,
-        shippingAddress: cleanAddress,
-        billingAddress: cleanAddress,
+        customer: {
+            name: customerName,
+            email: user.primaryEmailAddress?.emailAddress,
+            cpf: customer.document,
+            phone: ""
+        },
+        items: items.map(item => ({
+            _key: Math.random().toString(36).substring(7),
+            productName: item.title || item.name, 
+            variantName: item.variantName || "Padrão", 
+            quantity: item.quantity,
+            price: item.price,
+            imageUrl: item.image, 
+            product: { _type: 'reference', _ref: item._id }
+        })),
+        shippingAddress: activeAddress,
+        billingAddress: activeAddress,
         carrier: selectedShipping.name,
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: `Venda Site (Manuseio: ${globalHandlingTime} dias)`
+        internalNotes: `Venda Site (Manuseio: ${globalHandlingTime})`
       };
 
-      console.log("Criando pedido...", orderDoc);
       const createdOrder = await client.create(orderDoc);
       const sanityId = createdOrder._id;
 
-      // CHAMA WORKER
+      // Chama Worker para Pagamento
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            items: sanitizedItems,
+            items: items.map(item => ({
+                title: item.title || item.name,
+                quantity: item.quantity,
+                price: item.price
+            })),
             shipping: parseFloat(selectedShipping.price), 
-            email: cleanCustomer.email, 
+            email: user.primaryEmailAddress.emailAddress, 
             tipoPagamento, 
-            shippingAddress: cleanAddress,
-            customerDocument: cleanCustomer.cpf,
+            shippingAddress: activeAddress,
+            customerDocument: customer.document,
             totalAmount: totalFinal,
             orderId: sanityId 
         })
@@ -289,9 +273,7 @@ export default function Cart() {
 
       const data = await response.json();
 
-      if (data.error || !data.url) {
-        throw new Error(JSON.stringify(data.details || data.error));
-      }
+      if (data.error || !data.url) throw new Error(JSON.stringify(data.details || data.error));
 
       clearCart();
       if (data.id_preferencia && window.MercadoPago) {
@@ -355,7 +337,7 @@ export default function Cart() {
                 ))}
             </div>
 
-            {/* ENTREGA E DADOS */}
+            {/* ENTREGA */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
                 <div className="flex justify-between items-center">
                     <h2 className="text-lg font-bold flex gap-2"><MapPin className="text-orange-500"/> Entrega</h2>
@@ -379,27 +361,17 @@ export default function Cart() {
                 <div className="grid md:grid-cols-2 gap-4">
                     {customer.addresses?.map(addr => (
                         <div key={addr.id} onClick={() => setActiveAddress(addr.id)} className={`p-4 border-2 rounded-lg cursor-pointer ${addr.id === customer.activeAddressId ? 'border-blue-600 bg-blue-50' : 'border-gray-100'}`}>
-                            <div className="flex justify-between mb-1">
-                                <span className="font-bold text-sm">{addr.alias || 'Local'}</span>
-                                {addr.id === customer.activeAddressId && <div className="w-3 h-3 bg-blue-600 rounded-full"></div>}
-                            </div>
+                            <p className="font-bold text-sm">{addr.alias || 'Local'}</p>
                             <p className="text-xs text-gray-600">{addr.street}, {addr.number} {addr.complement}</p>
-                            <p className="text-xs text-gray-500">{addr.neighborhood}, {addr.city}/{addr.state}</p>
-                            <p className="text-xs text-gray-400 font-mono">{addr.zip}</p>
+                            <p className="text-xs text-gray-500">{addr.city}/{addr.state}</p>
                         </div>
                     ))}
                 </div>
 
                 <div className="pt-4 border-t space-y-3">
-                    <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados para Nota</h2>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nome Completo</label>
-                        <input placeholder="Seu Nome" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">CPF / CNPJ</label>
-                        <input placeholder="000.000.000-00" value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
-                    </div>
+                    <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados</h2>
+                    <input placeholder="Nome Completo" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
+                    <input placeholder="CPF / CNPJ" value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
                 </div>
             </div>
           </div>
@@ -416,7 +388,7 @@ export default function Cart() {
                             {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? formatCurrency(selectedShipping.price) : '--'}</span>}
                         </div>
                         
-                        {/* LISTA LIMPA E FILTRADA */}
+                        {/* LISTA LIMPA: Só aparece 1 PAC e 1 SEDEX (ou Expresso Local) */}
                         {!recalculatingShipping && shippingOptions.map(opt => (
                             <div key={opt.name} onClick={() => setShipping(opt)} className={`p-3 border rounded-lg cursor-pointer text-xs flex justify-between items-center ${selectedShipping?.name === opt.name ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'hover:bg-gray-50'}`}>
                                 <div className="flex flex-col">
