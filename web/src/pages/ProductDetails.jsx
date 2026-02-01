@@ -175,7 +175,6 @@ export default function ProductDetails() {
         const data = await client.fetch(query, { slug });
 
         if (data && data.product) {
-          // DEFINE OS DIAS DE MANUSEIO
           setHandlingDays(Number(data.settings?.handlingTime) || 0);
 
           const productData = data.product;
@@ -205,6 +204,7 @@ export default function ProductDetails() {
             if (productData.images?.length > 0) setActiveMedia(productData.images[0]);
           }
 
+          // BUSCA RELACIONADOS (INCLUINDO LOGISTICS PARA O QUICK ADD FUNCIONAR)
           if (productData.categories && productData.categories.length > 0) {
             const catId = productData.categories[0]._id;
             const relatedQuery = `
@@ -240,7 +240,6 @@ export default function ProductDetails() {
     }
   };
 
-  // --- RECALCULA QUANDO O PRODUTO CARREGA *E* QUANDO O HANDLING DAYS ATUALIZA ---
   useEffect(() => {
     if (product && globalCep) {
         const cleanGlobal = globalCep.replace(/\D/g, '');
@@ -249,7 +248,7 @@ export default function ProductDetails() {
             handleCalculateShipping(cleanGlobal);
         }
     }
-  }, [product, globalCep, handlingDays]); // <--- AQUI ESTAVA O PROBLEMA, AGORA ADICIONADO handlingDays
+  }, [product, globalCep]);
 
   const handleCalculateShipping = async (cepOverride) => {
     const targetCep = typeof cepOverride === 'string' ? cepOverride : cep;
@@ -295,16 +294,22 @@ export default function ProductDetails() {
              };
           });
 
-          // Ordenar pelo menor preço
-          candidates.sort((a, b) => a.price - b.price);
-
           let finalOptions = [];
 
           if (isLocal) {
-             const cheapest = candidates[0];
+             let sedexOption = candidates.find(o => 
+                o.name.toLowerCase().includes('sedex') || 
+                o.name.toLowerCase().includes('expresso')
+             );
+
+             if (!sedexOption) {
+                 candidates.sort((a, b) => b.price - a.price);
+                 sedexOption = candidates[0];
+             }
+
              finalOptions.push({
                 name: "Expresso Palastore ⚡",
-                price: cheapest ? cheapest.price : 20.00, 
+                price: sedexOption ? sedexOption.price : 20.00, 
                 delivery_time: 5,
                 company: "Própria"
              });
@@ -361,7 +366,6 @@ export default function ProductDetails() {
         color: selectedVariant ? selectedVariant.color : null,
         size: selectedVariant ? selectedVariant.size : null,
         // DADOS IMPORTANTES DE FRETE AQUI:
-        handlingTime: handlingDays, // Envia o manuseio correto
         width: product.logistics?.width || 15,
         height: product.logistics?.height || 15,
         length: product.logistics?.length || 15,
@@ -397,7 +401,7 @@ export default function ProductDetails() {
             image: prod.imageUrl,
             sku: prod._id,
             variantName: null,
-            handlingTime: handlingDays, // Tenta usar o do pai ou 0
+            // AGORA O QUICK ADD ENVIA OS DADOS REAIS:
             width: prod.logistics?.width || 15,
             height: prod.logistics?.height || 15,
             length: prod.logistics?.length || 15,
