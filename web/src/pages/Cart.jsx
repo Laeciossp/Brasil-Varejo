@@ -9,7 +9,7 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CONFIGURAÇÃO DO SANITY (TOKEN DE ESCRITA) ---
+// --- CONFIGURAÇÃO DO SANITY ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -47,7 +47,7 @@ export default function Cart() {
     tipoPagamento, setTipoPagamento, globalCep, clearCart
   } = useCartStore();
   
-  // Cálculo Total Blindado
+  // --- CÁLCULO TOTAL (BLINDADO) ---
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   const shippingCost = selectedShipping?.price ? Number(selectedShipping.price) : 0;
   const totalFinal = subtotal + shippingCost;
@@ -60,7 +60,7 @@ export default function Cart() {
     }
   }, [user]);
 
-  // --- RECALCULAR FRETE ---
+  // --- RECALCULAR FRETE (CORREÇÃO DO PREÇO ZERO) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -93,8 +93,16 @@ export default function Cart() {
           const optionsAdjusted = options.map(opt => {
             let finalName = opt.name;
             let finalDays = parseInt(opt.delivery_time) || 0;
-            // Garante que preço é número
-            let finalPrice = Number(opt.custom_price || opt.price || 0);
+            
+            // --- CORREÇÃO DE PREÇO (AQUI ESTÁ O SEGREDO) ---
+            // Pega o valor cru (seja numero ou texto)
+            let rawPrice = opt.custom_price || opt.price || 0;
+            // Se for texto com vírgula, troca por ponto e converte
+            if (typeof rawPrice === 'string') {
+                rawPrice = parseFloat(rawPrice.replace(',', '.'));
+            }
+            // Garante que é número
+            let finalPrice = Number(rawPrice) || 0;
             
             const lowerName = (opt.name || '').toLowerCase();
 
@@ -111,6 +119,7 @@ export default function Cart() {
             return { ...opt, name: finalName, delivery_time: finalDays, price: finalPrice };
           });
 
+          // Seleciona a primeira opção (geralmente a mais barata) e salva
           setShipping(optionsAdjusted[0]);
         }
       } catch (error) {
@@ -141,7 +150,7 @@ export default function Cart() {
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      // 1. PREPARAR DADOS
+      // 1. DADOS
       const cleanCustomer = {
         name: customerName,
         email: user.primaryEmailAddress?.emailAddress || "",
@@ -159,7 +168,6 @@ export default function Cart() {
         state: activeAddress.state
       };
 
-      // Garante nome do produto
       const sanitizedItems = items.map(item => ({
          _key: Math.random().toString(36).substring(7),
          productName: item.title || item.name || "Produto", 
@@ -173,8 +181,7 @@ export default function Cart() {
          product: { _type: 'reference', _ref: item._id }
       }));
 
-      // 2. CRIAR PEDIDO NO SANITY (AQUI ESTÁ A MÁGICA)
-      // O site cria o pedido perfeitamente organizado
+      // 2. CRIA PEDIDO NO SANITY
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
@@ -187,14 +194,14 @@ export default function Cart() {
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Venda Site (Frontend Create)"
+        internalNotes: "Pedido Criado pelo Site (Safe Price)"
       };
 
       console.log("Criando pedido...", orderDoc);
       const createdOrder = await client.create(orderDoc);
-      const sanityId = createdOrder._id; // PEGA O ID DO PEDIDO CRIADO
+      const sanityId = createdOrder._id;
 
-      // 3. CHAMAR O WORKER (SÓ PAGAMENTO)
+      // 3. CHAMA WORKER (PAGAMENTO)
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
@@ -207,7 +214,7 @@ export default function Cart() {
             shippingAddress: cleanAddress,
             customerDocument: cleanCustomer.cpf,
             totalAmount: totalFinal,
-            orderId: sanityId // MANDA O ID DO SANITY PRO WORKER USAR
+            orderId: sanityId 
         })
       });
 
@@ -217,7 +224,7 @@ export default function Cart() {
         throw new Error(JSON.stringify(data.details || data.error));
       }
 
-      // 4. REDIRECIONAR
+      // 4. REDIRECIONA
       clearCart();
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
@@ -304,9 +311,13 @@ export default function Cart() {
                 <div className="grid md:grid-cols-2 gap-4">
                     {customer.addresses?.map(addr => (
                         <div key={addr.id} onClick={() => setActiveAddress(addr.id)} className={`p-4 border-2 rounded-lg cursor-pointer ${addr.id === customer.activeAddressId ? 'border-blue-600 bg-blue-50' : 'border-gray-100'}`}>
-                            <p className="font-bold text-sm">{addr.alias || 'Local'}</p>
+                            <div className="flex justify-between mb-1">
+                                <span className="font-bold text-sm">{addr.alias || 'Local'}</span>
+                                {addr.id === customer.activeAddressId && <div className="w-3 h-3 bg-blue-600 rounded-full"></div>}
+                            </div>
                             <p className="text-xs text-gray-600">{addr.street}, {addr.number} {addr.complement}</p>
-                            <p className="text-xs text-gray-500">{addr.city}/{addr.state}</p>
+                            <p className="text-xs text-gray-500">{addr.neighborhood}, {addr.city}/{addr.state}</p>
+                            <p className="text-xs text-gray-400">{addr.zip}</p>
                         </div>
                     ))}
                 </div>
@@ -332,6 +343,7 @@ export default function Cart() {
                     <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                     <div className="flex justify-between items-center">
                         <span className="flex gap-1"><Truck size={14}/> Frete</span>
+                        {/* Exibição do Frete */}
                         {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? formatCurrency(selectedShipping.price) : '--'}</span>}
                     </div>
                     {selectedShipping && <div className="text-xs text-right text-gray-400">{selectedShipping.name}</div>}
