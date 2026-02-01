@@ -9,7 +9,7 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CLIENTE SANITY ---
+// --- CONFIGURAÇÃO SANITY ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -38,7 +38,6 @@ export default function Cart() {
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
   
   const [showAddressForm, setShowAddressForm] = useState(false);
-  // ADICIONADO: Campo 'complement' no estado do novo endereço
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   
   const { 
@@ -50,6 +49,17 @@ export default function Cart() {
   const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const totalFinal = getTotalPrice();
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
+
+  // Preenche dados do cliente automaticamente se logado
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+
+  useEffect(() => {
+    if (user) {
+        setCustomerName(user.fullName || '');
+        setCustomerEmail(user.primaryEmailAddress?.emailAddress || '');
+    }
+  }, [user]);
 
   // --- RECALCULAR FRETE ---
   useEffect(() => {
@@ -119,22 +129,27 @@ export default function Cart() {
     if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
     addAddress({ ...newAddr, id: Math.random().toString(36).substr(2, 9) });
     setShowAddressForm(false);
-    // Limpa form
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   };
 
-  // --- FINALIZAR COMPRA ALINHADA ---
+  // --- FINALIZAR COMPRA (CORREÇÃO DE DADOS) ---
   const handleCheckout = async () => {
-    if (!isLoaded || !user) return alert("Faça login.");
-    if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Frete/Endereço?");
-    if (!customer.document) return alert("CPF obrigatório.");
+    if (!isLoaded) return; // Aguarda carregar
+    
+    // Validações
+    if (items.length === 0) return alert("Seu carrinho está vazio.");
+    if (!selectedShipping) return alert("Selecione um frete.");
+    if (!activeAddress) return alert("Selecione um endereço de entrega.");
+    if (!customer.document) return alert("Por favor, informe seu CPF para a Nota Fiscal.");
+    if (!customerName) return alert("Por favor, informe seu Nome.");
 
     setLoading(true);
 
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      // 1. ITENS (Higienizados)
+      // 1. HIGIENIZAÇÃO DOS ITENS
+      // Aqui garantimos que o Título sempre vai preenchido
       const sanitizedItems = items.map(item => ({
          _key: Math.random().toString(36).substring(7),
          productName: item.title || item.name || "Produto Sem Nome", 
@@ -148,27 +163,26 @@ export default function Cart() {
          product: { _type: 'reference', _ref: item._id }
       }));
 
-      // 2. ENDEREÇO (ALINHADO COM O SCHEMA)
-      // Extraímos exatamente os campos que o schema pede
-      const finalAddress = {
+      // 2. HIGIENIZAÇÃO DO ENDEREÇO
+      const cleanAddress = {
         zip: activeAddress.zip,
         street: activeAddress.street,
         number: activeAddress.number,
+        complement: activeAddress.complement || "", // Garante string
         neighborhood: activeAddress.neighborhood,
         city: activeAddress.city,
-        state: activeAddress.state,
-        complement: activeAddress.complement || "" // Garante que vai string vazia se não tiver
+        state: activeAddress.state
       };
 
-      // 3. DADOS DO CLIENTE
+      // 3. HIGIENIZAÇÃO DO CLIENTE (Dados do Input)
       const cleanCustomer = {
-        name: user.fullName || "Cliente Site",
-        email: user.primaryEmailAddress?.emailAddress || "",
+        name: customerName, // Usa o nome do input/estado
+        email: customerEmail || "cliente@sememail.com",
         cpf: customer.document,
         phone: ""
       };
 
-      // 4. CRIA O PEDIDO NO SANITY
+      // 4. CRIAÇÃO DO PEDIDO NO SANITY
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
@@ -176,21 +190,21 @@ export default function Cart() {
         customer: cleanCustomer,
         items: sanitizedItems,
         
-        // ENVIA O ENDEREÇO PARA OS DOIS MÓDULOS (Entrega e Faturamento)
-        shippingAddress: finalAddress,
-        billingAddress: finalAddress, // <<-- AQUI GARANTE QUE O MÓDULO DE FATURAMENTO TENHA DADOS
+        // Manda o mesmo endereço para os dois campos
+        shippingAddress: cleanAddress,
+        billingAddress: cleanAddress, 
         
         carrier: selectedShipping.name,
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Venda Site - Endereço Completo"
+        internalNotes: "Venda Site - Dados Completos"
       };
 
-      console.log("Enviando...", orderDoc);
+      console.log("Enviando para o Sanity:", orderDoc);
       await client.create(orderDoc);
 
-      // 5. CHAMADA DE PAGAMENTO
+      // 5. CHAMADA DE PAGAMENTO (WORKER)
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
@@ -200,7 +214,7 @@ export default function Cart() {
             shipping: parseFloat(selectedShipping.price), 
             email: cleanCustomer.email, 
             tipoPagamento, 
-            shippingAddress: finalAddress,
+            shippingAddress: cleanAddress,
             customerDocument: cleanCustomer.cpf,
             totalAmount: totalFinal,
             orderId: orderNumber 
@@ -224,7 +238,7 @@ export default function Cart() {
 
     } catch (error) {
       console.error("Erro Checkout:", error);
-      alert("Erro: " + error.message);
+      alert("Erro ao processar pedido: " + error.message);
     } finally { 
       setLoading(false); 
     }
@@ -276,14 +290,14 @@ export default function Cart() {
                 ))}
             </div>
 
-            {/* ENTREGA E CPF */}
+            {/* ENTREGA, DADOS E CPF */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
                 <div className="flex justify-between items-center">
                     <h2 className="text-lg font-bold flex gap-2"><MapPin className="text-orange-500"/> Entrega</h2>
                     <button onClick={() => setShowAddressForm(!showAddressForm)} className="text-blue-600 font-bold text-sm">+ Endereço</button>
                 </div>
                 
-                {/* FORMULÁRIO DE ENDEREÇO ATUALIZADO COM COMPLEMENTO */}
+                {/* FORMULÁRIO ENDEREÇO */}
                 {showAddressForm && (
                    <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-2 gap-3">
                       <input placeholder="Apelido (Ex: Casa)" className="p-2 border rounded col-span-2" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
@@ -291,14 +305,14 @@ export default function Cart() {
                       <input placeholder="Rua" className="p-2 border rounded" value={newAddr.street} onChange={e => setNewAddr({...newAddr, street: e.target.value})} />
                       <input placeholder="Número" className="p-2 border rounded" value={newAddr.number} onChange={e => setNewAddr({...newAddr, number: e.target.value})} />
                       <input placeholder="Bairro" className="p-2 border rounded" value={newAddr.neighborhood} onChange={e => setNewAddr({...newAddr, neighborhood: e.target.value})} />
-                      <input placeholder="Complemento (Ap 101)" className="p-2 border rounded" value={newAddr.complement} onChange={e => setNewAddr({...newAddr, complement: e.target.value})} />
+                      <input placeholder="Complemento" className="p-2 border rounded" value={newAddr.complement} onChange={e => setNewAddr({...newAddr, complement: e.target.value})} />
                       <input placeholder="Cidade" className="p-2 border rounded" value={newAddr.city} onChange={e => setNewAddr({...newAddr, city: e.target.value})} />
                       <input placeholder="UF" className="p-2 border rounded" value={newAddr.state} onChange={e => setNewAddr({...newAddr, state: e.target.value})} />
                       <button onClick={handleSaveAddress} className="col-span-2 bg-black text-white py-2 rounded font-bold">Salvar</button>
                    </div>
                 )}
 
-                {/* VISUALIZAÇÃO DO ENDEREÇO ATUALIZADA */}
+                {/* LISTA DE ENDEREÇOS */}
                 <div className="grid md:grid-cols-2 gap-4">
                     {customer.addresses?.map(addr => (
                         <div key={addr.id} onClick={() => setActiveAddress(addr.id)} className={`p-4 border-2 rounded-lg cursor-pointer ${addr.id === customer.activeAddressId ? 'border-blue-600 bg-blue-50' : 'border-gray-100'}`}>
@@ -306,23 +320,36 @@ export default function Cart() {
                                 <span className="font-bold text-sm">{addr.alias || 'Local'}</span>
                                 {addr.id === customer.activeAddressId && <div className="w-3 h-3 bg-blue-600 rounded-full"></div>}
                             </div>
-                            <p className="text-xs text-gray-600">
-                                {addr.street}, {addr.number} {addr.complement ? `- ${addr.complement}` : ''}
-                            </p>
+                            <p className="text-xs text-gray-600">{addr.street}, {addr.number} {addr.complement}</p>
                             <p className="text-xs text-gray-500">{addr.neighborhood}, {addr.city}/{addr.state}</p>
-                            <p className="text-xs text-gray-400 font-mono">{addr.zip}</p>
+                            <p className="text-xs text-gray-400">{addr.zip}</p>
                         </div>
                     ))}
                 </div>
 
-                <div className="pt-4 border-t">
-                    <h2 className="text-lg font-bold mb-2 flex gap-2"><ShieldCheck className="text-gray-400"/> CPF na Nota</h2>
-                    <input 
-                        placeholder="000.000.000-00" 
-                        value={customer.document || ''} 
-                        onChange={e => setDocument(e.target.value)}
-                        className="w-full p-3 border rounded-lg bg-gray-50"
-                    />
+                {/* DADOS PESSOAIS */}
+                <div className="pt-4 border-t space-y-3">
+                    <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados para Nota</h2>
+                    
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Seu Nome</label>
+                        <input 
+                            placeholder="Nome Completo" 
+                            value={customerName} 
+                            onChange={e => setCustomerName(e.target.value)}
+                            className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-orange-500"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">CPF / CNPJ</label>
+                        <input 
+                            placeholder="000.000.000-00" 
+                            value={customer.document || ''} 
+                            onChange={e => setDocument(e.target.value)}
+                            className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-orange-500"
+                        />
+                    </div>
                 </div>
             </div>
           </div>
@@ -361,8 +388,8 @@ export default function Cart() {
 
                 <button 
                     onClick={handleCheckout} 
-                    disabled={loading || !selectedShipping || !activeAddress || !customer.document} 
-                    className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300"
+                    disabled={loading || !selectedShipping || !activeAddress || !customer.document || !customerName} 
+                    className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300 transition-colors"
                 >
                     {loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/>
                 </button>

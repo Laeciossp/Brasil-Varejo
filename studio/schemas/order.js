@@ -36,15 +36,16 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- CAMPOS LEGADOS (PARA EVITAR ERROS) ---
+    // --- CAMPOS OCULTOS (BLINDAGEM CONTRA ERROS) ---
+    // Estes campos aceitam os dados "errados" antigos para o painel não travar
     { name: 'cpf', type: 'string', hidden: true },
+    { name: 'document', type: 'string', hidden: true },
     { name: 'customerDocument', type: 'string', hidden: true },
     { name: 'customerEmail', type: 'string', hidden: true },
     { name: 'alias', type: 'string', hidden: true },
     { name: 'id', type: 'string', hidden: true },
-    { name: 'document', type: 'string', hidden: true },
 
-    // --- CLIENTE ---
+    // --- CLIENTE (ESTRUTURA CORRETA) ---
     {
       name: 'customer',
       title: 'Dados do Cliente',
@@ -94,7 +95,7 @@ export default {
               if (size) details.push(`Tam: ${size}`);
               return { 
                 title: `${qty}x ${title || 'PRODUTO SEM NOME'}`, 
-                subtitle: details.join(' - ') || 'Sem detalhes'
+                subtitle: details.join(' | ') || 'Sem variações'
               }
             }
           }
@@ -102,7 +103,7 @@ export default {
       ]
     },
 
-    // --- MÓDULO 1: ENDEREÇO DE ENTREGA ---
+    // --- ENDEREÇO DE ENTREGA ---
     {
       name: 'shippingAddress',
       title: 'Endereço de Entrega',
@@ -112,14 +113,14 @@ export default {
         { name: 'zip', type: 'string', title: 'CEP' },
         { name: 'street', type: 'string', title: 'Rua' },
         { name: 'number', type: 'string', title: 'Número' },
-        { name: 'neighborhood', type: 'string', title: 'Bairro' },
         { name: 'complement', type: 'string', title: 'Complemento' },
+        { name: 'neighborhood', type: 'string', title: 'Bairro' },
         { name: 'city', type: 'string', title: 'Cidade' },
         { name: 'state', type: 'string', title: 'Estado' }
       ]
     },
 
-    // --- MÓDULO 2: ENDEREÇO DE FATURAMENTO (IGUAL AO DE CIMA) ---
+    // --- ENDEREÇO DE FATURAMENTO ---
     {
       name: 'billingAddress',
       title: 'Endereço de Faturamento',
@@ -130,14 +131,14 @@ export default {
         { name: 'zip', type: 'string', title: 'CEP' },
         { name: 'street', type: 'string', title: 'Rua' },
         { name: 'number', type: 'string', title: 'Número' },
-        { name: 'neighborhood', type: 'string', title: 'Bairro' },
         { name: 'complement', type: 'string', title: 'Complemento' },
+        { name: 'neighborhood', type: 'string', title: 'Bairro' },
         { name: 'city', type: 'string', title: 'Cidade' },
         { name: 'state', type: 'string', title: 'Estado' }
       ]
     },
 
-    // --- LOGÍSTICA E FINANCEIRO ---
+    // --- LOGÍSTICA E PAGAMENTO ---
     { name: 'trackingCode', title: 'Código de Rastreio', type: 'string', group: 'logistics' },
     { name: 'carrier', title: 'Transportadora', type: 'string', group: 'logistics' },
     { name: 'shippingCost', title: 'Custo do Frete', type: 'number', group: 'billing' },
