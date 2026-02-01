@@ -5,7 +5,7 @@ export default {
   groups: [
     { name: 'details', title: '📝 Detalhes' },
     { name: 'logistics', title: '🚚 Logística' },
-    { name: 'billing', title: '💲 Faturamento' }, // Novo grupo para organizar financeiro
+    { name: 'billing', title: '💲 Faturamento' },
     { name: 'admin', title: '⚙️ Admin' }
   ],
   fields: [
@@ -36,7 +36,9 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- CLIENTE (DADOS FISCAIS) ---
+    // --- CLIENTE (OBJETO ORGANIZADO) ---
+    // O erro "Unknown fields" acontece porque o frontend manda solto.
+    // Aqui garantimos a estrutura correta.
     {
       name: 'customer',
       title: 'Dados do Cliente',
@@ -45,12 +47,12 @@ export default {
       fields: [
         { name: 'name', type: 'string', title: 'Nome Completo' },
         { name: 'email', type: 'string', title: 'E-mail' },
-        { name: 'cpf', type: 'string', title: 'CPF / CNPJ' }, // Crucial para NF
+        { name: 'cpf', type: 'string', title: 'CPF / CNPJ' },
         { name: 'phone', type: 'string', title: 'Telefone/WhatsApp' }
       ]
     },
 
-    // --- ITENS DO PEDIDO (CORRIGIDO PARA RECEBER VARIAÇÕES) ---
+    // --- ITENS DO PEDIDO (COM COR E TAMANHO) ---
     {
       name: 'items',
       title: 'Itens do Pedido',
@@ -62,10 +64,12 @@ export default {
           title: 'Produto',
           fields: [
             { name: 'productName', title: 'Nome do Produto', type: 'string' },
-            { name: 'variantName', title: 'Variação Completa', type: 'string', description: 'Ex: Azul - M' }, // Novo
-            { name: 'color', title: 'Cor', type: 'string' }, // Novo (Para colunas separadas no gestor)
-            { name: 'size', title: 'Tamanho', type: 'string' }, // Novo (Para colunas separadas no gestor)
-            { name: 'sku', title: 'SKU (Código)', type: 'string' }, // Novo (Essencial para Estoque/NF)
+            { name: 'variantName', title: 'Variação Completa', type: 'string' }, 
+            
+            // --- CAMPOS CRUCIAIS PARA O GESTOR ---
+            { name: 'color', title: 'Cor', type: 'string' }, 
+            { name: 'size', title: 'Tamanho', type: 'string' }, 
+            { name: 'sku', title: 'SKU', type: 'string' }, 
             
             { name: 'quantity', title: 'Quantidade', type: 'number' },
             { name: 'price', title: 'Preço Unitário', type: 'number' },
@@ -74,17 +78,24 @@ export default {
             { name: 'product', title: 'Ref. Produto', type: 'reference', to: [{type: 'product'}] },
             { name: 'productSlug', title: 'Slug', type: 'string' }
           ],
+          // --- AQUI ESTÁ A MÁGICA PARA APARECER NO PAINEL ---
           preview: {
             select: { 
               title: 'productName', 
-              subtitle: 'variantName', 
+              color: 'color',
+              size: 'size',
               qty: 'quantity',
               media: 'imageUrl' 
             },
-            prepare({title, subtitle, qty, media}) {
+            prepare({title, color, size, qty, media}) {
+              // Se tiver cor e tamanho, mostra. Se não, mostra "Padrão"
+              const details = (color && size) 
+                ? `${color} | Tam: ${size}` 
+                : (color ? color : 'Padrão');
+                
               return { 
                 title: `${qty}x ${title}`, 
-                subtitle: subtitle || 'Padrão', 
+                subtitle: details, // Isso vai aparecer no card do pedido!
                 media 
               }
             }
@@ -110,10 +121,10 @@ export default {
       ]
     },
 
-    // --- ENDEREÇO DE FATURAMENTO (OPCIONAL - PARA NF) ---
+    // --- FATURAMENTO ---
     {
       name: 'billingAddress',
-      title: 'Endereço de Faturamento (Se diferente)',
+      title: 'Endereço de Faturamento',
       type: 'object',
       group: 'billing',
       options: { collapsible: true, collapsed: true },
@@ -127,7 +138,7 @@ export default {
       ]
     },
 
-    // --- LOGÍSTICA ---
+    // --- LOGÍSTICA E VALORES ---
     {
       name: 'trackingCode',
       title: 'Código de Rastreio',
@@ -135,46 +146,31 @@ export default {
       group: 'logistics'
     },
     {
-      name: 'trackingUrl',
-      title: 'Link de Rastreio',
-      type: 'url',
-      group: 'logistics'
-    },
-    {
       name: 'carrier',
-      title: 'Transportadora Escolhida',
+      title: 'Transportadora',
       type: 'string',
       group: 'logistics'
     },
     {
-      name: 'shippingCost', // Adicionado para saber quanto foi cobrado de frete
+      name: 'shippingCost',
       title: 'Custo do Frete',
       type: 'number',
       group: 'billing'
     },
-
-    // --- FINANCEIRO ---
     {
       name: 'totalAmount',
-      title: 'Valor Total do Pedido',
+      title: 'Valor Total',
       type: 'number',
       group: 'billing'
     },
     {
       name: 'paymentMethod',
-      title: 'Método de Pagamento',
+      title: 'Método Pagamento',
       type: 'string',
       group: 'billing'
     },
     
-    // --- ADMIN / MENSAGENS ---
-    {
-      name: 'hasUnreadMessage',
-      title: 'Mensagem Não Lida',
-      type: 'boolean',
-      initialValue: false,
-      group: 'admin'
-    },
+    // --- ADMIN ---
     {
       name: 'internalNotes',
       title: 'Anotações Internas',
@@ -185,20 +181,21 @@ export default {
   preview: {
     select: { 
       title: 'orderNumber', 
-      subtitle: 'customer.name',
+      subtitle: 'customer.name', // Pega o nome de dentro do objeto customer
       status: 'status'
     },
     prepare({title, subtitle, status}) {
       const statusMap = {
         pending: '🟡',
         paid: '🟢',
+        invoiced: '📄',
         shipped: '🚚',
         delivered: '🏠',
         cancelled: '❌'
       };
       return {
         title: `${statusMap[status] || ''} Pedido #${title}`,
-        subtitle: subtitle || 'Cliente Desconhecido'
+        subtitle: subtitle || 'Cliente sem nome'
       }
     }
   }

@@ -42,7 +42,7 @@ export default function Cart() {
   const totalFinal = getTotalPrice();
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // --- RECALCULAR FRETE ---
+  // --- RECALCULAR FRETE (LÓGICA MANTIDA) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -73,11 +73,10 @@ export default function Cart() {
 
         if (Array.isArray(options) && options.length > 0) {
           // === LÓGICA DE FRETE AJUSTADA (Igual ProductDetails) ===
-          const PRAZO_MANUSEIO_PADRAO = 5; // Seus 5 dias de preparação padrão
+          const PRAZO_MANUSEIO_PADRAO = 5; 
           
-          // Limpa o CEP para verificar se é local
           const cleanZip = targetZip.replace(/\D/g, '');
-          const isLocal = cleanZip === '43850000'; // CEP DE SÃO SEBASTIÃO DO PASSÉ
+          const isLocal = cleanZip === '43850000'; 
 
           const optionsAdjusted = options.map(opt => {
             let finalName = opt.name;
@@ -95,12 +94,7 @@ export default function Cart() {
 
             // 2. Lógica de Dias (Manuseio)
             if (!isLocal) {
-                // Se NÃO for local, adiciona os 5 dias de separação
                 finalDays += PRAZO_MANUSEIO_PADRAO;
-            } else {
-                // Se FOR local, manuseio é zero (entrega rápida)
-                // Opcional: Se quiser forçar 1 dia, descomente abaixo:
-                // if (finalDays === 0) finalDays = 1;
             }
 
             return {
@@ -110,12 +104,16 @@ export default function Cart() {
             };
           });
 
-          // Tenta manter a opção selecionada pelo nome
+          // Filtra opção local se necessário (remover PAC se for local)
+          const filteredOptions = isLocal 
+            ? optionsAdjusted.filter(opt => !opt.name.toLowerCase().includes('pac')) 
+            : optionsAdjusted;
+
+          // Tenta manter a opção selecionada ou pega a primeira
           const currentName = selectedShipping?.name;
-          const sameOption = optionsAdjusted.find(o => o.name === currentName);
+          const sameOption = filteredOptions.find(o => o.name === currentName);
           
-          // Se não achar a mesma, pega a primeira (que geralmente é a mais barata/rápida dependendo da API)
-          setShipping(sameOption || optionsAdjusted[0]);
+          setShipping(sameOption || filteredOptions[0]);
         }
       } catch (error) {
         console.error("Erro frete", error);
@@ -133,7 +131,7 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
   };
 
-  // --- CHECKOUT ---
+  // --- CHECKOUT (AQUI ESTÁ A CORREÇÃO DOS DADOS) ---
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login para continuar.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione frete e endereço.");
@@ -143,17 +141,48 @@ export default function Cart() {
     try {
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       
+      // 1. Prepara os itens com COR, TAMANHO e SKU para o gestor
+      const itemsFormatted = items.map(item => ({
+         _key: Math.random().toString(36).substring(7),
+         productName: item.title, // Nome Limpo
+         variantName: item.variantName || null, // Variação Completa
+         
+         // --- CAMPOS QUE FALTAVAM ---
+         color: item.color || null,
+         size: item.size || null,
+         sku: item.sku || item._id,
+         
+         quantity: item.quantity,
+         price: item.price,
+         imageUrl: item.image,
+         product: { _type: 'reference', _ref: item._id },
+         productSlug: item.slug?.current || item.slug
+      }));
+
+      // 2. Prepara o Cliente (Agrupado para não dar erro de schema)
+      const customerData = {
+        name: user.fullName || customer.name,
+        email: user.primaryEmailAddress?.emailAddress || customer.email,
+        cpf: customer.document,
+        phone: customer.phone || ''
+      };
+
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            items, 
+            // Dados para o Worker processar pagamento
+            items: itemsFormatted, 
             shipping: parseFloat(selectedShipping.price), 
-            email: user.primaryEmailAddress.emailAddress, 
+            email: customerData.email, 
             tipoPagamento, 
             shippingAddress: activeAddress,
-            customerDocument: customer.document,
-            totalAmount: totalFinal
+            customerDocument: customerData.cpf,
+            totalAmount: totalFinal,
+
+            // Dados Estruturados para salvar no Sanity (Corrigindo o Schema)
+            customer: customerData, // Envia o objeto customer completo
+            carrier: selectedShipping.name
         })
       });
 
@@ -209,16 +238,15 @@ export default function Cart() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="p-6 space-y-6">
                 {items.map((item) => {
-                  // Prepara o slug para o link (verifica se existe)
                   const productSlug = item.slug?.current || item.slug;
 
                   return (
-                    <div key={item._id} className="flex gap-4 sm:gap-6">
+                    <div key={item.sku || item._id} className="flex gap-4 sm:gap-6">
                       
-                      {/* FOTO DO PRODUTO (AGORA COM LINK) */}
+                      {/* FOTO */}
                       <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white border border-gray-100 rounded-lg flex-shrink-0 p-2 relative">
                           {productSlug ? (
-                             <Link to={`/produto/${productSlug}`} className="block w-full h-full">
+                             <Link to={`/product/${productSlug}`} className="block w-full h-full">
                                 <img src={item.image} className="w-full h-full object-contain mix-blend-multiply hover:scale-105 transition-transform" alt={item.title} />
                              </Link>
                           ) : (
@@ -228,29 +256,31 @@ export default function Cart() {
 
                       <div className="flex-1 flex flex-col justify-between">
                         <div className="flex justify-between items-start gap-2">
-                            {/* NOME DO PRODUTO (AGORA COM LINK) */}
-                            <h3 className="font-medium text-gray-900 line-clamp-2 text-sm sm:text-base">
-                              {productSlug ? (
-                                <Link to={`/produto/${productSlug}`} className="hover:text-orange-600 transition-colors">
-                                  {item.name || item.title}
-                                </Link>
-                              ) : (
-                                item.name || item.title
-                              )}
-                            </h3>
+                            {/* NOME E VARIAÇÃO */}
+                            <div>
+                                <h3 className="font-medium text-gray-900 line-clamp-2 text-sm sm:text-base">
+                                  {productSlug ? (
+                                    <Link to={`/product/${productSlug}`} className="hover:text-orange-600 transition-colors">
+                                      {item.title}
+                                    </Link>
+                                  ) : item.title}
+                                </h3>
+                                {/* EXIBE VARIAÇÃO SE HOUVER */}
+                                {item.variantName && (
+                                    <p className="text-xs text-gray-500 font-medium mt-1">Opção: {item.variantName}</p>
+                                )}
+                            </div>
 
-                            {/* BOTÃO REMOVER (FUNCIONALIDADE MANTIDA) */}
-                            <button onClick={() => removeItem(item._id)} className="text-gray-400 hover:text-red-500 transition-colors">
+                            <button onClick={() => removeItem(item._id, item.sku)} className="text-gray-400 hover:text-red-500 transition-colors">
                               <Trash2 size={18}/>
                             </button>
                         </div>
                         
                         <div className="flex justify-between items-end mt-2">
-                            {/* CONTROLE DE QUANTIDADE (FUNCIONALIDADE MANTIDA) */}
                             <div className="flex items-center border border-gray-200 rounded-lg">
-                              <button onClick={() => updateQuantity(item._id, item.quantity - 1)} className="px-3 py-1 text-gray-500 hover:bg-gray-50">-</button>
+                              <button onClick={() => updateQuantity(item._id, item.quantity - 1, item.sku)} disabled={item.quantity <= 1} className="px-3 py-1 text-gray-500 hover:bg-gray-50 disabled:opacity-50">-</button>
                               <span className="px-2 text-sm font-bold text-gray-900">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item._id, item.quantity + 1)} className="px-3 py-1 text-gray-500 hover:bg-gray-50">+</button>
+                              <button onClick={() => updateQuantity(item._id, item.quantity + 1, item.sku)} className="px-3 py-1 text-gray-500 hover:bg-gray-50">+</button>
                             </div>
                             
                             <div className="text-right">
@@ -276,9 +306,9 @@ export default function Cart() {
                     </button>
                 </div>
 
-                {/* Formulário Novo Endereço */}
                 {showAddressForm && (
                    <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input placeholder="Apelido (Ex: Casa)" className="p-2 rounded border" value={newAddr.alias} onChange={e => setNewAddr({...newAddr, alias: e.target.value})} />
                       <input placeholder="CEP" className="p-2 rounded border" value={newAddr.zip} onChange={e => setNewAddr({...newAddr, zip: e.target.value})} />
                       <input placeholder="Rua" className="p-2 rounded border" value={newAddr.street} onChange={e => setNewAddr({...newAddr, street: e.target.value})} />
                       <input placeholder="Número" className="p-2 rounded border" value={newAddr.number} onChange={e => setNewAddr({...newAddr, number: e.target.value})} />
@@ -338,10 +368,10 @@ export default function Cart() {
                         }
                     </div>
                     {selectedShipping && (
-    <div className="text-xs text-right text-gray-400">
-        Via {selectedShipping.name} ({selectedShipping.delivery_time} dias úteis)
-    </div>
-)}
+                        <div className="text-xs text-right text-gray-400">
+                            Via {selectedShipping.name} ({selectedShipping.delivery_time} dias úteis)
+                        </div>
+                    )}
                 </div>
 
                 <div className="border-t border-gray-100 pt-4 mb-6">
