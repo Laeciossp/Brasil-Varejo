@@ -730,21 +730,6 @@ export default function ProductDetails() {
                       {rel.imageUrl ? (
                         <img src={`${rel.imageUrl}?w=300`} alt={rel.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-300" />
                       ) : <Package className="text-gray-200"/>}
-
-                      {/* --- BOTÃO QUICK ADD (Mobile Fixed / Desktop Hover) --- */}
-                       <button 
-                            onClick={(e) => handleQuickAdd(e, rel)}
-                            className="absolute bottom-2 right-2 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg 
-                                       lg:transform lg:translate-y-10 lg:opacity-0 lg:group-hover:translate-y-0 lg:group-hover:opacity-100 
-                                       opacity-100 translate-y-0
-                                       transition-all duration-300 hover:bg-orange-700 z-20"
-                            title="Adicionar ao Carrinho"
-                        >
-                            <div className="relative">
-                                <ShoppingBag size={14} />
-                                <Plus size={8} strokeWidth={4} className="absolute -top-1 -right-1 bg-white text-orange-600 rounded-full" />
-                            </div>
-                        </button>
                     </div>
 
                     <h4 className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" title={rel.title}>
