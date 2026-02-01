@@ -36,18 +36,14 @@ export default {
       initialValue: 'pending'
     },
 
-    // --- CORREÇÃO DO ERRO "UNKNOWN FIELD" ---
-    // Adicionamos este campo oculto para que pedidos antigos ou errados não quebrem o painel
-    {
-      name: 'customerDocument',
-      type: 'string',
-      hidden: true, // Oculto, serve apenas para não dar erro
-    },
-    {
-      name: 'customerEmail', // Caso tenha salvo e-mail solto também
-      type: 'string',
-      hidden: true, 
-    },
+    // --- CAMPOS FANTASMAS (CORREÇÃO DE ERRO "UNKNOWN FIELD") ---
+    // Adicione estes campos EXATAMENTE assim para sumir o erro vermelho
+    { name: 'cpf', type: 'string', hidden: true }, 
+    { name: 'document', type: 'string', hidden: true },
+    { name: 'customerDocument', type: 'string', hidden: true },
+    { name: 'customerEmail', type: 'string', hidden: true },
+    { name: 'alias', type: 'string', hidden: true },
+    { name: 'id', type: 'string', hidden: true },
 
     // --- CLIENTE (ESTRUTURA CORRETA) ---
     {
@@ -63,7 +59,7 @@ export default {
       ]
     },
 
-    // --- ITENS DO PEDIDO (VISUALIZAÇÃO CORRIGIDA) ---
+    // --- ITENS DO PEDIDO ---
     {
       name: 'items',
       title: 'Itens do Pedido',
@@ -77,36 +73,35 @@ export default {
             { name: 'productName', title: 'Nome do Produto', type: 'string' },
             { name: 'variantName', title: 'Variação', type: 'string' }, 
             
+            // Campos específicos
             { name: 'color', title: 'Cor', type: 'string' }, 
             { name: 'size', title: 'Tamanho', type: 'string' }, 
             { name: 'sku', title: 'SKU', type: 'string' }, 
             
             { name: 'quantity', title: 'Quantidade', type: 'number' },
             { name: 'price', title: 'Preço', type: 'number' },
-            // Alterado para string simples se for URL, para evitar crash
-            { name: 'imageUrl', title: 'Imagem URL', type: 'string' }, 
+            { name: 'imageUrl', title: 'Imagem URL', type: 'string' }, // String evita crash
             
             { name: 'product', title: 'Ref. Produto', type: 'reference', to: [{type: 'product'}] },
           ],
-          // AQUI CONSERTA O "UNTITLED" E MOSTRA COR/TAMANHO
           preview: {
             select: { 
               title: 'productName', 
-              variant: 'variantName',
+              subtitle: 'variantName',
               color: 'color',
               size: 'size',
               qty: 'quantity'
             },
-            prepare({title, variant, color, size, qty}) {
-              // Monta um subtítulo rico com as informações disponíveis
+            prepare({title, subtitle, color, size, qty}) {
+              // Monta a descrição para não ficar "undefined"
               let details = [];
-              if (variant && variant !== 'Padrão') details.push(variant);
-              if (color) details.push(`Cor: ${color}`);
-              if (size) details.push(`Tam: ${size}`);
+              if (subtitle && subtitle !== 'Padrão') details.push(subtitle);
+              if (color) details.push(color);
+              if (size) details.push(size);
 
               return { 
-                title: `${qty}x ${title || 'Produto sem nome'}`, 
-                subtitle: details.join(' | ') || 'Sem variações'
+                title: `${qty}x ${title || 'PRODUTO SEM NOME'}`, 
+                subtitle: details.join(' - ') || 'Sem detalhes'
               }
             }
           }
@@ -149,28 +144,15 @@ export default {
     },
 
     // --- LOGÍSTICA E FINANCEIRO ---
-    {
-      name: 'trackingCode', title: 'Código de Rastreio', type: 'string', group: 'logistics'
-    },
-    {
-      name: 'carrier', title: 'Transportadora', type: 'string', group: 'logistics'
-    },
-    {
-      name: 'shippingCost', title: 'Custo do Frete', type: 'number', group: 'billing'
-    },
-    {
-      name: 'totalAmount', title: 'Valor Total', type: 'number', group: 'billing'
-    },
-    {
-      name: 'paymentMethod', title: 'Método Pagamento', type: 'string', group: 'billing'
-    },
+    { name: 'trackingCode', title: 'Código de Rastreio', type: 'string', group: 'logistics' },
+    { name: 'carrier', title: 'Transportadora', type: 'string', group: 'logistics' },
+    { name: 'shippingCost', title: 'Custo do Frete', type: 'number', group: 'billing' },
+    { name: 'totalAmount', title: 'Valor Total', type: 'number', group: 'billing' },
+    { name: 'paymentMethod', title: 'Método Pagamento', type: 'string', group: 'billing' },
     
     // --- ADMIN ---
-    {
-      name: 'internalNotes', title: 'Anotações Internas', type: 'text', group: 'admin'
-    }
+    { name: 'internalNotes', title: 'Anotações Internas', type: 'text', group: 'admin' }
   ],
-  // PREVIEW DA LISTA DE PEDIDOS
   preview: {
     select: { 
       title: 'orderNumber', 
@@ -182,9 +164,7 @@ export default {
       const statusIcons = {
         pending: '🟡', paid: '🟢', invoiced: '📄', shipped: '🚚', delivered: '🏠', cancelled: '❌'
       };
-      
       const valor = total ? `R$ ${total.toFixed(2)}` : '';
-      
       return {
         title: `${statusIcons[status] || '⚪'} ${title || 'Novo'} - ${customer || 'Cliente'}`,
         subtitle: valor

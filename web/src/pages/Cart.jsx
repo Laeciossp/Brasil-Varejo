@@ -9,7 +9,7 @@ import { createClient } from "@sanity/client";
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
 
-// --- CLIENTE SANITY (TOKEN DE ESCRITA) ---
+// --- CONFIGURAÇÃO DO CLIENTE SANITY ---
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
@@ -121,7 +121,7 @@ export default function Cart() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '' });
   };
 
-  // --- FINALIZAR COMPRA (CORRIGIDO: SALVA NO SANITY E REDIRECIONA) ---
+  // --- FINALIZAR COMPRA ---
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Frete/Endereço?");
@@ -132,10 +132,11 @@ export default function Cart() {
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
 
-      // 1. PREPARAR ITEM (HIGIENIZAÇÃO DOS DADOS)
+      // 1. PREPARA ITENS (CORREÇÃO DO UNDEFINED)
       const sanitizedItems = items.map(item => ({
          _key: Math.random().toString(36).substring(7),
-         productName: item.title || item.name || "Produto", // Força o nome
+         // AQUI ESTÁ O SEGREDO: Se não tiver title, tenta name, se não tiver, coloca texto padrão
+         productName: item.title || item.name || "Produto Sem Nome", 
          variantName: item.variantName || "Padrão", 
          color: item.color || "",
          size: item.size || "",
@@ -147,7 +148,8 @@ export default function Cart() {
          productSlug: item.slug?.current || item.slug || ""
       }));
 
-      // 2. PREPARAR ENDEREÇO (LIMPO)
+      // 2. PREPARA ENDEREÇO (LIMPO - SEM ALIAS/ID)
+      // O erro 'Unknown field alias' acontecia porque mandávamos o objeto activeAddress direto
       const cleanAddress = {
         zip: activeAddress.zip,
         street: activeAddress.street,
@@ -158,8 +160,8 @@ export default function Cart() {
         complement: ""
       };
 
-      // 3. SALVAR NO SANITY (CLIENTE SIDE)
-      // Isso garante que os dados cheguem no painel exatamente como estão aqui
+      // 3. CRIA O PEDIDO NO SANITY (ESTRUTURA LIMPA)
+      // Note que NÃO enviamos 'customerDocument' solto na raiz, só dentro de customer
       const orderDoc = {
         _type: 'order',
         orderNumber: orderNumber,
@@ -167,7 +169,7 @@ export default function Cart() {
         customer: {
             name: user.fullName || "Cliente Site",
             email: user.primaryEmailAddress?.emailAddress || "",
-            cpf: customer.document,
+            cpf: customer.document, // Coloca o CPF no lugar certo
             phone: "" 
         },
         items: sanitizedItems,
@@ -176,19 +178,18 @@ export default function Cart() {
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Criado via Site v4 (Direct Sanity)"
+        internalNotes: "Checkout V5 - Dados Higienizados"
       };
 
-      console.log("Salvando pedido...", orderDoc);
+      console.log("Enviando pedido...", orderDoc);
       await client.create(orderDoc);
 
-      // 4. CHAMAR WORKER APENAS PARA O PAGAMENTO
+      // 4. CHAMA O PAGAMENTO (WORKER)
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            // Enviamos dados básicos para o Worker gerar o pagamento
             items: sanitizedItems,
             shipping: parseFloat(selectedShipping.price), 
             email: user.primaryEmailAddress?.emailAddress, 
@@ -206,7 +207,7 @@ export default function Cart() {
         throw new Error(JSON.stringify(data.details || data.error));
       }
 
-      // 5. REDIRECIONAR
+      // 5. REDIRECIONA
       clearCart();
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
@@ -228,11 +229,8 @@ export default function Cart() {
       <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6">
         <ShoppingCart size={40} className="text-gray-300" />
       </div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">Seu carrinho está vazio</h2>
-      <p className="text-gray-500 mb-8">Navegue por nossas categorias e aproveite as ofertas.</p>
-      <Link to="/" className="bg-gray-900 text-white px-8 py-3 rounded-lg font-bold hover:bg-black transition-colors">
-        Continuar Comprando
-      </Link>
+      <h2 className="text-2xl font-bold text-gray-900 mb-2">Carrinho Vazio</h2>
+      <Link to="/" className="bg-gray-900 text-white px-8 py-3 rounded-lg font-bold">Comprar</Link>
     </div>
   );
 
