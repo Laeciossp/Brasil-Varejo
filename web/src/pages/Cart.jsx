@@ -60,7 +60,7 @@ export default function Cart() {
     }
   }, [user]);
 
-  // --- RECALCULAR FRETE (CORREÇÃO DO PREÇO ZERO) ---
+  // --- RECALCULAR FRETE (CORREÇÃO DO ZERO) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -94,20 +94,22 @@ export default function Cart() {
             let finalName = opt.name;
             let finalDays = parseInt(opt.delivery_time) || 0;
             
-            // --- CORREÇÃO DE PREÇO (AQUI ESTÁ O SEGREDO) ---
-            // Pega o valor cru (seja numero ou texto)
-            let rawPrice = opt.custom_price || opt.price || 0;
-            // Se for texto com vírgula, troca por ponto e converte
-            if (typeof rawPrice === 'string') {
-                rawPrice = parseFloat(rawPrice.replace(',', '.'));
-            }
-            // Garante que é número
-            let finalPrice = Number(rawPrice) || 0;
+            // --- CORREÇÃO DE PREÇO ---
+            // 1. Pega qualquer campo que possa ter o preço
+            let rawPrice = opt.custom_price || opt.price || "0";
             
+            // 2. Converte para string e substitui vírgula por ponto (ex: "15,50" -> "15.50")
+            let stringPrice = String(rawPrice).replace(',', '.');
+            
+            // 3. Transforma em número real
+            let finalPrice = parseFloat(stringPrice) || 0;
+
             const lowerName = (opt.name || '').toLowerCase();
 
             if (isLocal) {
                 finalName = "Expresso Palastore ⚡";
+                // SE QUISER COBRAR TAXA FIXA LOCAL, DESCOMENTE A LINHA ABAIXO:
+                // if (finalPrice === 0) finalPrice = 10.00; 
             } else if (lowerName.includes('pac')) {
                 finalName = "PAC (Econômico)";
             } else if (lowerName.includes('sedex')) {
@@ -116,10 +118,11 @@ export default function Cart() {
 
             if (!isLocal) finalDays += 5; 
 
+            // Retorna o objeto com o preço numérico corrigido
             return { ...opt, name: finalName, delivery_time: finalDays, price: finalPrice };
           });
 
-          // Seleciona a primeira opção (geralmente a mais barata) e salva
+          // Define o frete selecionado (com o preço corrigido)
           setShipping(optionsAdjusted[0]);
         }
       } catch (error) {
@@ -194,14 +197,14 @@ export default function Cart() {
         shippingCost: parseFloat(selectedShipping.price),
         totalAmount: totalFinal,
         paymentMethod: tipoPagamento,
-        internalNotes: "Pedido Criado pelo Site (Safe Price)"
+        internalNotes: "Pedido Site (Frete Corrigido)"
       };
 
       console.log("Criando pedido...", orderDoc);
       const createdOrder = await client.create(orderDoc);
       const sanityId = createdOrder._id;
 
-      // 3. CHAMA WORKER (PAGAMENTO)
+      // 3. CHAMA WORKER
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST',
@@ -224,7 +227,6 @@ export default function Cart() {
         throw new Error(JSON.stringify(data.details || data.error));
       }
 
-      // 4. REDIRECIONA
       clearCart();
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
@@ -311,13 +313,9 @@ export default function Cart() {
                 <div className="grid md:grid-cols-2 gap-4">
                     {customer.addresses?.map(addr => (
                         <div key={addr.id} onClick={() => setActiveAddress(addr.id)} className={`p-4 border-2 rounded-lg cursor-pointer ${addr.id === customer.activeAddressId ? 'border-blue-600 bg-blue-50' : 'border-gray-100'}`}>
-                            <div className="flex justify-between mb-1">
-                                <span className="font-bold text-sm">{addr.alias || 'Local'}</span>
-                                {addr.id === customer.activeAddressId && <div className="w-3 h-3 bg-blue-600 rounded-full"></div>}
-                            </div>
+                            <p className="font-bold text-sm">{addr.alias || 'Local'}</p>
                             <p className="text-xs text-gray-600">{addr.street}, {addr.number} {addr.complement}</p>
-                            <p className="text-xs text-gray-500">{addr.neighborhood}, {addr.city}/{addr.state}</p>
-                            <p className="text-xs text-gray-400">{addr.zip}</p>
+                            <p className="text-xs text-gray-500">{addr.city}/{addr.state}</p>
                         </div>
                     ))}
                 </div>
@@ -343,7 +341,6 @@ export default function Cart() {
                     <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                     <div className="flex justify-between items-center">
                         <span className="flex gap-1"><Truck size={14}/> Frete</span>
-                        {/* Exibição do Frete */}
                         {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? formatCurrency(selectedShipping.price) : '--'}</span>}
                     </div>
                     {selectedShipping && <div className="text-xs text-right text-gray-400">{selectedShipping.name}</div>}
