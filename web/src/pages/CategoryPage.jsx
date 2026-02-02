@@ -29,7 +29,7 @@ export default function CategoryPage() {
   const { slug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  
+   
   const { addItem } = useCartStore();
 
   const productsTopRef = useRef(null);
@@ -41,7 +41,7 @@ export default function CategoryPage() {
 
   // --- LER DADOS DA URL ---
   const selectedSubcategory = searchParams.get('sub');
-  
+   
   const selectedBrands = useMemo(() => {
     const brandsParam = searchParams.get('marcas');
     return brandsParam ? brandsParam.split(',') : [];
@@ -96,9 +96,14 @@ export default function CategoryPage() {
         const result = await client.fetch(query, { slug });
         
         if (result && result.category) {
+            // --- MODIFICAÇÃO AQUI: FILTRO PARA REMOVER "CALÇADOS" ---
+            const filteredSubcategories = (result.subcategories || []).filter(sub => 
+                sub.title !== 'Calçados' && sub.slug.current !== 'calcados'
+            );
+
             setData({ 
               category: result.category, 
-              subcategories: result.subcategories || [], 
+              subcategories: filteredSubcategories, // Usa a lista filtrada
               products: result.products || [] 
             });
         }
@@ -196,9 +201,9 @@ export default function CategoryPage() {
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      
+       
       {data.category?.heroBanner ? <CategoryHero heroBanner={data.category.heroBanner} /> : <div className="w-full h-[300px] bg-gray-200 animate-pulse"></div>}
-      
+       
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="mb-8 pb-6 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -214,7 +219,7 @@ export default function CategoryPage() {
 
         {/* CONTAINER PRINCIPAL */}
         <div className="flex flex-col lg:flex-row gap-8 items-start relative">
-          
+           
           {/* ASIDE STICKY */}
           <aside className={`lg:w-64 flex-shrink-0 bg-white p-6 rounded-xl border border-gray-100 shadow-sm ${showMobileFilters ? 'fixed inset-0 z-50 overflow-y-auto m-0 rounded-none' : 'hidden lg:block sticky top-24 h-[calc(100vh-8rem)] overflow-y-auto scrollbar-thin scrollbar-thumb-orange-200 scrollbar-track-transparent'}`}>
               <div className="flex justify-between items-center mb-6 lg:hidden"><h3 className="font-bold text-gray-900">Filtrar</h3><button onClick={() => setShowMobileFilters(false)}><X size={20}/></button></div>
@@ -244,7 +249,7 @@ export default function CategoryPage() {
                           <input type="number" name="max" placeholder="Max" value={priceRange.max} onChange={handlePriceChange} className="w-full p-2 bg-gray-50 border border-gray-200 rounded text-sm focus:border-orange-500 outline-none"/>
                       </div>
                   </div>
-                  
+                   
                   {availableBrands.length > 0 && (
                       <div className="mb-6">
                           <h3 className="font-bold text-gray-900 mb-3 text-sm uppercase tracking-wide">Marcas</h3>
@@ -286,15 +291,14 @@ export default function CategoryPage() {
                       return (
                           <Link key={product._id} to={productLink} className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-xl hover:border-orange-200 transition-all duration-300 group flex flex-col h-full relative">
                               {product.freeShipping && <div className="absolute top-3 right-3 bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-md z-10"><Truck size={10} /> <span>Frete Grátis</span></div>}
-                              
+                               
                               <div className="h-40 w-full bg-white rounded-lg mb-4 flex items-center justify-center overflow-hidden relative p-2">
                                   {product.imageUrl ? <img src={`${product.imageUrl}?w=300`} alt={product.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" /> : <Package size={32} className="text-gray-200"/>}
                               </div>
 
                               <div className="mt-auto">
                                   <h3 className="font-medium text-gray-600 text-xs leading-4 line-clamp-3 h-[3rem] mb-2 group-hover:text-blue-600 transition-colors" title={product.title}>{product.title}</h3>
-                                  
-                                  {/* AQUI ESTÁ A CORREÇÃO DO CARD: LADO A LADO */}
+                                   
                                   <div className="border-t border-gray-50 pt-2 flex justify-between items-end">
                                       <div className="flex flex-col">
                                           {oldPrice > price && <p className="text-[10px] text-gray-400 line-through block mb-0.5">de {formatPrice(oldPrice)}</p>}
@@ -302,13 +306,11 @@ export default function CategoryPage() {
                                           {price > 0 && (
                                             <div className="mt-1 flex flex-col gap-0.5">
                                                 <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span>
-                                                {/* --- RECUPERADO: EM ATÉ 12X --- */}
                                                 <span className="text-[10px] text-gray-400 font-medium">Em até 12x</span>
                                             </div>
                                           )}
                                       </div>
 
-                                      {/* BOTÃO QUICK ADD (RODAPÉ) */}
                                       <button 
                                         onClick={(e) => handleQuickAdd(e, product)}
                                         className="mb-1 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-orange-700 transition-colors flex-shrink-0 ml-2"
