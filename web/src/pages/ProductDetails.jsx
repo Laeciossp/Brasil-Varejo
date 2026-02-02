@@ -545,17 +545,18 @@ export default function ProductDetails() {
                 )
                 )}
 
+                {/* SETAS DE NAVEGAÇÃO (PC E MOBILE - COR ROXA) */}
                 {product.images?.length > 1 && (
                     <>
                         <button 
                             onClick={(e) => { e.stopPropagation(); navigateImage('prev'); }}
-                            className="hidden lg:flex absolute left-4 top-1/2 -translate-y-1/2 z-20 bg-crocus-deep text-white w-10 h-10 rounded-full items-center justify-center shadow-lg shadow-purple-900/20 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-purple-900"
+                            className="absolute left-2 lg:left-4 top-1/2 -translate-y-1/2 z-20 bg-crocus-deep text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg shadow-purple-900/20 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-purple-900"
                         >
                             <ChevronLeft size={20} strokeWidth={3} />
                         </button>
                         <button 
                             onClick={(e) => { e.stopPropagation(); navigateImage('next'); }}
-                            className="hidden lg:flex absolute right-4 top-1/2 -translate-y-1/2 z-20 bg-crocus-deep text-white w-10 h-10 rounded-full items-center justify-center shadow-lg shadow-purple-900/20 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-purple-900"
+                            className="absolute right-2 lg:right-4 top-1/2 -translate-y-1/2 z-20 bg-crocus-deep text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg shadow-purple-900/20 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-purple-900"
                         >
                             <ChevronRight size={20} strokeWidth={3} />
                         </button>
