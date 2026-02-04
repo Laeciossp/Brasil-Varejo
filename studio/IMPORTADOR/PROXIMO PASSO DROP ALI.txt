@@ -1,0 +1,73 @@
+https://oauth.aliexpress.com/authorize?response_type=token&client_id=526852&redirect_uri=https://palastore.com.br/auth/callback&view=web&sp=ae
+
+
+Aqui está o seu Roteiro Mestre para a Palastore completo, com o link de teste que você pediu.
+
+Salve esta mensagem. Ela é o seu guia do começo ao fim.
+
+🔗 O Link do Teste (Para usar daqui a pouco)
+Este é o link exato para pegar o Token do seu novo aplicativo (526852). Se der erro agora, espere mais 20 minutos e tente de novo.
+
+CLIQUE AQUI PARA GERAR O TOKEN
+
+Deu certo? Você vai ser redirecionado e na barra de endereço vai aparecer access_token=.... Copie esse código!
+
+Deu erro (appkey.not.exists)? O servidor ainda está dormindo. Espere e tente de novo.
+
+🗺️ O Roteiro: Do Zero à Venda na Palastore
+Aqui está o passo a passo lógico para você não se perder no código:
+
+FASE 1: A Conexão (Onde estamos hoje)
+Objetivo: Fazer o seu computador (Node.js) falar com a China.
+
+Ação: Pegar o access_token usando o link acima.
+
+Código: Colocar o token no sincronizador-ali.js e rodar o script.
+
+Resultado: Ver os dados de um relógio ou fone aparecerem na tela preta do terminal.
+
+FASE 2: O Banco de Dados (Sanity)
+Objetivo: Salvar esses produtos no seu sistema.
+
+Ação: O script Node.js vai pegar o JSON do AliExpress e enviar para o Sanity.
+
+Código:
+
+JavaScript
+// Exemplo do que faremos
+await client.create({
+  _type: 'product',
+  name: produtoAli.title,
+  price: produtoAli.price,
+  image: produtoAli.image
+})
+Resultado: O produto aparece no seu painel do Sanity Studio.
+
+FASE 3: A Loja (Frontend)
+Objetivo: Mostrar o produto para o cliente comprar.
+
+Ação: Criar a página do produto no seu site React/Next.js.
+
+Detalhe Importante: É aqui que você aplica a Margem de Lucro.
+
+Preço no Ali: R$ 50,00
+
+Preço na Palastore: R$ 99,90 (Você programa isso no código).
+
+FASE 4: O Dinheiro (Checkout)
+Objetivo: Receber o pagamento.
+
+Ação: Integrar Mercado Pago ou Stripe.
+
+Fluxo: O cliente paga -> O dinheiro cai na SUA conta -> O sistema avisa "Venda Realizada!".
+
+FASE 5: O Envio (Dropshipping Real)
+Objetivo: Mandar o produto para a casa do cliente.
+
+Ação (Manual no início): Você pega o dinheiro da venda, entra no AliExpress, compra o produto e coloca o endereço do cliente.
+
+Ação (Automática no futuro): O sistema faz o pedido sozinho via API (Nível Avançado).
+
+Resumo da Madrugada: Foque apenas na FASE 1 agora. Assim que aquele link funcionar e te der o Token, você venceu a barreira mais difícil. O resto é só código javascript que a gente resolve rápido!
+
+Tente o link!

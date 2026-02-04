@@ -51,7 +51,7 @@ export default function Cart() {
 
   useEffect(() => { if (user && !customerName) setCustomerName(user.fullName || ''); }, [user]);
 
-  // --- RECALCULAR FRETE (CORREÇÃO NACIONAL) ---
+  // --- RECALCULAR FRETE (CORREÇÃO FRETE GRÁTIS + MISTO) ---
   useEffect(() => {
     const recalculate = async () => {
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
@@ -69,6 +69,15 @@ export default function Cart() {
       const postingDays = 1;
       let finalOptions = [];
 
+      // NOVO: Filtrar itens pagos
+      const paidItems = items.filter(i => !i.freeShipping);
+      const hasPaidItems = paidItems.length > 0;
+      const allFree = items.length > 0 && !hasPaidItems;
+
+      // Se tiver itens pagos, mandamos SÓ eles para a API calcular o custo.
+      // Se TODOS forem grátis, mandamos todos apenas para calcular prazo, mas forçamos preço 0.
+      const payloadItems = hasPaidItems ? paidItems : items;
+
       try {
         const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
         const response = await fetch(`${baseUrl}/shipping`, { 
@@ -77,7 +86,7 @@ export default function Cart() {
           body: JSON.stringify({
             from: { postal_code: "43805000" }, 
             to: { postal_code: targetZip },
-            products: items.map(p => ({
+            products: payloadItems.map(p => ({
               id: p._id,
               width: Number(p.width) || 15,
               height: Number(p.height) || 15,
@@ -94,19 +103,29 @@ export default function Cart() {
           const candidates = rawOptions.map(opt => {
               let val = opt.custom_price || opt.price || opt.valor || 0;
               if (typeof val === 'string') val = parseFloat(val.replace(',', '.'));
+              
               let finalPrice = Number(val);
+              
+              // SE TODOS FOREM GRÁTIS, O PREÇO É 0
+              if (allFree) {
+                 finalPrice = 0;
+              }
+
               const nameLower = (opt.name || '').toLowerCase();
               
-              // Correção apenas para Vizinhos
-              if (finalPrice === 0 && isNearby) {
+              // Correção apenas para Vizinhos (APENAS SE NÃO FOR 100% FREE)
+              if (!allFree && finalPrice === 0 && isNearby) {
                   if (nameLower.includes('pac') || nameLower.includes('econômico')) finalPrice = 16.90;
                   if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
               }
               return { ...opt, price: finalPrice, days: parseInt(opt.delivery_time || opt.prazo) || 1, cleanName: nameLower };
-          }).filter(c => c.price > 0).sort((a, b) => a.price - b.price);
+          })
+          .filter(c => c.price > 0 || allFree) // Permite preço 0 apenas se for tudo grátis
+          .sort((a, b) => a.price - b.price);
 
           if (isLocal) {
-             finalOptions.push({ name: "Palastore Expresso ⚡", price: candidates[0]?.price > 0 ? candidates[0].price : 15.00, delivery_time: 5, company: "Própria" });
+             const localPrice = allFree ? 0 : (candidates[0]?.price > 0 ? candidates[0].price : 15.00);
+             finalOptions.push({ name: "Palastore Expresso ⚡", price: localPrice, delivery_time: 5, company: "Própria" });
           } else {
              const pac = candidates.find(o => o.cleanName.includes('pac') || o.cleanName.includes('econômico'));
              const sedex = candidates.find(o => o.cleanName.includes('sedex') || o.cleanName.includes('expresso'));
@@ -128,7 +147,7 @@ export default function Cart() {
                 finalOptions.push({ name: "SEDEX (Expresso)", price: sedex.price, delivery_time: finalSedexDays, company: "Correios" });
              }
              
-             // Fallback Nacional (só se API retornou algo mas não foi correio)
+             // Fallback Nacional
              if (finalOptions.length === 0 && candidates.length > 0) {
                  finalOptions.push({
                     name: candidates[0].name || "Entrega Padrão",
@@ -141,13 +160,13 @@ export default function Cart() {
         }
       } catch (error) { console.error("Erro frete API:", error); } 
       
-      // RESGATE SÓ PARA LOCAL E VIZINHO (Nacional depende da API agora)
+      // RESGATE SÓ PARA LOCAL E VIZINHO
       if (finalOptions.length === 0) {
            if (isLocal) {
-               finalOptions.push({ name: "Palastore Expresso ⚡", price: 15.00, delivery_time: 5, company: "Própria" });
+               finalOptions.push({ name: "Palastore Expresso ⚡", price: allFree ? 0 : 15.00, delivery_time: 5, company: "Própria" });
            } else if (isNearby) {
-               finalOptions.push({ name: "PAC (Econômico)", price: 16.90, delivery_time: 12, company: "Correios" });
-               finalOptions.push({ name: "SEDEX (Expresso)", price: 19.90, delivery_time: 7, company: "Correios" });
+               finalOptions.push({ name: "PAC (Econômico)", price: allFree ? 0 : 16.90, delivery_time: 12, company: "Correios" });
+               finalOptions.push({ name: "SEDEX (Expresso)", price: allFree ? 0 : 19.90, delivery_time: 7, company: "Correios" });
            }
       }
 
@@ -221,8 +240,13 @@ export default function Cart() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
                 {items.map((item) => (
                     <div key={item.sku || item._id} className="flex gap-4">
-                      <div className="w-20 h-20 bg-white border rounded-lg p-2">
+                      <div className="w-20 h-20 bg-white border rounded-lg p-2 relative">
                           <Link to={`/produto/${item.slug?.current || item.slug}`}><img src={item.image} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} /></Link>
+                          {item.freeShipping && (
+                               <div className="absolute bottom-0 left-0 right-0 bg-green-600 text-white text-[8px] font-bold text-center py-0.5">
+                                   FRETE GRÁTIS
+                               </div>
+                           )}
                       </div>
                       <div className="flex-1 flex flex-col justify-between">
                         <div className="flex justify-between">
@@ -276,10 +300,10 @@ export default function Cart() {
                     <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                     {isPix && discount > 0 && (<div className="flex justify-between text-green-600 font-bold bg-green-50 p-1 rounded"><span>Desconto PIX (10%)</span><span>-{formatCurrency(discount)}</span></div>)}
                     <div className="flex flex-col gap-2">
-                        <div className="flex justify-between items-center"><span className="flex gap-1"><Truck size={14}/> Frete</span>{recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? formatCurrency(selectedShipping.price) : '--'}</span>}</div>
+                        <div className="flex justify-between items-center"><span className="flex gap-1"><Truck size={14}/> Frete</span>{recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? (selectedShipping.price === 0 ? 'Grátis' : formatCurrency(selectedShipping.price)) : '--'}</span>}</div>
                         {!recalculatingShipping && shippingOptions.map(opt => (
                             <div key={opt.name} onClick={() => setShipping(opt)} className={`p-3 border rounded-lg cursor-pointer text-xs flex justify-between items-center ${selectedShipping?.name === opt.name ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'hover:bg-gray-50'}`}>
-                                <div className="flex flex-col"><span className="font-bold text-gray-900">{opt.name}</span><span className="text-gray-500">Em até {opt.delivery_time} dias úteis</span></div><span className="font-bold text-sm">{formatCurrency(opt.price)}</span>
+                                <div className="flex flex-col"><span className="font-bold text-gray-900">{opt.name}</span><span className="text-gray-500">Em até {opt.delivery_time} dias úteis</span></div><span className="font-bold text-sm">{opt.price === 0 ? 'Grátis' : formatCurrency(opt.price)}</span>
                             </div>
                         ))}
                     </div>

@@ -108,7 +108,7 @@ export default function ProductDetails() {
   const [shippingOptions, setShippingOptions] = useState(null);
 
   // --- PRAZO FLEXÍVEL ---
-  const [handlingDays, setHandlingDays] = useState(4); // Padrão 4 para garantir
+  const [handlingDays, setHandlingDays] = useState(4); 
 
   const carouselRef = useRef(null);
   const [touchStart, setTouchStart] = useState(null);
@@ -176,7 +176,6 @@ export default function ProductDetails() {
         const data = await client.fetch(query, { slug });
 
         if (data && data.product) {
-          // SE O SANITY RETORNAR ALGO, USA. SE NÃO, MANTÉM O 4 FIXO.
           if (data.settings?.handlingTime) {
              setHandlingDays(parseInt(data.settings.handlingTime));
           }
@@ -215,6 +214,7 @@ export default function ProductDetails() {
                 _id, title, slug, price, oldPrice,
                 "imageUrl": images[0].asset->url,
                 variants,
+                freeShipping,
                 logistics { width, height, length, weight }
               }
             `;
@@ -271,6 +271,9 @@ export default function ProductDetails() {
 
     let finalOptions = [];
 
+    // Se o produto tem frete grátis, verificamos aqui
+    const isFree = product.freeShipping === true;
+
     try {
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       
@@ -282,10 +285,10 @@ export default function ProductDetails() {
           to: { postal_code: targetCep },
           products: [{
             id: product._id,
-            width: product.width || 15,
-            height: product.height || 15,
-            length: product.length || 15,
-            weight: product.weight || 0.5,
+            width: product.logistics?.width || 15,
+            height: product.logistics?.height || 15,
+            length: product.logistics?.length || 15,
+            weight: product.logistics?.weight || 0.5,
             insurance_value: product.price || 50,
             quantity: 1
           }]
@@ -298,11 +301,12 @@ export default function ProductDetails() {
           const candidates = rawOptions.map(opt => {
              let p = opt.custom_price || opt.price || opt.valor || 0;
              if (typeof p === 'string') p = parseFloat(p.replace(',', '.'));
-             let finalPrice = Number(p);
+             let finalPrice = isFree ? 0 : Number(p); // Força zero se for grátis
+             
              const nameLower = (opt.name || '').toLowerCase();
 
-             // Correção de Zero SOMENTE para Vizinhos (Salvador/Simões)
-             if (finalPrice === 0 && isNearby) {
+             // Correção de Zero SOMENTE para Vizinhos (Salvador/Simões) - SE não for frete grátis
+             if (!isFree && finalPrice === 0 && isNearby) {
                  if (nameLower.includes('pac') || nameLower.includes('econômico')) finalPrice = 16.90;
                  if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
              }
@@ -314,11 +318,11 @@ export default function ProductDetails() {
                cleanName: nameLower
              };
           })
-          .filter(c => c.price > 0 || (product && product.freeShipping))
+          .filter(c => c.price > 0 || isFree) // Permite 0 se for freeShipping
           .sort((a, b) => a.price - b.price);
 
           if (isLocal) {
-              const bestPrice = candidates[0]?.price > 0 ? candidates[0].price : 15.00;
+              const bestPrice = isFree ? 0 : (candidates[0]?.price > 0 ? candidates[0].price : 15.00);
               finalOptions.push({
                  name: "Palastore Expresso ⚡",
                  price: bestPrice, delivery_time: 5, company: "Própria"
@@ -356,7 +360,6 @@ export default function ProductDetails() {
                  });
               }
               
-              // Fallback para Nacional (só se API retornou algo mas não foi correio)
               if (finalOptions.length === 0 && candidates.length > 0) {
                   finalOptions.push({
                       name: candidates[0].name || "Entrega Padrão",
@@ -372,13 +375,12 @@ export default function ProductDetails() {
     }
 
     // --- RESGATE APENAS PARA LOCAL E VIZINHOS (TRAVA DE SEGURANÇA) ---
-    // Nacional só aparece se a API mandar (como você quer)
     if (finalOptions.length === 0) {
          if (isLocal) {
-             finalOptions.push({ name: "Palastore Expresso ⚡", price: 15.00, delivery_time: 5, company: "Própria" });
+             finalOptions.push({ name: "Palastore Expresso ⚡", price: isFree ? 0 : 15.00, delivery_time: 5, company: "Própria" });
          } else if (isNearby) {
-             finalOptions.push({ name: "PAC (Econômico)", price: 16.90, delivery_time: 12, company: "Correios" });
-             finalOptions.push({ name: "SEDEX (Expresso)", price: 19.90, delivery_time: 7, company: "Correios" });
+             finalOptions.push({ name: "PAC (Econômico)", price: isFree ? 0 : 16.90, delivery_time: 12, company: "Correios" });
+             finalOptions.push({ name: "SEDEX (Expresso)", price: isFree ? 0 : 19.90, delivery_time: 7, company: "Correios" });
          }
     }
 
@@ -398,7 +400,8 @@ export default function ProductDetails() {
         sku: finalSku,
         color: selectedVariant ? selectedVariant.color : null,
         size: selectedVariant ? selectedVariant.size : null,
-        handlingTime: handlingDays, // Envia o dado para o carrinho
+        handlingTime: handlingDays,
+        freeShipping: product.freeShipping, // <--- CRUCIAL: Passa a flag para o carrinho
         width: product.logistics?.width || 15,
         height: product.logistics?.height || 15,
         length: product.logistics?.length || 15,
@@ -435,6 +438,7 @@ export default function ProductDetails() {
             sku: prod._id,
             variantName: null,
             handlingTime: handlingDays,
+            freeShipping: prod.freeShipping, // <--- CRUCIAL: Passa a flag para o carrinho
             width: prod.logistics?.width || 15,
             height: prod.logistics?.height || 15,
             length: prod.logistics?.length || 15,
@@ -545,7 +549,7 @@ export default function ProductDetails() {
                 )
                 )}
 
-                {/* SETAS DE NAVEGAÇÃO (PC E MOBILE - COR ROXA) */}
+                {/* SETAS DE NAVEGAÇÃO */}
                 {product.images?.length > 1 && (
                     <>
                         <button 
@@ -759,6 +763,7 @@ export default function ProductDetails() {
                       {rel.imageUrl ? (
                         <img src={`${rel.imageUrl}?w=300`} alt={rel.title} className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-300" />
                       ) : <Package className="text-gray-200"/>}
+                      {rel.freeShipping && <span className="absolute bottom-2 left-2 bg-green-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">Frete Grátis</span>}
                     </div>
 
                     <h4 className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" title={rel.title}>
