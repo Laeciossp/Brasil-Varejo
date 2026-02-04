@@ -195,6 +195,7 @@ export default function Cart() {
     setLoading(true);
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
+      // 1. SALVAR NO SANITY (Já estava correto, mantido)
       const orderDoc = {
         _type: 'order', orderNumber, status: 'pending',
         customer: { name: customerName, email: user.primaryEmailAddress?.emailAddress, cpf: customer.document, phone: "" },
@@ -206,10 +207,26 @@ export default function Cart() {
       };
       const createdOrder = await client.create(orderDoc);
       const sanityId = createdOrder._id;
+      
+      // 2. ENVIAR PARA WORKER/MERCADO PAGO (AQUI ESTAVA O PROBLEMA)
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: items.map(i => ({ title: i.title || i.name, quantity: i.quantity, price: i.price })), shipping: parseFloat(selectedShipping.price), email: user.primaryEmailAddress.emailAddress, tipoPagamento, shippingAddress: activeAddress, customerDocument: customer.document, totalAmount: totalFinal, orderId: sanityId })
+        body: JSON.stringify({ 
+            items: items.map(i => ({ 
+                title: i.title || i.name, 
+                quantity: i.quantity, 
+                price: i.price,
+                picture_url: i.image // <--- CORREÇÃO: ADICIONADO AQUI PARA APARECER NO MP E EMAIL
+            })), 
+            shipping: parseFloat(selectedShipping.price), 
+            email: user.primaryEmailAddress.emailAddress, 
+            tipoPagamento, 
+            shippingAddress: activeAddress, 
+            customerDocument: customer.document, 
+            totalAmount: totalFinal, 
+            orderId: sanityId 
+        })
       });
       const data = await response.json();
       if (data.error || !data.url) throw new Error(JSON.stringify(data.details || data.error));
@@ -319,7 +336,7 @@ export default function Cart() {
                     </label>
                 </div>
                 <div className="flex justify-between items-end mb-6 pt-4 border-t"><span className="font-medium">Total Final</span><span className="text-3xl font-black text-gray-900">{formatCurrency(totalFinal)}</span></div>
-                <button onClick={handleCheckout} disabled={loading || !selectedShipping || !activeAddress || !customer.document || !customerName} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300 transition-all">{loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/></button>
+                <button onClick={handleCheckout} disabled={loading || !selectedShipping || !activeAddress || !customer.document || !customerName} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-lg shadow-orange-200 transform active:scale-95">{loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/></button>
                 <MercadoPagoTrust />
             </div>
           </div>
