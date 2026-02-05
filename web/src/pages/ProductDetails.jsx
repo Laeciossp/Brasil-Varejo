@@ -374,15 +374,37 @@ export default function ProductDetails() {
       console.error("Erro API:", error);
     }
 
-    // --- RESGATE APENAS PARA LOCAL E VIZINHOS (TRAVA DE SEGURANÇA) ---
-    if (finalOptions.length === 0) {
-         if (isLocal) {
-             finalOptions.push({ name: "Palastore Expresso ⚡", price: isFree ? 0 : 15.00, delivery_time: 5, company: "Própria" });
-         } else if (isNearby) {
-             finalOptions.push({ name: "PAC (Econômico)", price: isFree ? 0 : 16.90, delivery_time: 12, company: "Correios" });
-             finalOptions.push({ name: "SEDEX (Expresso)", price: isFree ? 0 : 19.90, delivery_time: 7, company: "Correios" });
-         }
+    // --- LÓGICA DEFINITIVA (IGUAL AO CART) ---
+    if (product?.brand === 'SN') {
+        // CAMINHO A: É Shein (SN) -> Ignora local e força Econômico
+        let precoBase = 15.00;
+
+        // Tenta pegar o preço mais barato da API (se houver), senão usa 15
+        if (finalOptions.length > 0) {
+             const maisBarato = finalOptions.reduce((min, p) => parseFloat(p.price) < parseFloat(min.price) ? p : min, finalOptions[0]);
+             precoBase = parseFloat(maisBarato.price);
+        }
+        
+        // Sobrescreve a lista com UMA ÚNICA opção correta
+        finalOptions = [{
+            name: 'Envio Econômico Padrão', // Nome novo (sem Expresso)
+            price: isFree ? 0 : (precoBase > 0 ? precoBase : 15.00),
+            delivery_time: 12,
+            company: 'Transportadora'
+        }];
+        
+    } else {
+        // CAMINHO B: Normal -> Aplica regras de Local/Vizinho (Palastore Expresso)
+        if (finalOptions.length === 0) {
+             if (isLocal) {
+                 finalOptions.push({ name: "Palastore Expresso ⚡", price: isFree ? 0 : 15.00, delivery_time: 5, company: "Própria" });
+             } else if (isNearby) {
+                 finalOptions.push({ name: "PAC (Econômico)", price: isFree ? 0 : 16.90, delivery_time: 12, company: "Correios" });
+                 finalOptions.push({ name: "SEDEX (Expresso)", price: isFree ? 0 : 19.90, delivery_time: 7, company: "Correios" });
+             }
+        }
     }
+    // ---------------------------------------------
 
     setShippingOptions(finalOptions);
     setCalculating(false);
@@ -394,6 +416,7 @@ export default function ProductDetails() {
         _id: product._id,
         title: product.title, 
         slug: product.slug,
+        brand: product.brand, // <--- ADICIONEI ISSO! É O QUE FALTAVA.
         price: currentPrice,
         image: activeMedia ? urlFor(activeMedia.asset).url() : '',
         variantName: selectedVariant ? selectedVariant.variantName : null,
@@ -401,7 +424,7 @@ export default function ProductDetails() {
         color: selectedVariant ? selectedVariant.color : null,
         size: selectedVariant ? selectedVariant.size : null,
         handlingTime: handlingDays,
-        freeShipping: product.freeShipping, // <--- CRUCIAL: Passa a flag para o carrinho
+        freeShipping: product.freeShipping,
         width: product.logistics?.width || 15,
         height: product.logistics?.height || 15,
         length: product.logistics?.length || 15,

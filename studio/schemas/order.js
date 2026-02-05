@@ -1,3 +1,5 @@
+import React from 'react'
+
 export default {
   name: 'order',
   title: '📦 Pedidos',
@@ -34,6 +36,7 @@ export default {
     { name: 'document', type: 'string', hidden: true },
     { name: 'alias', type: 'string', hidden: true },
     { name: 'id', type: 'string', hidden: true },
+    { name: 'hasUnreadMessage', type: 'boolean', title: 'Tem mensagem não lida?', hidden: true },
     
     // --- DADOS DO CLIENTE ---
     {
@@ -60,6 +63,12 @@ export default {
           type: 'object',
           title: 'Produto',
           fields: [
+            {
+              name: 'product',
+              title: 'Produto Original',
+              type: 'reference',
+              to: [{ type: 'product' }]
+            },
             { name: 'productName', title: 'Nome', type: 'string' },
             { name: 'variantName', title: 'Variação', type: 'string' },
             { name: 'color', title: 'Cor', type: 'string' },
@@ -69,7 +78,22 @@ export default {
             { name: 'imageUrl', title: 'Imagem', type: 'string' }
           ],
           preview: {
-            select: { title: 'productName', subtitle: 'variantName' }
+            select: {
+              title: 'productName',
+              subtitle: 'variantName',
+              imageUrl: 'imageUrl'
+            },
+            prepare({ title, subtitle, imageUrl }) {
+              return {
+                title: title,
+                subtitle: subtitle,
+                media: imageUrl ? React.createElement('img', { 
+                  src: imageUrl, 
+                  alt: title,
+                  style: { objectFit: 'cover', height: '100%', width: '100%' } 
+                }) : undefined
+              }
+            }
           }
         }
       ]
@@ -86,7 +110,7 @@ export default {
       name: 'shippingCost',
       title: 'Custo do Frete',
       type: 'number',
-      group: 'logistics' // Coloquei aqui para ficar junto com a transportadora
+      group: 'logistics'
     },
     {
       name: 'shippingAddress',
@@ -144,6 +168,93 @@ export default {
       type: 'text', 
       rows: 3,
       group: 'admin' 
+    },
+
+    // --- CHAT / MENSAGENS ---
+    {
+      name: 'messages',
+      title: '💬 Chat do Pedido',
+      type: 'array',
+      group: 'details',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            { 
+              name: 'user', 
+              title: 'Remetente', 
+              type: 'string',
+              options: {
+                list: [
+                  { title: '👤 Cliente', value: 'cliente' },
+                  { title: '🛡️ Equipe / Admin', value: 'admin' }
+                ],
+                layout: 'radio'
+              },
+              initialValue: 'admin'
+            },
+            {
+              name: 'staff',
+              title: 'Atendente',
+              type: 'reference',
+              to: [{ type: 'staff' }],
+              hidden: ({ parent }) => parent?.user === 'cliente'
+            },
+            { 
+              name: 'text', 
+              title: 'Mensagem', 
+              type: 'text',
+              rows: 2
+            },
+            { 
+              name: 'date', 
+              title: 'Data/Hora', 
+              type: 'datetime', 
+              initialValue: () => new Date().toISOString(),
+              readOnly: true
+            }
+          ],
+          preview: {
+            select: {
+              title: 'text',
+              subtitle: 'user',
+              date: 'date',
+              staffName: 'staff.name',
+              staffImage: 'staff.avatar'
+            },
+            prepare({ title, subtitle, date, staffName, staffImage }) {
+              const isClient = subtitle === 'cliente';
+              const senderName = isClient ? '👤 Cliente' : (staffName || '🛡️ Admin');
+              
+              return {
+                title: title,
+                subtitle: `${senderName} - ${date ? new Date(date).toLocaleString('pt-BR') : ''}`,
+                media: staffImage
+              }
+            }
+          }
+        }
+      ]
     }
-  ]
+  ],
+  // --- PREVIEW PRINCIPAL DO PEDIDO (RESTAURADO) ---
+  preview: {
+    select: {
+      orderNumber: 'orderNumber',
+      customerName: 'customer.name',
+      status: 'status'
+    },
+    prepare({ orderNumber, customerName, status }) {
+      const statusIcons = {
+        pending: '🟡',
+        paid: '🟢',
+        shipped: '🚚',
+        cancelled: '❌'
+      }
+      return {
+        title: `${statusIcons[status] || '📦'} ${orderNumber || 'Novo Pedido'} - ${customerName || 'Cliente'}`,
+        subtitle: status === 'pending' ? 'Aguardando Pagamento' : (status === 'paid' ? 'Pago' : status)
+      }
+    }
+  }
 }

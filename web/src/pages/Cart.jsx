@@ -160,23 +160,63 @@ export default function Cart() {
         }
       } catch (error) { console.error("Erro frete API:", error); } 
       
-      // RESGATE SÓ PARA LOCAL E VIZINHO
-      if (finalOptions.length === 0) {
-           if (isLocal) {
-               finalOptions.push({ name: "Palastore Expresso ⚡", price: allFree ? 0 : 15.00, delivery_time: 5, company: "Própria" });
-           } else if (isNearby) {
-               finalOptions.push({ name: "PAC (Econômico)", price: allFree ? 0 : 16.90, delivery_time: 12, company: "Correios" });
-               finalOptions.push({ name: "SEDEX (Expresso)", price: allFree ? 0 : 19.90, delivery_time: 7, company: "Correios" });
-           }
+     // --- LÓGICA DEFINITIVA: BIFURCAÇÃO POR MARCA ---
+      
+      // 1. Verifica se tem ALGUM item da marca SN (Shein)
+      const temItemSN = items && items.some(item => item.brand === 'SN');
+
+      if (temItemSN) {
+          // === CAMINHO A: TEM PRODUTO SN (SHEIN) ===
+          // AQUI NÓS IGNORAMOS TOTALMENTE SE É LOCAL OU VIZINHO.
+          // A REGRA DA MARCA MANDA MAIS QUE A REGRA DO CEP.
+
+          // Tenta pegar um preço base da API, se falhar, usa R$ 15.00
+          let precoBase = 15.00;
+          if (finalOptions.length > 0) {
+              const maisBarato = finalOptions.reduce((min, p) => parseFloat(p.price) < parseFloat(min.price) ? p : min, finalOptions[0]);
+              precoBase = parseFloat(maisBarato.price);
+          }
+
+          // Cria a opção ÚNICA e OBRIGATÓRIA
+          finalOptions = [{
+              name: 'Envio Econômico Padrão',
+              price: allFree ? 0 : (precoBase > 0 ? precoBase : 15.00),
+              delivery_time: 12,
+              company: 'Transportadora'
+          }];
+
+      } else {
+          // === CAMINHO B: NÃO TEM PRODUTO SN (NORMAL) ===
+          // Aqui roda a lógica antiga de Local/Vizinho (Palastore Expresso)
+          
+          if (finalOptions.length === 0) {
+               if (isLocal) {
+                   finalOptions.push({ name: "Palastore Expresso ⚡", price: allFree ? 0 : 15.00, delivery_time: 5, company: "Própria" });
+               } else if (isNearby) {
+                   finalOptions.push({ name: "PAC (Econômico)", price: allFree ? 0 : 16.90, delivery_time: 12, company: "Correios" });
+                   finalOptions.push({ name: "SEDEX (Expresso)", price: allFree ? 0 : 19.90, delivery_time: 7, company: "Correios" });
+               }
+          }
       }
+      // ----------------------------------------------------
 
       setShippingOptions(finalOptions);
       setRecalculatingShipping(false);
+      
       if (finalOptions.length > 0) {
+          // Lógica para manter seleção ou forçar o primeiro
           const currentName = selectedShipping?.name;
           const sameOption = finalOptions.find(o => o.name === currentName);
-          setShipping(sameOption || finalOptions[0]);
-      } else { setShipping(null); }
+          
+          if (typeof setSelectedShipping === 'function') {
+              setSelectedShipping(sameOption || finalOptions[0]);
+          } else if (typeof setShipping === 'function') {
+              setShipping(sameOption || finalOptions[0]);
+          }
+      } else { 
+          if (typeof setSelectedShipping === 'function') setSelectedShipping(null);
+          else if (typeof setShipping === 'function') setShipping(null);
+      }
     };
     recalculate();
   }, [customer.activeAddressId, items.length, globalCep]);
