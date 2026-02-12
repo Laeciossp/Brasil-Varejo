@@ -1,7 +1,8 @@
 const { createClient } = require('@sanity/client');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const readline = require('readline'); // ADICIONADO PARA A PARADA
+const readline = require('readline');
+const fs = require('fs'); // Necessário para ler o arquivo
 
 puppeteer.use(StealthPlugin());
 
@@ -16,13 +17,13 @@ const client = createClient({
 
 const MARKUP = 1.30; 
 
-// --- FUNÇÃO DE PARADA (Igual ao Importador) ---
+// --- FUNÇÃO DE PARADA ---
 async function askForHelp(msg) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     console.log('\n\x1b[41m\x1b[37m%s\x1b[0m', ` 🚨 PARADA: ${msg} `);
     console.log('   (O robô detectou um bloqueio ou erro de leitura)');
     return new Promise(resolve => {
-        rl.question('   ✅ Resolva o Captcha no navegador e tecle ENTER para tentar de novo...', () => {
+        rl.question('   ✅ Resolva o Captcha na aba atual e tecle ENTER...', () => {
             rl.close();
             resolve();
         });
@@ -33,7 +34,6 @@ async function askForHelp(msg) {
 async function checkSheinStock(page, url) {
     let attempts = 0;
     
-    // Loop infinito até conseguir ler ou decidir que realmente morreu
     while (true) {
         try {
             if (attempts === 0) await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -44,7 +44,6 @@ async function checkSheinStock(page, url) {
                 });
             } catch(e) {}
 
-            // Tenta pegar Preço
             const rawPrice = await page.evaluate(() => {
                 const idPrice = document.getElementById('productMainPriceId');
                 if (idPrice) {
@@ -60,23 +59,15 @@ async function checkSheinStock(page, url) {
                 return 0;
             });
 
-            // 🛑 AQUI ESTÁ A SEGURANÇA 🛑
-            // Se não achou preço, assume que é CAPTCHA e pede ajuda
             if (!rawPrice || rawPrice === 0) {
-                // Verifica se é 404 (página não encontrada real)
                 const is404 = await page.evaluate(() => document.body.innerText.includes('página não encontrada') || document.body.innerText.includes('This page was not found'));
-                
-                if (is404) {
-                    return { active: false, reason: 'Página 404 (Produto Removido)' };
-                }
+                if (is404) return { active: false, reason: 'Página 404 (Produto Removido)' };
 
-                // Se não é 404, é bloqueio!
                 await askForHelp("Preço sumiu (Provável Captcha)");
                 attempts++;
-                continue; // Tenta de novo o mesmo link
+                continue; 
             }
 
-            // Validação de Estoque (Click & Wait)
             const validSizes = await page.evaluate(async () => {
                 const sizes = [];
                 const buttons = Array.from(document.querySelectorAll('.product-intro__size-radio, .size-item, .val'));
@@ -93,30 +84,23 @@ async function checkSheinStock(page, url) {
                 for (const btn of buttons) {
                     let rawText = btn.innerText;
                     let cleanName = rawText.split('R$')[0].trim();
-                    
                     if (cleanName.length > 25 || cleanName.length === 0) continue; 
                     if (cleanName.includes('Tamanho BR') || cleanName.includes('Cintura')) continue;
                     if (blockList.some(bad => cleanName.includes(bad))) continue;
-
                     if (btn.classList.contains('disabled') || btn.classList.contains('is-disabled')) continue;
 
                     try {
                         btn.click();
-                        await wait(400);
-                        
+                        await wait(400); 
                         const buyBtn = document.querySelector('.product-intro__add-btn, button.she-btn-black');
                         let isSoldOut = false;
-                        
                         if (buyBtn) {
                             const btnText = buyBtn.innerText.toUpperCase();
                             if (btnText.includes('ESGOTADO') || btnText.includes('SOLD OUT')) isSoldOut = true;
                             if (buyBtn.disabled || buyBtn.classList.contains('disabled')) isSoldOut = true;
                         }
-                        
                         if (!isSoldOut) sizes.push(cleanName);
-                    } catch(e) {
-                        sizes.push(cleanName);
-                    }
+                    } catch(e) { sizes.push(cleanName); }
                 }
                 return [...new Set(sizes)];
             });
@@ -133,7 +117,18 @@ async function checkSheinStock(page, url) {
 }
 
 async function startGuardian() {
-    console.log('🛡️ Iniciando O GUARDIÃO (Blindado + Anti-Captcha)...');
+    console.log('🛡️ Iniciando O GUARDIÃO (Modo Conexão + Cookies)...');
+
+    // --- 1. LER COOKIES ---
+    let cookies = [];
+    try {
+        const fileContent = fs.readFileSync('cookies.json', 'utf-8');
+        cookies = JSON.parse(fileContent);
+        console.log(`🍪 Cookies carregados: ${cookies.length} encontrados.`);
+    } catch (e) {
+        console.log("⚠️ Aviso: Não encontrei 'cookies.json' ou ele está inválido.");
+        console.log("   (O robô vai tentar sem cookies extras, usando apenas a sessão aberta)");
+    }
 
     const query = `*[_type == "product" && brand == "SN"] {
         _id, title, isActive, price, sourceUrl, 
@@ -144,8 +139,35 @@ async function startGuardian() {
     const products = await client.fetch(query);
     console.log(`📦 Auditando ${products.length} produtos 'SN'...`);
 
-    const browser = await puppeteer.launch({ headless: false, defaultViewport: null });
-    const page = await browser.newPage();
+    // --- 2. CONECTAR ---
+    let browser;
+    try {
+        browser = await puppeteer.connect({ 
+            browserURL: 'http://127.0.0.1:9222',
+            defaultViewport: null 
+        });
+        console.log("✅ Conectado ao Chrome existente!");
+    } catch (e) {
+        console.log("\n❌ ERRO: Chrome fechado ou sem porta 9222.");
+        process.exit(1);
+    }
+
+    // --- 3. PEGAR ABA E INJETAR ---
+    const pages = await browser.pages();
+    const page = pages.length > 0 ? pages[0] : await browser.newPage();
+    
+    if (cookies.length > 0) {
+        // Filtra cookies para garantir que são apenas do domínio certo (segurança extra)
+        const sheinCookies = cookies.filter(c => c.domain.includes('shein.com'));
+        if(sheinCookies.length > 0) {
+             console.log(`💉 Injetando ${sheinCookies.length} cookies da Shein na aba...`);
+             await page.setCookie(...sheinCookies);
+             // Dá um refresh para os cookies pegarem
+             await page.reload({ waitUntil: 'domcontentloaded' });
+        }
+    }
+    
+    console.log("   👉 Tudo pronto. Não feche a aba.");
 
     for (const [index, product] of products.entries()) {
         console.log(`\n🔍 [${index + 1}/${products.length}] ${product.title.substring(0, 30)}...`);
@@ -159,7 +181,7 @@ async function startGuardian() {
         const updates = {};
         let needsCommit = false;
 
-        // LÓGICA DE ATUALIZAÇÃO (Igual à anterior)
+        // LÓGICA DE ATUALIZAÇÃO
         if (!status.active) {
             if (product.isActive) {
                 console.log(`   💀 DESATIVANDO: ${status.reason}`);
@@ -217,7 +239,6 @@ async function startGuardian() {
     }
 
     console.log("\n🛡️ Auditoria Finalizada.");
-    await browser.close();
 }
 
 startGuardian();

@@ -61,22 +61,26 @@ const CategoryItem = ({ category, level = 0, onItemClick }) => {
         )}
       </div>
 
-      {/* Renderização dos Filhos */}
+      {/* Renderização dos Filhos (ALTERADO PARA GRID SE TIVER MUITOS ITENS) */}
       {hasChildren && isOpen && (
-        <div className="relative">
-          <div 
-            // CORRIGIDO: Linha vertical agora é um roxo bem clarinho
-            className="absolute bg-purple-100 w-[1px] top-0 bottom-0"
-            style={{ left: `${(level * 16) + 24}px` }} 
-          ></div>
+        <div className={`relative ${category.children.length > 6 ? 'grid grid-cols-2 gap-x-1' : ''}`}>
+          
+          {/* A linha vertical só aparece se NÃO for grade de 2 colunas, para não cortar o layout */}
+          {category.children.length <= 6 && (
+            <div 
+              className="absolute bg-purple-100 w-[1px] top-0 bottom-0"
+              style={{ left: `${(level * 16) + 24}px` }} 
+            ></div>
+          )}
           
           {category.children.map((child) => (
-            <CategoryItem 
-                key={child._id} 
-                category={child} 
-                level={level + 1} 
-                onItemClick={onItemClick}
-            />
+            <div key={child._id} className={category.children.length > 6 ? "overflow-hidden" : ""}>
+                <CategoryItem 
+                    category={child} 
+                    level={level + 1} 
+                    onItemClick={onItemClick}
+                />
+            </div>
           ))}
         </div>
       )}

@@ -111,8 +111,9 @@ function calculatePrice(rawPrice) {
 async function startFullSync() {
     console.log('🚀 Iniciando Atualizador Inteligente (Detector de Cores & Reposição)...');
 
-    // QUERY ATUALIZADA: Pega ativos OU produtos da Sangue Latino inativos (para verificar se voltou estoque)
-    const query = `*[_type == "product" && defined(sourceUrl) && (isActive == true || brand match "SL")]{
+    // QUERY AJUSTADA: Traz APENAS produtos SL (ativos ou inativos)
+    // Removemos o "OR isActive == true" para impedir que ele puxe SN
+    const query = `*[_type == "product" && defined(sourceUrl) && brand match "SL"]{
         _id, title, sourceUrl, variants, price, isActive
     }`;
     
