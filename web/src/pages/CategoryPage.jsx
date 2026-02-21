@@ -103,7 +103,7 @@ export default function CategoryPage() {
 
             setData({ 
               category: result.category, 
-              subcategories: filteredSubcategories, // Usa a lista filtrada
+              subcategories: filteredSubcategories, 
               products: result.products || [] 
             });
         }
@@ -175,7 +175,8 @@ export default function CategoryPage() {
   const filteredProducts = useMemo(() => {
     if (!data.products) return [];
     return data.products.filter(product => {
-      const finalPrice = product.variants?.[0]?.price || product.price || 0;
+      // CORREÇÃO: Busca profunda do preço para o filtro também funcionar
+      const finalPrice = product.variants?.[0]?.sizes?.[0]?.price || product.variants?.[0]?.price || product.price || 0;
       const matchesBrand = selectedBrands.length === 0 || (product.brandName && selectedBrands.includes(product.brandName));
       const min = priceRange.min ? parseFloat(priceRange.min) : 0;
       const max = priceRange.max ? parseFloat(priceRange.max) : Infinity;
@@ -285,8 +286,10 @@ export default function CategoryPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredProducts.map((product) => {
                       const productLink = product.slug?.current ? `/product/${product.slug.current}` : '#';
-                      const price = product.variants?.[0]?.price || product.price || 0;
-                      const oldPrice = product.variants?.[0]?.oldPrice || product.oldPrice || 0;
+                      
+                      // CORREÇÃO: Busca profunda do preço para exibir no Card corretamente
+                      const price = product.variants?.[0]?.sizes?.[0]?.price || product.variants?.[0]?.price || product.price || 0;
+                      const oldPrice = product.variants?.[0]?.sizes?.[0]?.oldPrice || product.variants?.[0]?.oldPrice || product.oldPrice || 0;
 
                       return (
                           <Link key={product._id} to={productLink} className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-xl hover:border-orange-200 transition-all duration-300 group flex flex-col h-full relative">

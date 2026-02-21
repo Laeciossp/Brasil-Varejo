@@ -23,12 +23,12 @@ export default function SearchPage() {
       if (!queryTerm) return;
       setLoading(true);
       try {
-        // 🔥 CORREÇÃO AQUI: Adicionei "&& isActive == true"
+        // 🔥 CORREÇÃO AQUI: Adicionei "&& isActive == true" e ajustei para trazer 'variants'
         // Agora o site só busca produtos que estiverem com a chave ligada no Sanity.
         const groq = `*[_type == "product" && isActive == true && (title match $term + "*" || description match $term + "*")]{
             _id, title, price, slug,
             "imageUrl": images[0].asset->url,
-            variants[0] { price }
+            variants
         }`;
         
         const result = await client.fetch(groq, { term: queryTerm });
@@ -55,7 +55,9 @@ export default function SearchPage() {
        ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
              {products.map(product => {
-                const price = product.variants?.price || product.price || 0;
+                // CORREÇÃO: Busca profunda de preços
+                const price = product.variants?.[0]?.sizes?.[0]?.price || product.variants?.[0]?.price || product.price || 0;
+                
                 return (
                    <Link key={product._id} to={`/product/${product.slug.current}`} className="bg-white border p-4 rounded-xl hover:shadow-lg transition-all flex flex-col">
                       

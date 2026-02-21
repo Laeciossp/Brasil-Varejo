@@ -25,7 +25,7 @@ export default function BrandPage() {
     const fetchBrandProducts = async () => {
       setLoading(true);
       try {
-        // Busca produtos onde o campo 'brand' é igual ao da URL
+        // CORREÇÃO: Puxamos 'variants' inteiro para ter acesso aos 'sizes'
         const query = `*[_type == "product" && brand == $brand] {
           _id,
           title,
@@ -35,7 +35,7 @@ export default function BrandPage() {
           slug,
           brand,
           freeShipping,
-          variants[0] { price, oldPrice }
+          variants
         }`;
 
         const result = await client.fetch(query, { brand: decodedBrand });
@@ -72,8 +72,9 @@ export default function BrandPage() {
         {products.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {products.map((product) => {
-                    const price = product.variants?.price || product.price || 0;
-                    const oldPrice = product.variants?.oldPrice || product.oldPrice || 0;
+                    // CORREÇÃO: Busca profunda de preços
+                    const price = product.variants?.[0]?.sizes?.[0]?.price || product.variants?.[0]?.price || product.price || 0;
+                    const oldPrice = product.variants?.[0]?.sizes?.[0]?.oldPrice || product.variants?.[0]?.oldPrice || product.oldPrice || 0;
 
                     return (
                         <Link key={product._id} to={`/product/${product.slug.current}`} className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-xl transition-all group relative">

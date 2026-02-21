@@ -1,7 +1,7 @@
 [
 {
     "domain": ".br.shein.com",
-    "expirationDate": 1802433956,
+    "expirationDate": 1802616408,
     "hostOnly": false,
     "httpOnly": false,
     "name": "_derived_epik",
@@ -10,12 +10,12 @@
     "secure": false,
     "session": false,
     "storeId": "0",
-    "value": "dj0yJnU9Y3pzck8yNHFsY0hGMS01QTZ4S05iY2hkT25Tel95S0Embj1sd0xHaEpTR0hENHd4a0JBOWViWmZ3Jm09MSZ0PUFBQUFBR21Od2lRJnJtPTEmcnQ9QUFBQUFHbU53aVEmc3A9Mg",
+    "value": "dj0yJnU9LTdlOXFmdmltQU5mOFFnd2ZDSDFuRksxdFUtQkkzV0wmbj1GTUVzQVNFMThid3JXV2VNRl9qN3lBJm09MSZ0PUFBQUFBR21RaXRZJnJtPTEmcnQ9QUFBQUFHbVFpdFkmc3A9NQ",
     "id": 1
 },
 {
     "domain": ".br.shein.com",
-    "expirationDate": 1802433956,
+    "expirationDate": 1802616408,
     "hostOnly": false,
     "httpOnly": false,
     "name": "_pin_unauth",
@@ -29,7 +29,7 @@
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1778673956,
+    "expirationDate": 1778856409,
     "hostOnly": false,
     "httpOnly": false,
     "name": "_cbp",
@@ -51,12 +51,12 @@
     "secure": true,
     "session": true,
     "storeId": "0",
-    "value": "6iWJlIaex2wI3uBVd38AD3X897OkEXVcevOzEw_geCk-1770896337304-0.0.1.1-604800000",
+    "value": "LSW0vb.._OUhIy8_59DHsmAIqFXewVfV6abiGQnyvBc-1771080398746-0.0.1.1-604800000",
     "id": 4
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1778673956,
+    "expirationDate": 1778856408,
     "hostOnly": false,
     "httpOnly": false,
     "name": "_fbp",
@@ -70,7 +70,7 @@
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1804962239.230575,
+    "expirationDate": 1805508794.505091,
     "hostOnly": false,
     "httpOnly": false,
     "name": "_ga",
@@ -84,7 +84,7 @@
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1804974852.333833,
+    "expirationDate": 1805513374.163849,
     "hostOnly": false,
     "httpOnly": false,
     "name": "_ga_1EF6B85C31",
@@ -93,12 +93,12 @@
     "secure": false,
     "session": false,
     "storeId": "0",
-    "value": "GS2.1.s1770414852$o4$g0$t1770414852$j60$l0$h0",
+    "value": "GS2.1.s1770953374$o6$g0$t1770953374$j60$l0$h0",
     "id": 7
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1804974852.051614,
+    "expirationDate": 1805509268.242419,
     "hostOnly": false,
     "httpOnly": false,
     "name": "_ga_BY7EZRXJL2",
@@ -107,7 +107,7 @@
     "secure": false,
     "session": false,
     "storeId": "0",
-    "value": "GS2.1.s1770414852$o4$g0$t1770414852$j60$l0$h0",
+    "value": "GS2.1.s1770947452$o5$g1$t1770949268$j60$l0$h0",
     "id": 8
 },
 {
@@ -154,7 +154,7 @@
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1801938239,
+    "expirationDate": 1802483445,
     "hostOnly": false,
     "httpOnly": false,
     "name": "_hjSessionUser_6491386",
@@ -168,7 +168,7 @@
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1770984356,
+    "expirationDate": 1771166808,
     "hostOnly": false,
     "httpOnly": false,
     "name": "_uetsid",
@@ -177,12 +177,12 @@
     "secure": false,
     "session": false,
     "storeId": "0",
-    "value": "716e9d20079d11f186c5e7889953e24b",
+    "value": "fde36fd009b311f19b8a77d7172bd37b",
     "id": 13
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1804593956,
+    "expirationDate": 1804776408,
     "hostOnly": false,
     "httpOnly": false,
     "name": "_uetvid",
@@ -196,7 +196,7 @@
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1805457953,
+    "expirationDate": 1805640406,
     "hostOnly": false,
     "httpOnly": false,
     "name": "armorUuid",
@@ -210,7 +210,7 @@
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1805061956,
+    "expirationDate": 1805244410,
     "hostOnly": false,
     "httpOnly": false,
     "name": "cto_bundle",
@@ -219,26 +219,12 @@
     "secure": false,
     "session": false,
     "storeId": "0",
-    "value": "-g2T5F80RjgzaXRwODRJUG11WGZDbyUyRkJMazhaVFQwdDN6UUtkaUVVVGFqeU9UUmpjTlZHaXZOeCUyRjVWTTlMN1dBMHNCdTk2RDdnUW4lMkI0RmQxYjBnaWclMkZseTZERVVEbHp3WjZLd1VieFNuamFvcWFmMXpKRmdLRlI0Y2ZXYVpPRzVwVEFubElYMFFJc2pFb0tTNmdFeXA0RWVUQSUzRCUzRA",
+    "value": "1xYwn180RjgzaXRwODRJUG11WGZDbyUyRkJMazlXNm90aUtOd0xETmFwQVlmdEJZbUg5VHQ4S1F6RzRieXhzWFVyMDhrWjhVa2c3VlBaVEZCQ2RadTQ1ZFB5UGx6bWElMkJpM2tqSHFTRkpqZmlGa2R1MVdWJTJGVEk2eWdjOHpFWUxDaGw3UmhOTThPaHNMY2k5T3lDbHdUOW04dEdnOHclM0QlM0Q",
     "id": 16
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1772885081.674569,
-    "hostOnly": false,
-    "httpOnly": false,
-    "name": "currency",
-    "path": "/",
-    "sameSite": "unspecified",
-    "secure": false,
-    "session": false,
-    "storeId": "0",
-    "value": "BRL",
-    "id": 17
-},
-{
-    "domain": ".shein.com",
-    "expirationDate": 1770899755,
+    "expirationDate": 1771082209,
     "hostOnly": false,
     "httpOnly": false,
     "name": "fita.short_sid.shein",
@@ -247,12 +233,12 @@
     "secure": false,
     "session": false,
     "storeId": "0",
-    "value": "01KH8SE1GS07GEMQDA582CR3N4",
-    "id": 18
+    "value": "01KHE9WPVP3V2RKY79K1A3TVMJ",
+    "id": 17
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1805057955,
+    "expirationDate": 1805240409,
     "hostOnly": false,
     "httpOnly": false,
     "name": "fita.sid.shein",
@@ -262,11 +248,11 @@
     "session": false,
     "storeId": "0",
     "value": "01KGPM6QK9TH6C11VS8M1PFG47",
-    "id": 19
+    "id": 18
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1771502755.678048,
+    "expirationDate": 1771685209.773989,
     "hostOnly": false,
     "httpOnly": false,
     "name": "language",
@@ -276,11 +262,11 @@
     "session": false,
     "storeId": "0",
     "value": "br",
-    "id": 20
+    "id": 19
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1802001954,
+    "expirationDate": 1802184406,
     "hostOnly": false,
     "httpOnly": false,
     "name": "smidV2",
@@ -290,11 +276,11 @@
     "session": false,
     "storeId": "0",
     "value": "20260205070403c4cd801cfb3688b6131a53e24f05659200d90b4ddd1e54c60",
-    "id": 21
+    "id": 20
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1785954237,
+    "expirationDate": 1786499443,
     "hostOnly": false,
     "httpOnly": false,
     "name": "tfstk",
@@ -303,12 +289,12 @@
     "secure": true,
     "session": false,
     "storeId": "0",
-    "value": "g8CK3W1aDlqHrdF_DX2grFTRt1aMyRbeWM7jZ3xnFGIOPidkZyJl6LQJjXju89XRBgswKH1kt_hRzgIhK_QrwU_54y-u8RbF8QR7mof8iw7eXfIrzlA7PNOkyRkLzP_F8QuNPtZcPwP8Mg5JPQsW1hTyJQTWP3a91EY2NX9SOAi6bUOWNL9BfCTDoXiBAHaO5h8WN3sWNPd6bUOWVgOSMugpq2t-wOQpTTP4EYCRg1Lppn_L_bGR6jvpcwttNo19JktfRhhSwnasyJ7O-khVSB5GDEj31XIARts5hGNt9dWCW_pVaDa6NL6GnpBTAbKGtUpXNd3SNNdBfK1MGSi97O_hF6SKybTFtsvJ0dUSaLA1iK6fv4zV5BT54K5u0X-CPZ5VnIF-1Bp54YfcMs5tmnLodPUtUYJB7h5EjMOrEq-pWn4iIYkyIF89mPUtUYJB7FK0S5DrUdYN.",
-    "id": 22
+    "value": "g6qqU6thtiIqoK53LJmNYh3kG2ixRc5QjlGsIR2ihjcmGtBNQWwsoO3_IfvaOSusSsnbb7PYwqajfZdwbmE7lhGfMcygOc5COMsQH-nxj61Cuq0svDDZsfcM13xofA7JuOBuH-n9eR4hOR2Abg7f8Amgs0coBxoiIAcGU0DEBcxmSnYkZbHijc0mSbmoQAlisV0cU8c-IccgscXrqbHijfVijjnIsXtrLqXmZaXYgQxeIXwmahxgmZ3qTzT6fhZr3qrgnbkq3ukquXuNijbLm7wgco3RJeiTFyPaS7jy05y0-5cbq6xZ1yHaIvohvplu0RrrkzODovoqg2qmrp-UHV4z4mZc6ee7Uj0EVz_RGVi4gyhKoaC8_8lbsoukg_G_R8ZmzWfW453aoSkoxgSH6Yq4qlU2sFumeYlCUTRUVoBV4XU_xFLtkzHrOtBvWF3meYlCUT89Wqn-UX6AH",
+    "id": 21
 },
 {
     "domain": ".shein.com",
-    "expirationDate": 1805457954,
+    "expirationDate": 1805640407,
     "hostOnly": false,
     "httpOnly": false,
     "name": "zpnvSrwrNdywdz",
@@ -318,11 +304,11 @@
     "session": false,
     "storeId": "0",
     "value": "center",
-    "id": 23
+    "id": 22
 },
 {
     "domain": "br.shein.com",
-    "expirationDate": 1772877856.940018,
+    "expirationDate": 1773507645.158026,
     "hostOnly": true,
     "httpOnly": true,
     "name": "AT",
@@ -331,12 +317,12 @@
     "secure": true,
     "session": false,
     "storeId": "0",
-    "value": "MDEwMDE.eyJiIjo3LCJnIjoxNzcwMjg1ODU1LCJyIjoiM3o1a0FCIiwidCI6MiwibSI6NDA3MzAwMzkxNSwibCI6MTc3MDI4NTg1NX0.03ff6ca8d735ea45.e1992415328ab6750f398408c9c1d9e029f15e21b029955c1353bed8f7f96a55",
-    "id": 24
+    "value": "MDEwMDE.eyJiIjo3LCJnIjoxNzcwOTE1NjQ1LCJyIjoieGowSUtoIiwidCI6MiwibSI6NDA3MzAwMzkxNSwibCI6MTc3MDkxNTY0NX0.3dc4ab8e3f41e542.e6066210725599b339c62317399d88ac2df83a0d07f1d359333b1328602124f5",
+    "id": 23
 },
 {
     "domain": "br.shein.com",
-    "expirationDate": 1785837856,
+    "expirationDate": 1786467644,
     "hostOnly": true,
     "httpOnly": false,
     "name": "g_state",
@@ -345,12 +331,12 @@
     "secure": false,
     "session": false,
     "storeId": "0",
-    "value": "{\"i_l\":0,\"i_ll\":1770285846747,\"i_e\":{\"enable_itp_optimization\":0}}",
-    "id": 25
+    "value": "{\"i_l\":0,\"i_ll\":1770899162559,\"i_e\":{\"enable_itp_optimization\":0}}",
+    "id": 24
 },
 {
     "domain": "br.shein.com",
-    "expirationDate": 1772877856.939922,
+    "expirationDate": 1773507645.157909,
     "hostOnly": true,
     "httpOnly": false,
     "name": "memberId",
@@ -360,11 +346,11 @@
     "session": false,
     "storeId": "0",
     "value": "4073003915",
-    "id": 26
+    "id": 25
 },
 {
     "domain": "br.shein.com",
-    "expirationDate": 1773442813.958692,
+    "expirationDate": 1773507645.548014,
     "hostOnly": true,
     "httpOnly": true,
     "name": "sessionID_shein",
@@ -373,7 +359,7 @@
     "secure": true,
     "session": false,
     "storeId": "0",
-    "value": "s%3AqCpItHjY4ynvarrVC4CxNQv9sieOgGwN.7zqp%2FFVl4cYTnqqX47NFbNiWB8faamLusvtzfTSoSUg",
-    "id": 27
+    "value": "s%3AsMJWJGB_RssQVl9VnNNj_Cn2nMjNRVy8.m1I1XfzMYYs7atUPoqmX3cu%2FMiwZ68JmRauRX515Bt4",
+    "id": 26
 }
 ]

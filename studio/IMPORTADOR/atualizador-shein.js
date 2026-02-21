@@ -15,7 +15,7 @@ const client = createClient({
   token: 'skmLtdy7ME2lnyS0blM3IWiNv0wuWzBG4egK7jUYdVVkBktLngwz47GbsPPdq5NLX58WJEiR3bmW0TBpeMtBhPNEIxf5mk6uQ14PvbGYKlWQdSiP2uWdBDafWhVAGMw5RYh3IyKhDSmqEqSLg1bEzzYVEwcGWDZ9tEPmZhNDkljeyvY6IcEO'
 });
 
-const MARKUP = 1.80; 
+const MARKUP = 1.30; 
 
 // Função auxiliar para esperar
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));

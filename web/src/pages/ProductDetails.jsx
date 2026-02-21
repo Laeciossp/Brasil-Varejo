@@ -774,8 +774,9 @@ export default function ProductDetails() {
             </div>
             <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-6 snap-x scrollbar-hide scroll-smooth px-1">
               {relatedProducts.map((rel) => {
-                const relPrice = rel.price;
-                const relOldPrice = rel.oldPrice;
+                // A mesma lógica de fallback para garantir que o preço do carrossel bate com o produto
+                const relPrice = rel.variants?.[0]?.sizes?.[0]?.price || rel.variants?.[0]?.price || rel.price;
+                const relOldPrice = rel.variants?.[0]?.sizes?.[0]?.oldPrice || rel.variants?.[0]?.oldPrice || rel.oldPrice;
                 return (
                   <Link 
                     to={`/product/${rel.slug.current}`} 

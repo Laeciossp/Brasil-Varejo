@@ -279,8 +279,13 @@ const ProductCarouselBlock = ({ data }) => {
         </div>
       </div>
       
-      <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-6 scrollbar-hide scroll-smooth px-1 snap-x snap-mandatory">
-        {products.map((prod) => (
+     <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-6 scrollbar-hide scroll-smooth px-1 snap-x snap-mandatory">
+        {products.map((prod) => {
+          // Busca o preço real na grade de tamanhos (que foi atualizada pelo script) ou cai pro preço raiz
+          const currentPrice = prod.variants?.[0]?.sizes?.[0]?.price || prod.variants?.[0]?.price || prod.price;
+          const currentOldPrice = prod.variants?.[0]?.sizes?.[0]?.oldPrice || prod.variants?.[0]?.oldPrice || prod.oldPrice;
+
+          return (
           <Link to={`/product/${prod.slug}`} key={prod._id} className="min-w-[145px] md:min-w-[180px] w-[145px] md:w-[180px] snap-start bg-white p-3 rounded-lg border border-gray-100 hover:shadow-xl hover:border-gray-300 transition-all group flex flex-col relative">
             
             <div className="h-32 w-full mb-3 flex items-center justify-center bg-white p-2 rounded relative">
@@ -293,14 +298,12 @@ const ProductCarouselBlock = ({ data }) => {
 
             <h4 className="font-medium text-gray-600 mb-2 text-xs leading-4 line-clamp-3 h-[3rem] overflow-hidden group-hover:text-blue-600" title={prod.title}>{prod.title}</h4>
             
-            {/* AQUI ESTÁ A CORREÇÃO DO CARD */}
             <div className="mt-auto pt-2 border-t border-gray-50 flex justify-between items-end">
                <div className="flex flex-col">
-                  {prod.oldPrice > prod.price && <span className="text-[10px] text-gray-400 line-through block mb-0.5">de {formatCurrency(prod.oldPrice)}</span>}
-                  <span className="text-base font-black text-green-700 block tracking-tight leading-none">{prod.price ? formatCurrency(prod.price) : 'Sob Consulta'}</span>
+                 {currentOldPrice > currentPrice && <span className="text-[10px] text-gray-400 line-through block mb-0.5">de {formatCurrency(currentOldPrice)}</span>}
+                  <span className="text-base font-black text-green-700 block tracking-tight leading-none">{currentPrice ? formatCurrency(currentPrice) : 'Sob Consulta'}</span>
                   <div className="mt-1 flex flex-col gap-0.5">
                       <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span>
-                      {/* --- RECUPERADO: EM ATÉ 12X --- */}
                       <span className="text-[10px] text-gray-400 font-medium">Em até 12x</span>
                   </div>
                </div>
@@ -318,7 +321,7 @@ const ProductCarouselBlock = ({ data }) => {
                </button>
             </div>
           </Link>
-        ))}
+        )})}
       </div>
     </div>
   );
