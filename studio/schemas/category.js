@@ -144,8 +144,14 @@ export default {
     // ============================================================
 
     {
-      name: 'description',
-      title: 'Descrição (SEO & Google)',
+      name: 'seoTitle',
+      title: 'Título SEO (Google)',
+      type: 'string',
+      description: 'Título otimizado para os resultados de busca do Google.'
+    },
+    {
+      name: 'seoDescription',
+      title: 'Descrição SEO (Google)',
       type: 'text',
       rows: 3,
       description: 'Breve descrição para aparecer nos resultados do Google.'

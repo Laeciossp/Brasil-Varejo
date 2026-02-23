@@ -72,7 +72,7 @@ export default function CategoryPage() {
       try {
         const query = `{
           "category": *[_type == "category" && slug.current == $slug][0] {
-            _id, title, description,
+            _id, title, description, seoTitle, seoDescription,
             heroBanner {
               mediaType, heading, subheading, link,
               desktopImage { asset->{ _id, url }, hotspot, crop, alt },
@@ -96,7 +96,6 @@ export default function CategoryPage() {
         const result = await client.fetch(query, { slug });
         
         if (result && result.category) {
-            // --- MODIFICAÇÃO AQUI: FILTRO PARA REMOVER "CALÇADOS" ---
             const filteredSubcategories = (result.subcategories || []).filter(sub => 
                 sub.title !== 'Calçados' && sub.slug.current !== 'calcados'
             );
@@ -116,6 +115,23 @@ export default function CategoryPage() {
 
     if (slug) fetchData();
   }, [slug]);
+
+  // --- 3. ATUALIZAR SEO DA PÁGINA (Google) ---
+  useEffect(() => {
+    if (data.category) {
+      // 1. Atualiza o título na aba do navegador e pro Google
+      document.title = data.category.seoTitle || data.category.title || 'Palastore';
+
+      // 2. Atualiza a Meta Descrição pro Google
+      let metaDescription = document.querySelector('meta[name="description"]');
+      if (!metaDescription) {
+        metaDescription = document.createElement('meta');
+        metaDescription.name = 'description';
+        document.head.appendChild(metaDescription);
+      }
+      metaDescription.content = data.category.seoDescription || data.category.description || 'Encontre as melhores ofertas na Palastore!';
+    }
+  }, [data.category]);
 
   // --- MANIPULADORES ---
   const handleSubcategoryChange = (subSlug) => {
@@ -175,7 +191,6 @@ export default function CategoryPage() {
   const filteredProducts = useMemo(() => {
     if (!data.products) return [];
     return data.products.filter(product => {
-      // CORREÇÃO: Busca profunda do preço para o filtro também funcionar
       const finalPrice = product.variants?.[0]?.sizes?.[0]?.price || product.variants?.[0]?.price || product.price || 0;
       const matchesBrand = selectedBrands.length === 0 || (product.brandName && selectedBrands.includes(product.brandName));
       const min = priceRange.min ? parseFloat(priceRange.min) : 0;
@@ -287,7 +302,6 @@ export default function CategoryPage() {
                   {filteredProducts.map((product) => {
                       const productLink = product.slug?.current ? `/product/${product.slug.current}` : '#';
                       
-                      // CORREÇÃO: Busca profunda do preço para exibir no Card corretamente
                       const price = product.variants?.[0]?.sizes?.[0]?.price || product.variants?.[0]?.price || product.price || 0;
                       const oldPrice = product.variants?.[0]?.sizes?.[0]?.oldPrice || product.variants?.[0]?.oldPrice || product.oldPrice || 0;
 
