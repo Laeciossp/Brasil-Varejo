@@ -130,7 +130,7 @@ export default function Footer() {
                 <img src="/google-safe.png" alt="Google Safe Browsing" className="h-7 object-contain opacity-80 hover:opacity-100 transition-opacity" onError={(e) => e.target.style.display='none'}/>
             </div>
 
-            <p className="mb-1 font-bold">42.361.289 LAECIO S S PEDRO E-COMMERCE - CNPJ: 42.361.289/0001-14</p>
+            <p className="mb-1 font-bold">PALASTORE - LAECIO S S PEDRO E-COMMERCE - CNPJ: 42.361.289/0001-14</p>
             <p>© {new Date().getFullYear()} Palastore Oficial. Todos os direitos reservados. A cópia de qualquer conteúdo é proibida.</p>
          </div>
       </div>
