@@ -99,9 +99,14 @@ async function gerarPlanilhaShopee() {
         // GERAR TODAS AS LINHAS DA MATRIZ PERFEITA (Obrigatório Shopee)
         // ==============================================================
         cores.forEach((corObj, cIndex) => {
+            const corNomeLimpo = corObj.nome.trim(); // Remove espaços vazios acidentais
+
             tamanhos.forEach((tamNome, sIndex) => {
+                const tamNomeLimpo = tamNome.trim(); // Remove espaços vazios acidentais
+                
+                // Mantemos a chave original para não quebrar a busca dos dados reais no Sanity
                 const chave = `${corObj.nome}-${tamNome}`;
-                const dadosReais = combinacoes[chave]; // Verifica se existe no Sanity
+                const dadosReais = combinacoes[chave]; 
 
                 const linha = new Array(51).fill('');
                 
@@ -114,13 +119,14 @@ async function gerarPlanilhaShopee() {
                 }
                 
                 linha[26] = 0.3; linha[27] = 20; linha[28] = 15; linha[29] = 5; linha[30] = ''; 
+                linha[31] = 6; // <-- NOVO: Define 6 dias de Prazo de Encomenda (Pré-encomenda)
                 
                 // Variação 1 (Cor)
-                linha[5] = 'Cor'; linha[6] = corObj.nome; 
+                linha[5] = 'Cor'; linha[6] = corNomeLimpo; 
                 if (sIndex === 0) linha[7] = corObj.imagem || ''; // Imagem só na 1ª vez
                 
                 // Variação 2 (Tamanho)
-                linha[8] = 'Tamanho'; linha[9] = tamNome; 
+                linha[8] = 'Tamanho'; linha[9] = tamNomeLimpo; 
                 
                 // PREÇO E ESTOQUE
                 const precoFinal = dadosReais?.price ? dadosReais.price : precoPadrao;
@@ -129,7 +135,12 @@ async function gerarPlanilhaShopee() {
                 // O SEGREDO: Se não houver no Sanity, mete o stock a 0 e passa na aprovação!
                 linha[11] = dadosReais?.stock !== undefined ? dadosReais.stock : 0;
                 
-                linha[12] = dadosReais?.sku ? dadosReais.sku : `${skuBase}-${corObj.nome}-${tamNome}`.substring(0, 20);
+                // <-- CORREÇÃO FINAL: Criação de SKU curto (diminuindo o ID para 10 caracteres)
+                const skuBaseCurto = skuBase.substring(0, 10);
+                const shortCor = corNomeLimpo.substring(0, 3).toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "");
+                const shortTam = tamNomeLimpo.substring(0, 2).toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "");
+                
+                linha[12] = dadosReais?.sku ? dadosReais.sku : `${skuBaseCurto}-${shortCor}-${shortTam}`.substring(0, 20);
                 
                 dadosLote.push(linha);
             });
@@ -145,7 +156,7 @@ async function gerarPlanilhaShopee() {
 
       const nomeArquivo = `Carga_Shopee_SL_Lote_${numeroLote}.xlsx`;
       XLSX.writeFile(workbook, nomeArquivo);
-      console.log(`✅ Lote ${numeroLote} gerado com sucesso! Matriz Perfeita injetada.`);
+      console.log(`✅ Lote ${numeroLote} gerado com sucesso! Matriz Perfeita injetada com Prazo de Encomenda de 6 dias.`);
     }
 
   } catch (e) { console.error('❌ Erro:', e.message); }

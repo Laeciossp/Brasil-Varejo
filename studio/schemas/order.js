@@ -112,8 +112,22 @@ export default {
       type: 'number',
       group: 'logistics'
     },
+    // NOVOS CAMPOS AQUI:
+    {
+      name: 'trackingCode',
+      title: 'Código de Rastreamento',
+      type: 'string',
+      group: 'logistics'
+    },
+    {
+      name: 'trackingUrl',
+      title: 'Link de Rastreamento',
+      type: 'url',
+      group: 'logistics'
+    },
     {
       name: 'shippingAddress',
+      // ... restante do código do endereço
       title: 'Endereço de Entrega',
       type: 'object',
       group: 'logistics',
