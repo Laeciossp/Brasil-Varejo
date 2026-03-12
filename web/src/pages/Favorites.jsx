@@ -6,7 +6,6 @@ import { urlFor } from '../lib/sanity';
 import { formatCurrency } from '../lib/utils';
 
 export default function Favorites() {
-  // ATENÇÃO: Mudamos de addToCart para addItem aqui
   const { favorites, toggleFavorite, addItem } = useCartStore();
 
   if (favorites.length === 0) {
@@ -66,14 +65,25 @@ export default function Favorites() {
 
             <button 
               onClick={(e) => {
-                // Previne que o clique no botão acione o Link em volta dele ou atualize a página
                 e.preventDefault();
                 e.stopPropagation();
                 
-                // ATENÇÃO: Mudamos de addToCart para addItem aqui também
-                addItem(product);
+                // RESOLVENDO A IMAGEM QUEBRADA:
+                // Pegamos a URL da imagem da mesma forma que o componente exibe
+                const resolvedImageUrl = product.image 
+                  ? product.image 
+                  : (product.images?.[0] ? urlFor(product.images[0]).url() : null);
+
+                // Criamos uma cópia do produto substituindo a propriedade image pela URL final
+                const productForCart = {
+                  ...product,
+                  image: resolvedImageUrl
+                };
                 
-                // Remove o produto da lista de favoritos
+                // Enviamos o produto já formatado para o carrinho
+                addItem(productForCart);
+                
+                // Remove dos favoritos
                 toggleFavorite(product);
               }}
               className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 hover:bg-orange-500 hover:shadow-orange-500/30 transition-all cursor-pointer"
