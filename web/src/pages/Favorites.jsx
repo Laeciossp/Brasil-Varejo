@@ -64,8 +64,18 @@ export default function Favorites() {
             </Link>
 
             <button 
-              onClick={() => addToCart(product)}
-              className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 hover:bg-orange-500 hover:shadow-orange-500/30 transition-all"
+              onClick={(e) => {
+                // Previne que o clique no botão acione o Link em volta dele ou atualize a página
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Adiciona o produto ao carrinho
+                addToCart(product);
+                
+                // Remove o produto da lista de favoritos
+                toggleFavorite(product);
+              }}
+              className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 hover:bg-orange-500 hover:shadow-orange-500/30 transition-all cursor-pointer"
             >
               <ShoppingCart size={16} /> Mover para Carrinho
             </button>
