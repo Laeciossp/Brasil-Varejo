@@ -6,7 +6,8 @@ import { urlFor } from '../lib/sanity';
 import { formatCurrency } from '../lib/utils';
 
 export default function Favorites() {
-  const { favorites, toggleFavorite, addToCart } = useCartStore();
+  // ATENÇÃO: Mudamos de addToCart para addItem aqui
+  const { favorites, toggleFavorite, addItem } = useCartStore();
 
   if (favorites.length === 0) {
     return (
@@ -69,8 +70,8 @@ export default function Favorites() {
                 e.preventDefault();
                 e.stopPropagation();
                 
-                // Adiciona o produto ao carrinho
-                addToCart(product);
+                // ATENÇÃO: Mudamos de addToCart para addItem aqui também
+                addItem(product);
                 
                 // Remove o produto da lista de favoritos
                 toggleFavorite(product);
