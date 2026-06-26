@@ -1,85 +1,46 @@
-const { createClient } = require('@sanity/client');
+import { createClient } from '@sanity/client';
 
-// --- CONFIGURAÇÃO ---
+const TOKEN_SANITY = 'sk3uozLq4sMLk4k5wAMY9QVLQHVHYEqNJzpF5t66U3jbmfW5BcdqI7OKt8H2KQ7WyjGoybxYMukfqtpSoRNhofZm0Ou7jdf8TMer0qiwasLRQ9HUtelf1m9jhE7sHVJgaT7xdQbT6TR1hMSFtyNnwZfVbaMxoP1qE9oxzqDb6rYRZfkLid2d';
+
 const client = createClient({
   projectId: 'o4upb251',
   dataset: 'production',
-  apiVersion: '2023-05-03',
   useCdn: false,
-  token: 'skmLtdy7ME2lnyS0blM3IWiNv0wuWzBG4egK7jUYdVVkBktLngwz47GbsPPdq5NLX58WJEiR3bmW0TBpeMtBhPNEIxf5mk6uQ14PvbGYKlWQdSiP2uWdBDafWhVAGMw5RYh3IyKhDSmqEqSLg1bEzzYVEwcGWDZ9tEPmZhNDkljeyvY6IcEO' 
+  token: TOKEN_SANITY,
+  apiVersion: '2024-03-19'
 });
 
-const MARCA_PERMITIDA = 'SL'; // A única que vai sobreviver
+async function desativarProdutosSN() {
+  try {
+    console.log("🚀 Buscando produtos da marca SN para desativação...");
+    
+    const query = '*[_type == "product" && brand == "SN" && (active == true || isActive == true)]';
+    const produtos = await client.fetch(query);
 
-// Lista de Categorias que serão LIMPAS (se não for SL, tchau!)
-const CATEGORIAS_ALVO = [
-    'Moda Feminina',
-    'Bermudas e Shorts',
-    'Blusas',
-    'Calçados',
-    'Calças',
-    'Camisas',
-    'Conjuntos Calças',
-    'Conjuntos Saias',
-    'Conjuntos Shorts',
-    'Macacão',
-    'Saias',
-    'Vestidos'
-];
-
-async function limparOutrasMarcas() {
-    console.log(`🚀 Iniciando Limpeza Cirúrgica...`);
-    console.log(`🛡️  Marca Protegida: ${MARCA_PERMITIDA}`);
-    console.log(`🎯 Categorias Alvo: ${CATEGORIAS_ALVO.length} categorias listadas.`);
-
-    // 1. Busca TODOS os produtos que NÃO são SL e estão Ativos
-    const query = `*[_type == "product" && brand != "${MARCA_PERMITIDA}" && isActive == true]{
-        _id, 
-        title, 
-        brand, 
-        "categorias": categories[]->title
-    }`;
-
-    let produtos = [];
-    try {
-        produtos = await client.fetch(query);
-        console.log(`📋 Analisando ${produtos.length} produtos de outras marcas...`);
-    } catch (e) {
-        console.error("❌ Erro ao buscar:", e.message);
-        return;
+    if (produtos.length === 0) {
+      console.log("✨ Nenhum produto ativo da marca SN encontrado.");
+      return;
     }
 
-    // 2. Filtra e Prepara Desativação
-    let transaction = client.transaction();
-    let count = 0;
+    console.log(`📦 Encontrados ${produtos.length} produtos. Processando...`);
 
-    for (const produto of produtos) {
-        if (!produto.categorias) continue;
-
-        // Verifica se o produto tem ALGUMA das categorias da nossa lista
-        const ehDaCategoriaAlvo = produto.categorias.some(catProduto => 
-            CATEGORIAS_ALVO.some(alvo => catProduto.toLowerCase().includes(alvo.toLowerCase()))
-        );
-
-        if (ehDaCategoriaAlvo) {
-            console.log(`   🚫 Desativando: [${produto.brand}] ${produto.title}`);
-            transaction.patch(produto._id, p => p.set({ isActive: false }));
-            count++;
+    const transaction = client.transaction();
+    
+    produtos.forEach(p => {
+      transaction.patch(p._id, {
+        set: { 
+          active: false,
+          isActive: false, 
+          status: "inactive" 
         }
-    }
+      });
+    });
 
-    // 3. Executa
-    if (count > 0) {
-        console.log(`\n💾 Salvando alterações em ${count} produtos...`);
-        try {
-            await transaction.commit();
-            console.log(`✅ SUCESSO! Limpeza concluída.`);
-        } catch (err) {
-            console.error(`❌ Erro ao salvar:`, err.message);
-        }
-    } else {
-        console.log(`\n✨ Nenhum produto precisou ser desativado (tudo limpo).`);
-    }
+    await transaction.commit();
+    console.log(`✅ SUCESSO! ${produtos.length} produtos desativados.`);
+  } catch (error) {
+    console.error("❌ Erro fatal na execução:", error.message);
+  }
 }
 
-limparOutrasMarcas();
+desativarProdutosSN();
