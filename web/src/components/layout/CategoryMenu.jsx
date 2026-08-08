@@ -35,15 +35,26 @@ const CategoryItem = ({ category, level = 0, onItemClick }) => {
         `}
         style={{ paddingLeft }}
       >
-        {/* Link da Categoria */}
-        <Link 
-          to={`/categoria/${category.slug.current}`} 
-          // CORRIGIDO: Hover agora usa text-crocus-vivid (ou similar) em vez de blue
-          className={`flex-1 ${textSize} ${textColor} group-hover:text-purple-700 transition-colors`}
-          onClick={onItemClick} // Fecha o menu ao clicar
-        >
-          {category.title}
-        </Link>
+        {/* 👇 ADICIONADO: Lógica condicional para o Link da Categoria */}
+        {category.externalLink ? (
+          <a 
+            href={category.externalLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`flex-1 ${textSize} ${textColor} group-hover:text-purple-700 transition-colors`}
+            onClick={onItemClick} // Fecha o menu ao clicar
+          >
+            {category.title}
+          </a>
+        ) : (
+          <Link 
+            to={`/categoria/${category.slug.current}`} 
+            className={`flex-1 ${textSize} ${textColor} group-hover:text-purple-700 transition-colors`}
+            onClick={onItemClick} // Fecha o menu ao clicar
+          >
+            {category.title}
+          </Link>
+        )}
 
         {/* Botão de Expandir */}
         {hasChildren && (
@@ -53,7 +64,6 @@ const CategoryItem = ({ category, level = 0, onItemClick }) => {
               e.stopPropagation();
               setIsOpen(!isOpen);
             }} 
-            // CORRIGIDO: Cores dos ícones e fundo do botão para roxo
             className="p-1 text-crocus-deep/40 hover:text-crocus-deep hover:bg-purple-100 rounded-full transition-all"
           >
             {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -61,11 +71,11 @@ const CategoryItem = ({ category, level = 0, onItemClick }) => {
         )}
       </div>
 
-      {/* Renderização dos Filhos (ALTERADO PARA GRID SE TIVER MUITOS ITENS) */}
+      {/* Renderização dos Filhos */}
       {hasChildren && isOpen && (
         <div className={`relative ${category.children.length > 6 ? 'grid grid-cols-2 gap-x-1' : ''}`}>
           
-          {/* A linha vertical só aparece se NÃO for grade de 2 colunas, para não cortar o layout */}
+          {/* A linha vertical só aparece se NÃO for grade de 2 colunas */}
           {category.children.length <= 6 && (
             <div 
               className="absolute bg-purple-100 w-[1px] top-0 bottom-0"
@@ -96,8 +106,9 @@ export default function CategoryMenu({ onItemClick }) {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
+        // 👇 ADICIONADO: externalLink na busca principal do menu em árvore
         const query = `*[_type == "category" && isActive == true] | order(title asc) {
-          _id, title, slug, parent
+          _id, title, slug, parent, externalLink
         }`;
         
         const data = await client.fetch(query);

@@ -45,6 +45,19 @@ export default {
       description: 'Deixe EM BRANCO se for um Departamento Principal (Nível 1). Se for subcategoria, selecione o pai aqui.'
     },
 
+    // 👇 AQUI ESTÁ O CAMPO NOVO QUE VAI CRIAR A CAIXINHA NO PAINEL 👇
+    {
+      name: 'externalLink',
+      title: 'Link Externo (Redirecionamento)',
+      type: 'url',
+      description: 'OPCIONAL: Se preenchido, ao clicar nesta categoria o usuário será redirecionado para este link.',
+      validation: (Rule) => Rule.uri({
+        scheme: ['http', 'https'],
+        allowRelative: false,
+      }),
+    },
+    // ------------------------------------------------------------------
+
     // 👇 CORREÇÃO: ADICIONADO PARA SUMIR O ERRO "UNKNOWN FIELD" 👇
     {
       name: 'isRoot',

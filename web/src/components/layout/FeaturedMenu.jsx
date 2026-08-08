@@ -14,9 +14,9 @@ export default function FeaturedMenu() {
   const [featured, setFeatured] = useState([]);
 
   useEffect(() => {
-    // Busca apenas as categorias marcadas como destaque
+    // 👇 ADICIONADO: externalLink na busca
     const query = `*[_type == "category" && isActive == true && isHighlighted == true] | order(title asc) {
-      _id, title, slug
+      _id, title, slug, externalLink
     }[0...5]`; // [0...5] limita a 5 itens para não quebrar o layout
 
     client.fetch(query).then(data => setFeatured(data)).catch(console.error);
@@ -28,12 +28,24 @@ export default function FeaturedMenu() {
     <>
       {featured.map((cat) => (
         <li key={cat._id}>
-          <Link 
-            to={`/categoria/${cat.slug.current}`} 
-            className="block py-3 px-2 hover:text-orange-600 transition-colors font-bold uppercase text-[11px] tracking-tight"
-          >
-            {cat.title}
-          </Link>
+          {/* 👇 ADICIONADO: Lógica condicional para Link Externo vs Link Interno */}
+          {cat.externalLink ? (
+            <a 
+              href={cat.externalLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block py-3 px-2 hover:text-orange-600 transition-colors font-bold uppercase text-[11px] tracking-tight"
+            >
+              {cat.title}
+            </a>
+          ) : (
+            <Link 
+              to={`/categoria/${cat.slug.current}`} 
+              className="block py-3 px-2 hover:text-orange-600 transition-colors font-bold uppercase text-[11px] tracking-tight"
+            >
+              {cat.title}
+            </Link>
+          )}
         </li>
       ))}
     </>
