@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { client, urlFor } from '../lib/sanity';
-import { Filter, ChevronRight, ShoppingCart } from 'lucide-react';
+import { Filter, ChevronRight, ShoppingCart, ExternalLink } from 'lucide-react';
 
 export default function Category() {
   const { slug } = useParams();
@@ -14,21 +14,31 @@ export default function Category() {
       setLoading(true);
       
       // 1. Busca Categoria (SÓ SE ESTIVER ATIVA)
-      // Adicionamos "&& isActive == true" aqui. Se estiver false, retorna null.
+      // 👇 ADICIONADO: externalLink na busca principal e nas subcategorias (children)
       const categoryQuery = `*[_type == "category" && slug.current == $slug && isActive == true][0]{
         _id,
         title,
         description,
-        "children": *[_type == "category" && references(^._id) && isActive == true] { title, slug }
+        externalLink,
+        "children": *[_type == "category" && references(^._id) && isActive == true] { 
+          title, 
+          slug, 
+          externalLink 
+        }
       }`;
 
       const cat = await client.fetch(categoryQuery, { slug });
 
       if (cat) {
+        // 👇 ADICIONADO: Se a categoria tiver um link externo, redireciona o usuário imediatamente
+        if (cat.externalLink) {
+          window.location.replace(cat.externalLink);
+          return; // Para a execução do código aqui para não carregar produtos à toa
+        }
+
         setCategoryData(cat);
         
         // 2. Busca Produtos dessa categoria
-        // Busca produtos que referenciam esta categoria OU alguma subcategoria dela
         const productsQuery = `*[_type == "product" && references($catId)] {
           title,
           slug,
@@ -83,15 +93,33 @@ export default function Category() {
         {/* Subcategorias (Chips) */}
         {categoryData.children?.length > 0 && (
           <div className="flex gap-2 flex-wrap mb-8">
-            {categoryData.children.map(child => (
-              <Link 
-                key={child.slug.current}
-                to={`/category/${child.slug.current}`}
-                className="bg-white border border-gray-200 px-4 py-2 rounded-full text-sm font-bold text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
-              >
-                {child.title}
-              </Link>
-            ))}
+            {categoryData.children.map(child => {
+              // 👇 ADICIONADO: Lógica para renderizar link externo ou link interno nas subcategorias
+              if (child.externalLink) {
+                return (
+                  <a 
+                    key={child.slug.current}
+                    href={child.externalLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 bg-white border border-gray-200 px-4 py-2 rounded-full text-sm font-bold text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
+                  >
+                    {child.title} <ExternalLink size={12} />
+                  </a>
+                );
+              }
+              
+              // Link Interno normal
+              return (
+                <Link 
+                  key={child.slug.current}
+                  to={`/category/${child.slug.current}`}
+                  className="bg-white border border-gray-200 px-4 py-2 rounded-full text-sm font-bold text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
+                >
+                  {child.title}
+                </Link>
+              );
+            })}
           </div>
         )}
 
@@ -124,7 +152,7 @@ export default function Category() {
                    <Link key={idx} to={`/product/${prod.slug.current}`} className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-xl hover:border-blue-400 transition-all group">
                      <div className="aspect-square bg-gray-100 relative flex items-center justify-center overflow-hidden">
                        {prod.image ? (
-                         <img src={urlFor(prod.image).width(400).url()} className="object-contain w-full h-full mix-blend-multiply group-hover:scale-105 transition-transform duration-500"/>
+                         <img src={urlFor(prod.image).width(400).url()} className="object-contain w-full h-full mix-blend-multiply group-hover:scale-105 transition-transform duration-500" alt={prod.title} />
                        ) : (
                          <div className="text-gray-300 font-bold text-xs">Sem foto</div>
                        )}
