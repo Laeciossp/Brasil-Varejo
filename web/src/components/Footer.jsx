@@ -30,7 +30,7 @@ export default function Footer() {
               <li>
                 <a href="https://wa.me/5571983774301" target="_blank" rel="noreferrer" className="hover:text-orange-400 transition-colors flex items-center gap-3 group">
                   <span className="bg-white/10 p-2 rounded-full group-hover:bg-orange-500 transition-all"><Phone size={16} className="text-white"/></span>
-                   Whatsapp (71) 983810420 ou (71) 98377-4301
+                    Whatsapp (71) 983810420 ou (71) 98377-4301
                 </a>
               </li>
               <li>
@@ -58,8 +58,7 @@ export default function Footer() {
           <div className="md:col-span-2 md:pl-10">
              <h4 className="font-black text-white uppercase mb-6 text-sm tracking-widest border-l-4 border-orange-500 pl-3">Pagamento Seguro</h4>
              <div className="flex flex-wrap gap-3 mb-8 items-center">
-                {/* ATUALIZADO: Imagens das bandeiras ao invés de texto */}
-                {/* Certifique-se de adicionar visa.png, mastercard.png, pix.png, elo.png na pasta /public */}
+                {/* Imagens das bandeiras */}
                 <img src="/visa.png" alt="Visa" className="h-9 bg-white p-1 rounded shadow-sm object-contain" onError={(e) => e.target.style.display='none'}/>
                 <img src="/mastercard.png" alt="Mastercard" className="h-9 bg-white p-1 rounded shadow-sm object-contain" onError={(e) => e.target.style.display='none'}/>
                 <img src="/pix.png" alt="PIX" className="h-9 bg-white p-1 rounded shadow-sm object-contain" onError={(e) => e.target.style.display='none'}/>
@@ -70,29 +69,42 @@ export default function Footer() {
                 </div>
              </div>
 
-             {/* --- SEÇÃO RECLAME AQUI --- */}
-             <h4 className="font-black text-white uppercase mb-6 text-sm tracking-widest border-l-4 border-green-500 pl-3">Loja Confiável</h4>
-             <div className="mb-8">
+             {/* --- SEÇÃO LOJA CONFIÁVEL & IATA --- */}
+             <h4 className="font-black text-white uppercase mb-6 text-sm tracking-widest border-l-4 border-green-500 pl-3">Credibilidade & Segurança</h4>
+             <div className="flex flex-wrap gap-4 mb-8">
+                {/* Selo Reclame Aqui */}
                 <a
                     href="https://www.reclameaqui.com.br/empresa/palastore1"
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-block bg-white px-4 py-2 rounded-lg hover:scale-105 transition-transform shadow-lg group"
+                    className="inline-flex items-center bg-white px-4 py-2 rounded-lg hover:scale-105 transition-transform shadow-lg group"
                 >
-                    {/* Carrega o arquivo local '/reclame-aqui.png' da pasta public */}
                     <img
                         src="/reclame-aqui.png"
                         alt="Reclame Aqui"
                         className="h-10 object-contain group-hover:opacity-90"
                         onError={(e) => {
-                          // Fallback simples se a imagem não existir
                           e.target.src = "https://logodownload.org/wp-content/uploads/2014/06/reclame-aqui-logo.png";
                         }}
                     />
                 </a>
-             </div>
-             {/* -------------------------------------- */}
 
+                {/* --- NOVO SELO IATA AQUI --- */}
+                <div className="inline-flex items-center gap-3 bg-white px-4 py-2 rounded-lg shadow-lg">
+                  <img 
+                    src="/iata.jpg" 
+                    alt="Certificação IATA" 
+                    className="h-9 w-auto object-contain grayscale hover:grayscale-0 transition-all duration-300" 
+                  />
+                  <div className="text-left flex flex-col border-l border-gray-200 pl-3">
+                    <span className="text-[10px] font-black text-gray-800 tracking-wider">AGÊNCIA CREDENCIADA</span>
+                    <span className="text-[10px] text-gray-500 font-bold">IATA: 96100340</span>
+                  </div>
+                </div>
+                {/* --------------------------- */}
+             </div>
+             
+             {/* REDES SOCIAIS */}
              <h4 className="font-black text-white uppercase mb-6 text-sm tracking-widest border-l-4 border-orange-500 pl-3">Siga a Palastore</h4>
              <div className="flex gap-4">
                 <a
@@ -120,12 +132,10 @@ export default function Footer() {
       {/* BARRA FINAL COM SELOS SSL */}
       <div className="relative z-20 bg-[#320a69]/50 py-6 border-t border-white/5 backdrop-blur-md">
          <div className="container mx-auto px-4 text-center text-[11px] text-white/60 leading-relaxed uppercase tracking-wide font-medium">
-            {/* ATUALIZADO: Área de Selos de Segurança */}
             <div className="flex justify-center items-center gap-4 mb-4 flex-wrap">
                 <p className="flex items-center gap-2 text-white/80">
                     <ShieldCheck size={16} className="text-green-400"/> Site Seguro e Protegido com SSL
                 </p>
-                {/* Certifique-se de adicionar cloudflare-ssl.png e google-safe.png na pasta /public */}
                 <img src="/cloudflare-ssl.png" alt="Cloudflare SSL" className="h-7 object-contain opacity-80 hover:opacity-100 transition-opacity" onError={(e) => e.target.style.display='none'} />
                 <img src="/google-safe.png" alt="Google Safe Browsing" className="h-7 object-contain opacity-80 hover:opacity-100 transition-opacity" onError={(e) => e.target.style.display='none'}/>
             </div>
