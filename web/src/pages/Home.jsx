@@ -394,11 +394,28 @@ export default function Home() {
 
   return (
     <div className="w-full bg-gray-50 min-h-screen pb-20">
+      {/* Mapeamento dos blocos do Sanity */}
       {pageData.pageBuilder.map((section) => {
         const Component = COMPONENTS_MAP[section._type];
         if (!Component) return null;
         return <Component key={section._key} data={section} />;
       })}
+
+      {/* Selo de Certificação IATA */}
+      <div className="max-w-[1440px] mx-auto px-4 pb-10">
+        <div className="flex items-center justify-center md:justify-start gap-3 mt-10 p-3 bg-white rounded-lg border border-gray-200 w-fit shadow-sm">
+          <img 
+            src="/iata.jpg" 
+            alt="Certificação IATA" 
+            className="h-10 w-auto object-contain grayscale hover:grayscale-0 transition-all duration-300" 
+          />
+          <div className="text-left flex flex-col border-l border-gray-300 pl-3">
+            <span className="text-xs font-bold text-gray-800 tracking-wide">AGÊNCIA CREDENCIADA IATA</span>
+            <span className="text-[11px] text-gray-500 font-semibold">CÓDIGO: 96100340</span>
+          </div>
+        </div>
+      </div>
+      
     </div>
   );
 }
