@@ -13,8 +13,9 @@ import Profile from './pages/Profile';
 import Success from './pages/Success';
 import Favorites from './pages/Favorites';
 import SearchPage from './pages/SearchPage';
+import ViagensPage from './pages/ViagensPage'; // 👈 Sua página de viagens importada aqui
 
-// 👇 IMPORTANTE: Importar a nova página de Marcas
+// Importar a página de Marcas
 import BrandPage from './pages/BrandPage';
 
 // Páginas Institucionais
@@ -48,7 +49,7 @@ function App() {
           <Route path="/category/:slug" element={<CategoryPage />} />
           <Route path="/categoria/:slug" element={<CategoryPage />} />
           
-          {/* 👇 NOVA ROTA DE MARCAS AQUI */}
+          {/* Rota de Marcas */}
           <Route path="/marca/:brandName" element={<BrandPage />} />
 
           {/* Funcionalidades */}
@@ -56,6 +57,9 @@ function App() {
           <Route path="/cart" element={<Cart />} />
           <Route path="/favoritos" element={<Favorites />} />
 
+          {/* 👇 NOVA ROTA DE VIAGENS (WIDGET DA KIWI) */}
+          <Route path="/viagens" element={<ViagensPage />} />
+               
           {/* Páginas Institucionais */}
           <Route path="/sobre" element={<About />} />
           <Route path="/termos-de-uso" element={<Terms />} />
@@ -86,7 +90,7 @@ function App() {
 
       <Footer />
       
-    </div>
+  </div>
   );
 }
 
