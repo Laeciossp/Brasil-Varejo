@@ -36,40 +36,43 @@ const KiwiWidget = () => {
 };
 
 // ==========================================
-// 2. SUBCOMPONENTE: WIDGET DA KIWI (SUGESTÕES / VITRINE)
+// 2. SUBCOMPONENTE: WIDGET DA KIWI (VITRINE DE OFERTAS)
+// Usamos a técnica de iFrame 'srcDoc' para criar um ambiente isolado.
+// Isso evita que o ID "widget-holder" entre em conflito com o buscador de cima!
 // ==========================================
 const KiwiSuggestionsWidget = () => {
-  const suggestionsContainerRef = useRef(null);
-
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = "https://widgets.kiwi.com/scripts/widget-search-iframe.js";
-    script.async = true;
-    
-    // Configurações do seu novo Widget de Sugestões de Pacotes
-    script.setAttribute("data-width", "100%"); // Ajustado para 100% para ser responsivo no celular/PC
-    script.setAttribute("data-affilid", "lptbenspacotes");
-    script.setAttribute("data-from", "belo-horizonte_mg_br,brasilia_df_br,recife_pe_br,sao-paulo_sp_br");
-    script.setAttribute("data-return", "anytime");
-    script.setAttribute("data-transport-types", "FLIGHT");
-    script.setAttribute("data-results-only", "true"); // Ativa o modo Vitrine de Cards
-
-    if (suggestionsContainerRef.current) {
-      suggestionsContainerRef.current.appendChild(script);
-    }
-
-    return () => {
-      if (suggestionsContainerRef.current && suggestionsContainerRef.current.contains(script)) {
-        suggestionsContainerRef.current.removeChild(script);
-      }
-    };
-  }, []);
+  // Construímos o HTML que o iFrame vai rodar separadamente da página principal
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>body { margin: 0; padding: 0; background-color: transparent; }</style>
+    </head>
+    <body>
+      <div id="widget-holder"></div>
+      <script 
+        data-width="100%" 
+        data-affilid="lptbenspacotes" 
+        data-from="sao-paulo_sp_br,rio-de-janeiro_rj_br,belo-horizonte_mg_br,brasilia_df_br,recife_pe_br" 
+        data-return="anytime" 
+        data-transport-types="FLIGHT" 
+        data-results-only="true" 
+        src="https://widgets.kiwi.com/scripts/widget-search-iframe.js">
+      </script>
+    </body>
+    </html>
+  `;
 
   return (
-    // ID diferente para não conflitar com a pesquisa principal!
-    <div id="widget-holder-suggestions" ref={suggestionsContainerRef} className="w-full min-h-[400px]">
-      {/* Script da Kiwi renderiza os cards de sugestões aqui */}
-    </div>
+    <iframe 
+      srcDoc={htmlContent}
+      className="w-full min-h-[600px] md:min-h-[800px] border-0 rounded-xl"
+      title="Ofertas Imperdíveis de Passagens"
+      // Permissões para que o clique nos cards abra a página de reserva normalmente
+      sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-top-navigation allow-popups-to-escape-sandbox"
+    />
   );
 };
 
@@ -202,7 +205,7 @@ export default function ViagensPage() {
             </div>
             
             <div className="bg-white rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100">
-                {/* Aqui renderiza a vitrine de pacotes que você acabou de criar */}
+                {/* Aqui renderiza a sua nova vitrine de pacotes de forma 100% segura e isolada */}
                 <KiwiSuggestionsWidget />
             </div>
         </div>
