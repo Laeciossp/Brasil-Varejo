@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plane, Bus, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Plane, Bus, ShieldCheck, ArrowRight, ExternalLink } from 'lucide-react';
 
 // ==========================================
 // 1. SUBCOMPONENTE: WIDGET DA KIWI (PESQUISA PRINCIPAL)
@@ -37,11 +37,8 @@ const KiwiWidget = () => {
 
 // ==========================================
 // 2. SUBCOMPONENTE: WIDGET DA KIWI (VITRINE DE OFERTAS)
-// Usamos a técnica de iFrame 'srcDoc' para criar um ambiente isolado.
-// Isso evita que o ID "widget-holder" entre em conflito com o buscador de cima!
 // ==========================================
 const KiwiSuggestionsWidget = () => {
-  // Construímos o HTML que o iFrame vai rodar separadamente da página principal
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -70,15 +67,13 @@ const KiwiSuggestionsWidget = () => {
       srcDoc={htmlContent}
       className="w-full min-h-[600px] md:min-h-[800px] border-0 rounded-xl"
       title="Ofertas Imperdíveis de Passagens"
-      // Permissões para que o clique nos cards abra a página de reserva normalmente
       sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-top-navigation allow-popups-to-escape-sandbox"
     />
   );
 };
 
-
 // ==========================================
-// 3. PÁGINA PRINCIPAL: PALASTORE VIAGENS
+// 3. PÁGINA PRINCIPAL: PALASTORE VIAGENS (WEB)
 // ==========================================
 export default function ViagensPage() {
   const [activeTab, setActiveTab] = useState('voos');
@@ -168,33 +163,30 @@ export default function ViagensPage() {
             </div>
           )}
 
-          {/* ================= ABA 3: SEGUROS ================= */}
+          {/* ================= ABA 3: SEGUROS (HOTSITE PALASTORE) ================= */}
           {activeTab === 'seguros' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow flex flex-col">
                <h2 className="text-xl md:text-2xl font-black text-crocus-deep mb-4 text-center uppercase italic">
-                 Seguro Viagem Allianz Travel
+                 Seguro Viagem Oficial Palastore
                </h2>
                
                <div className="bg-blue-50 p-4 rounded-xl mb-4 flex justify-between items-center border border-blue-100">
-                 <p className="text-blue-800 text-sm font-medium">Viaje protegido pela maior seguradora do mundo. Cobertura global e suporte 24h.</p>
-                 <a href="https://www.awin1.com/cread.php?awinmid=24143&awinaffid=910543&ued=https%3A%2F%2Fwww.allianztravel.com.br%2Fseguro-viagem%2Faereo%2Flazer-e-turismo" target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 text-blue-600 font-bold hover:underline">
-                    Abrir em tela cheia <ArrowRight size={16}/>
+                 <p className="text-blue-800 text-sm font-medium">Viaje protegido com cobertura completa e suporte 24h.</p>
+                 <a href="https://seguroviagem.app/palastore" target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 text-blue-600 font-bold hover:underline">
+                    Abrir em tela cheia <ExternalLink size={16}/>
                  </a>
                </div>
 
                <iframe 
-                 src="https://www.awin1.com/cread.php?awinmid=24143&awinaffid=910543&ued=https%3A%2F%2Fwww.allianztravel.com.br%2Fseguro-viagem%2Faereo%2Flazer-e-turismo" 
+                 src="https://seguroviagem.app/palastore" 
                  className="w-full flex-grow min-h-[700px] border-0 rounded-2xl bg-gray-50"
-                 title="Cotação Allianz Seguros"
+                 title="Hotsite Seguro Viagem Palastore"
                />
             </div>
           )}
         </div>
 
-        {/* =======================================================
-            NOVA SESSÃO DE SUGESTÕES DE VOOS (WIDGET RESULTS-ONLY)
-            Esta sessão fica sempre visível no final da página!
-        ======================================================== */}
+        {/* ================= SESSÃO DE OFERTAS IMPERDÍVEIS ================= */}
         <div className="w-full mt-12 mb-8">
             <div className="flex items-center gap-4 justify-center mb-8">
                <div className="h-[2px] w-12 bg-orange-500"></div>
@@ -205,7 +197,6 @@ export default function ViagensPage() {
             </div>
             
             <div className="bg-white rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100">
-                {/* Aqui renderiza a sua nova vitrine de pacotes de forma 100% segura e isolada */}
                 <KiwiSuggestionsWidget />
             </div>
         </div>
