@@ -3,7 +3,6 @@ import { Plane, Bus, ShieldCheck, ArrowRight } from 'lucide-react';
 
 // ==========================================
 // 1. SUBCOMPONENTE: WIDGET DA KIWI (AVIÃO)
-// Isolamos aqui para ele montar e desmontar corretamente ao trocar de abas
 // ==========================================
 const KiwiWidget = () => {
   const widgetContainerRef = useRef(null);
@@ -36,15 +35,12 @@ const KiwiWidget = () => {
   );
 };
 
-
 // ==========================================
 // 2. PÁGINA PRINCIPAL: PALASTORE VIAGENS
 // ==========================================
 export default function ViagensPage() {
-  // Estado que controla qual aba está ativa no momento (Padrão: voos)
   const [activeTab, setActiveTab] = useState('voos');
 
-  // Definição do Menu
   const tabs = [
     { id: 'voos', label: 'Passagens Aéreas', icon: Plane },
     { id: 'onibus', label: 'Passagens de Ônibus', icon: Bus },
@@ -95,7 +91,7 @@ export default function ViagensPage() {
             })}
         </div>
 
-        {/* ÁREA DE CONTEÚDO (BLOCO BRANCO) */}
+        {/* ÁREA DE CONTEÚDO */}
         <div className="bg-white rounded-3xl shadow-xl p-2 md:p-6 border border-gray-100 min-h-[700px] flex flex-col overflow-hidden">
           
           {/* ================= ABA 1: VOOS (KIWI) ================= */}
@@ -108,26 +104,26 @@ export default function ViagensPage() {
             </div>
           )}
 
-          {/* ================= ABA 2: ÔNIBUS (QUERO PASSAGEM / AWIN) ================= */}
+          {/* ================= ABA 2: ÔNIBUS (FLIXBUS / AWIN) ================= */}
           {activeTab === 'onibus' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow flex flex-col">
                <h2 className="text-xl md:text-2xl font-black text-crocus-deep mb-4 text-center uppercase italic">
-                 Viaje de Ônibus pelo Brasil
+                 Viaje de Ônibus com a FlixBus
                </h2>
                
-               {/* Aviso e botão de tela cheia */}
-               <div className="bg-orange-50 p-4 rounded-xl mb-4 flex justify-between items-center border border-orange-100">
-                 <p className="text-orange-800 text-sm font-medium">A reserva de ônibus é processada com segurança pelo nosso parceiro oficial Quero Passagem.</p>
-                 <a href="https://www.awin1.com/cread.php?awinmid=17817&awinaffid=910543&campaign=Home+Quero+Passagem&ued=https%3A%2F%2Fqueropassagem.com.br%2Fonibus%2Frio-de-janeiro-novo-rio-rj-para-sao-paulo-tiete-sp%3Fida%3D16-08-2026" target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 text-orange-600 font-bold hover:underline">
+               {/* Aviso e botão de tela cheia (opcional) */}
+               <div className="bg-green-50 p-4 rounded-xl mb-4 flex justify-between items-center border border-green-100">
+                 <p className="text-green-800 text-sm font-medium">A pesquisa e reserva são processadas com segurança pela FlixBus, parceira oficial.</p>
+                 <a href="https://www.awin1.com/cread.php?awinmid=30765&awinaffid=910543" target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 text-green-600 font-bold hover:underline">
                     Abrir em tela cheia <ArrowRight size={16}/>
                  </a>
                </div>
 
-               {/* O Site do Quero Passagem embutido */}
+               {/* O Site da FlixBus embutido com o seu link */}
                <iframe 
-                 src="https://www.awin1.com/cread.php?awinmid=17817&awinaffid=910543&campaign=Home+Quero+Passagem&ued=https%3A%2F%2Fqueropassagem.com.br%2Fonibus%2Frio-de-janeiro-novo-rio-rj-para-sao-paulo-tiete-sp%3Fida%3D16-08-2026" 
+                 src="https://www.awin1.com/cread.php?awinmid=30765&awinaffid=910543" 
                  className="w-full flex-grow min-h-[700px] border-0 rounded-2xl bg-gray-50"
-                 title="Pesquisa Quero Passagem"
+                 title="Pesquisa FlixBus"
                />
             </div>
           )}
@@ -139,7 +135,7 @@ export default function ViagensPage() {
                  Seguro Viagem Allianz Travel
                </h2>
                
-               {/* Aviso e botão de tela cheia */}
+               {/* Aviso e botão de tela cheia (opcional) */}
                <div className="bg-blue-50 p-4 rounded-xl mb-4 flex justify-between items-center border border-blue-100">
                  <p className="text-blue-800 text-sm font-medium">Viaje protegido pela maior seguradora do mundo. Cobertura global e suporte 24h.</p>
                  <a href="https://www.awin1.com/cread.php?awinmid=24143&awinaffid=910543&ued=https%3A%2F%2Fwww.allianztravel.com.br%2Fseguro-viagem%2Faereo%2Flazer-e-turismo" target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 text-blue-600 font-bold hover:underline">
@@ -147,7 +143,7 @@ export default function ViagensPage() {
                  </a>
                </div>
 
-               {/* O Site da Allianz embutido */}
+               {/* O Site da Allianz embutido com o seu link */}
                <iframe 
                  src="https://www.awin1.com/cread.php?awinmid=24143&awinaffid=910543&ued=https%3A%2F%2Fwww.allianztravel.com.br%2Fseguro-viagem%2Faereo%2Flazer-e-turismo" 
                  className="w-full flex-grow min-h-[700px] border-0 rounded-2xl bg-gray-50"
