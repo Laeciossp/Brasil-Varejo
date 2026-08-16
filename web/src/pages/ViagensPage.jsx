@@ -1,26 +1,27 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plane, Bus, ShieldCheck, ArrowRight } from 'lucide-react';
 
-export default function ViagensPage() {
+// ==========================================
+// 1. SUBCOMPONENTE: WIDGET DA KIWI (AVIÃO)
+// Isolamos aqui para ele montar e desmontar corretamente ao trocar de abas
+// ==========================================
+const KiwiWidget = () => {
   const widgetContainerRef = useRef(null);
 
   useEffect(() => {
-    // 1. Cria a tag <script> dinamicamente
     const script = document.createElement('script');
     script.src = "https://widgets.kiwi.com/scripts/widget-search-iframe.js";
     script.async = true;
     
-    // 2. Adiciona todos os atributos (data-*) exatos que você forneceu da Kiwi
     script.setAttribute("data-affilid", "lptbenspalastorewidget");
     script.setAttribute("data-from", "sao-paulo_sp_br");
     script.setAttribute("data-return", "anytime");
     script.setAttribute("data-transport-types", "FLIGHT");
 
-    // 3. Injeta o script dentro da nossa div "widget-holder"
     if (widgetContainerRef.current) {
       widgetContainerRef.current.appendChild(script);
     }
 
-    // 4. Limpeza de segurança (remove o script se o usuário sair da página para não duplicar)
     return () => {
       if (widgetContainerRef.current && widgetContainerRef.current.contains(script)) {
         widgetContainerRef.current.removeChild(script);
@@ -29,9 +30,31 @@ export default function ViagensPage() {
   }, []);
 
   return (
+    <div id="widget-holder" ref={widgetContainerRef} className="w-full h-full min-h-[600px]">
+      {/* Script da Kiwi renderiza o visual aqui */}
+    </div>
+  );
+};
+
+
+// ==========================================
+// 2. PÁGINA PRINCIPAL: PALASTORE VIAGENS
+// ==========================================
+export default function ViagensPage() {
+  // Estado que controla qual aba está ativa no momento (Padrão: voos)
+  const [activeTab, setActiveTab] = useState('voos');
+
+  // Definição do Menu
+  const tabs = [
+    { id: 'voos', label: 'Passagens Aéreas', icon: Plane },
+    { id: 'onibus', label: 'Passagens de Ônibus', icon: Bus },
+    { id: 'seguros', label: 'Seguro Viagem', icon: ShieldCheck },
+  ];
+
+  return (
     <div className="w-full min-h-screen bg-gray-50 pb-20">
       
-      {/* CABEÇALHO COM A IMAGEM DA PALASTORE VIAGENS (OPÇÃO 1: PASTA PUBLIC) */}
+      {/* CABEÇALHO COM A IMAGEM DA PALASTORE VIAGENS */}
       <div className="w-full bg-white shadow-sm mb-8 border-b border-gray-200">
         <img 
           src="/image_0335bf.png" 
@@ -40,24 +63,98 @@ export default function ViagensPage() {
         />
       </div>
 
-      {/* CONTAINER PRINCIPAL */}
       <div className="max-w-[1440px] mx-auto px-4">
         
-        {/* Bloco Branco onde o Widget vai ficar */}
-        <div className="bg-white rounded-3xl shadow-lg p-2 md:p-6 border border-gray-100 min-h-[600px]">
-          
-          <h1 className="text-2xl md:text-3xl font-black text-crocus-deep mb-6 text-center uppercase tracking-tight italic">
-            Encontre as Melhores Passagens
-          </h1>
+        {/* TÍTULO E SUBTÍTULO */}
+        <div className="text-center mb-8">
+            <h1 className="text-3xl md:text-4xl font-black text-crocus-deep uppercase tracking-tight italic mb-2">
+            Central de Viagens
+            </h1>
+            <p className="text-gray-500 font-medium">Sua próxima aventura começa aqui. Escolha o serviço desejado.</p>
+        </div>
 
-          {/* O WIDGET DA KIWI SERÁ RENDERIZADO EXATAMENTE AQUI DENTRO */}
-          <div 
-            id="widget-holder" 
-            ref={widgetContainerRef} 
-            className="w-full h-full min-h-[500px]"
-          >
-            {/* O script será injetado aqui pelo useEffect automaticamente */}
-          </div>
+        {/* MENU DE NAVEGAÇÃO (ABAS) */}
+        <div className="flex flex-col md:flex-row justify-center items-center gap-3 mb-8">
+            {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            
+            return (
+                <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all duration-300 shadow-sm w-full md:w-auto justify-center
+                    ${isActive 
+                    ? 'bg-orange-500 text-white shadow-orange-500/30 scale-105 border-transparent' 
+                    : 'bg-white text-gray-600 hover:bg-gray-100 hover:text-orange-500 border border-gray-200'}`}
+                >
+                <Icon size={20} />
+                {tab.label}
+                </button>
+            );
+            })}
+        </div>
+
+        {/* ÁREA DE CONTEÚDO (BLOCO BRANCO) */}
+        <div className="bg-white rounded-3xl shadow-xl p-2 md:p-6 border border-gray-100 min-h-[700px] flex flex-col overflow-hidden">
+          
+          {/* ================= ABA 1: VOOS (KIWI) ================= */}
+          {activeTab === 'voos' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow">
+               <h2 className="text-xl md:text-2xl font-black text-crocus-deep mb-4 text-center uppercase italic">
+                 Encontre as Melhores Passagens Aéreas
+               </h2>
+               <KiwiWidget />
+            </div>
+          )}
+
+          {/* ================= ABA 2: ÔNIBUS (QUERO PASSAGEM / AWIN) ================= */}
+          {activeTab === 'onibus' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow flex flex-col">
+               <h2 className="text-xl md:text-2xl font-black text-crocus-deep mb-4 text-center uppercase italic">
+                 Viaje de Ônibus pelo Brasil
+               </h2>
+               
+               {/* Aviso e botão de tela cheia */}
+               <div className="bg-orange-50 p-4 rounded-xl mb-4 flex justify-between items-center border border-orange-100">
+                 <p className="text-orange-800 text-sm font-medium">A reserva de ônibus é processada com segurança pelo nosso parceiro oficial Quero Passagem.</p>
+                 <a href="https://www.awin1.com/cread.php?awinmid=17817&awinaffid=910543&campaign=Home+Quero+Passagem&ued=https%3A%2F%2Fqueropassagem.com.br%2Fonibus%2Frio-de-janeiro-novo-rio-rj-para-sao-paulo-tiete-sp%3Fida%3D16-08-2026" target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 text-orange-600 font-bold hover:underline">
+                    Abrir em tela cheia <ArrowRight size={16}/>
+                 </a>
+               </div>
+
+               {/* O Site do Quero Passagem embutido */}
+               <iframe 
+                 src="https://www.awin1.com/cread.php?awinmid=17817&awinaffid=910543&campaign=Home+Quero+Passagem&ued=https%3A%2F%2Fqueropassagem.com.br%2Fonibus%2Frio-de-janeiro-novo-rio-rj-para-sao-paulo-tiete-sp%3Fida%3D16-08-2026" 
+                 className="w-full flex-grow min-h-[700px] border-0 rounded-2xl bg-gray-50"
+                 title="Pesquisa Quero Passagem"
+               />
+            </div>
+          )}
+
+          {/* ================= ABA 3: SEGUROS (ALLIANZ / AWIN) ================= */}
+          {activeTab === 'seguros' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow flex flex-col">
+               <h2 className="text-xl md:text-2xl font-black text-crocus-deep mb-4 text-center uppercase italic">
+                 Seguro Viagem Allianz Travel
+               </h2>
+               
+               {/* Aviso e botão de tela cheia */}
+               <div className="bg-blue-50 p-4 rounded-xl mb-4 flex justify-between items-center border border-blue-100">
+                 <p className="text-blue-800 text-sm font-medium">Viaje protegido pela maior seguradora do mundo. Cobertura global e suporte 24h.</p>
+                 <a href="https://www.awin1.com/cread.php?awinmid=24143&awinaffid=910543&ued=https%3A%2F%2Fwww.allianztravel.com.br%2Fseguro-viagem%2Faereo%2Flazer-e-turismo" target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 text-blue-600 font-bold hover:underline">
+                    Abrir em tela cheia <ArrowRight size={16}/>
+                 </a>
+               </div>
+
+               {/* O Site da Allianz embutido */}
+               <iframe 
+                 src="https://www.awin1.com/cread.php?awinmid=24143&awinaffid=910543&ued=https%3A%2F%2Fwww.allianztravel.com.br%2Fseguro-viagem%2Faereo%2Flazer-e-turismo" 
+                 className="w-full flex-grow min-h-[700px] border-0 rounded-2xl bg-gray-50"
+                 title="Cotação Allianz Seguros"
+               />
+            </div>
+          )}
 
         </div>
       </div>
