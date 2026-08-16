@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plane, Bus, ShieldCheck, ArrowRight } from 'lucide-react';
 
 // ==========================================
-// 1. SUBCOMPONENTE: WIDGET DA KIWI (AVIÃO)
+// 1. SUBCOMPONENTE: WIDGET DA KIWI (PESQUISA PRINCIPAL)
 // ==========================================
 const KiwiWidget = () => {
   const widgetContainerRef = useRef(null);
@@ -30,13 +30,52 @@ const KiwiWidget = () => {
 
   return (
     <div id="widget-holder" ref={widgetContainerRef} className="w-full h-full min-h-[600px]">
-      {/* Script da Kiwi renderiza o visual aqui */}
+      {/* Script da Kiwi renderiza o buscador aqui */}
     </div>
   );
 };
 
 // ==========================================
-// 2. PÁGINA PRINCIPAL: PALASTORE VIAGENS
+// 2. SUBCOMPONENTE: WIDGET DA KIWI (SUGESTÕES / VITRINE)
+// ==========================================
+const KiwiSuggestionsWidget = () => {
+  const suggestionsContainerRef = useRef(null);
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = "https://widgets.kiwi.com/scripts/widget-search-iframe.js";
+    script.async = true;
+    
+    // Configurações do seu novo Widget de Sugestões de Pacotes
+    script.setAttribute("data-width", "100%"); // Ajustado para 100% para ser responsivo no celular/PC
+    script.setAttribute("data-affilid", "lptbenspacotes");
+    script.setAttribute("data-from", "belo-horizonte_mg_br,brasilia_df_br,recife_pe_br,sao-paulo_sp_br");
+    script.setAttribute("data-return", "anytime");
+    script.setAttribute("data-transport-types", "FLIGHT");
+    script.setAttribute("data-results-only", "true"); // Ativa o modo Vitrine de Cards
+
+    if (suggestionsContainerRef.current) {
+      suggestionsContainerRef.current.appendChild(script);
+    }
+
+    return () => {
+      if (suggestionsContainerRef.current && suggestionsContainerRef.current.contains(script)) {
+        suggestionsContainerRef.current.removeChild(script);
+      }
+    };
+  }, []);
+
+  return (
+    // ID diferente para não conflitar com a pesquisa principal!
+    <div id="widget-holder-suggestions" ref={suggestionsContainerRef} className="w-full min-h-[400px]">
+      {/* Script da Kiwi renderiza os cards de sugestões aqui */}
+    </div>
+  );
+};
+
+
+// ==========================================
+// 3. PÁGINA PRINCIPAL: PALASTORE VIAGENS
 // ==========================================
 export default function ViagensPage() {
   const [activeTab, setActiveTab] = useState('voos');
@@ -91,10 +130,10 @@ export default function ViagensPage() {
             })}
         </div>
 
-        {/* ÁREA DE CONTEÚDO */}
-        <div className="bg-white rounded-3xl shadow-xl p-2 md:p-6 border border-gray-100 min-h-[700px] flex flex-col overflow-hidden">
+        {/* ÁREA DE CONTEÚDO PRINCIPAL (PESQUISAS) */}
+        <div className="bg-white rounded-3xl shadow-xl p-2 md:p-6 border border-gray-100 min-h-[700px] flex flex-col overflow-hidden mb-12">
           
-          {/* ================= ABA 1: VOOS (KIWI) ================= */}
+          {/* ================= ABA 1: VOOS ================= */}
           {activeTab === 'voos' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow">
                <h2 className="text-xl md:text-2xl font-black text-crocus-deep mb-4 text-center uppercase italic">
@@ -104,14 +143,13 @@ export default function ViagensPage() {
             </div>
           )}
 
-          {/* ================= ABA 2: ÔNIBUS (FLIXBUS / AWIN) ================= */}
+          {/* ================= ABA 2: ÔNIBUS ================= */}
           {activeTab === 'onibus' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow flex flex-col">
                <h2 className="text-xl md:text-2xl font-black text-crocus-deep mb-4 text-center uppercase italic">
                  Viaje de Ônibus com a FlixBus
                </h2>
                
-               {/* Aviso e botão de tela cheia (opcional) */}
                <div className="bg-green-50 p-4 rounded-xl mb-4 flex justify-between items-center border border-green-100">
                  <p className="text-green-800 text-sm font-medium">A pesquisa e reserva são processadas com segurança pela FlixBus, parceira oficial.</p>
                  <a href="https://www.awin1.com/cread.php?awinmid=30765&awinaffid=910543" target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 text-green-600 font-bold hover:underline">
@@ -119,7 +157,6 @@ export default function ViagensPage() {
                  </a>
                </div>
 
-               {/* O Site da FlixBus embutido com o seu link */}
                <iframe 
                  src="https://www.awin1.com/cread.php?awinmid=30765&awinaffid=910543" 
                  className="w-full flex-grow min-h-[700px] border-0 rounded-2xl bg-gray-50"
@@ -128,14 +165,13 @@ export default function ViagensPage() {
             </div>
           )}
 
-          {/* ================= ABA 3: SEGUROS (ALLIANZ / AWIN) ================= */}
+          {/* ================= ABA 3: SEGUROS ================= */}
           {activeTab === 'seguros' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow flex flex-col">
                <h2 className="text-xl md:text-2xl font-black text-crocus-deep mb-4 text-center uppercase italic">
                  Seguro Viagem Allianz Travel
                </h2>
                
-               {/* Aviso e botão de tela cheia (opcional) */}
                <div className="bg-blue-50 p-4 rounded-xl mb-4 flex justify-between items-center border border-blue-100">
                  <p className="text-blue-800 text-sm font-medium">Viaje protegido pela maior seguradora do mundo. Cobertura global e suporte 24h.</p>
                  <a href="https://www.awin1.com/cread.php?awinmid=24143&awinaffid=910543&ued=https%3A%2F%2Fwww.allianztravel.com.br%2Fseguro-viagem%2Faereo%2Flazer-e-turismo" target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 text-blue-600 font-bold hover:underline">
@@ -143,7 +179,6 @@ export default function ViagensPage() {
                  </a>
                </div>
 
-               {/* O Site da Allianz embutido com o seu link */}
                <iframe 
                  src="https://www.awin1.com/cread.php?awinmid=24143&awinaffid=910543&ued=https%3A%2F%2Fwww.allianztravel.com.br%2Fseguro-viagem%2Faereo%2Flazer-e-turismo" 
                  className="w-full flex-grow min-h-[700px] border-0 rounded-2xl bg-gray-50"
@@ -151,8 +186,27 @@ export default function ViagensPage() {
                />
             </div>
           )}
-
         </div>
+
+        {/* =======================================================
+            NOVA SESSÃO DE SUGESTÕES DE VOOS (WIDGET RESULTS-ONLY)
+            Esta sessão fica sempre visível no final da página!
+        ======================================================== */}
+        <div className="w-full mt-12 mb-8">
+            <div className="flex items-center gap-4 justify-center mb-8">
+               <div className="h-[2px] w-12 bg-orange-500"></div>
+               <h2 className="text-2xl md:text-3xl font-black text-gray-800 uppercase tracking-tight italic text-center">
+                 Ofertas Imperdíveis
+               </h2>
+               <div className="h-[2px] w-12 bg-orange-500"></div>
+            </div>
+            
+            <div className="bg-white rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100">
+                {/* Aqui renderiza a vitrine de pacotes que você acabou de criar */}
+                <KiwiSuggestionsWidget />
+            </div>
+        </div>
+
       </div>
     </div>
   );
