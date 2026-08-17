@@ -10,7 +10,8 @@ import {
   Car,
   MapPin,
   Compass,
-  Train
+  Train,
+  Star
 } from 'lucide-react';
 
 // ==========================================
@@ -126,14 +127,15 @@ const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
 export default function ViagensPage() {
   const [activeTab, setActiveTab] = useState('voos');
 
-  // O seu novo Menu de Agência Multinacional (9 opções)
+  // O seu novo Menu de Agência Multinacional agora com 10 opções
   const menuItems = [
     { id: 'voos', label: 'Voos', icon: Plane },
+    { id: 'hoteis', label: 'Hotéis', icon: Building },
+    { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Star },
+    { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
+    { id: 'carros', label: 'Carros', icon: Car },
     { id: 'onibus', label: 'Ônibus Nacionais', icon: Bus },
     { id: 'seguros', label: 'Seguros', icon: ShieldCheck },
-    { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
-    { id: 'hoteis', label: 'Hotéis', icon: Building },
-    { id: 'carros', label: 'Carros', icon: Car },
     { id: 'translado', label: 'Translado', icon: MapPin },
     { id: 'passeios', label: 'Passeios', icon: Compass },
     { id: 'trens', label: 'Trens Internacionais', icon: Train },
@@ -219,7 +221,7 @@ export default function ViagensPage() {
             />
           )}
 
-          {/* PARCEIROS TRIP.COM (Voo+Hotel, Hotéis, Carros, Translado, Passeios, Trens) */}
+          {/* PARCEIROS TRIP.COM */}
           {activeTab === 'voo_hotel' && (
             <PartnerIframe 
               title="Pacotes Voo + Hotel"
@@ -234,6 +236,16 @@ export default function ViagensPage() {
               title="Reserva de Hotéis"
               url="https://br.trip.com/hotels/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286297"
               noticeText="As melhores hospedagens ao redor do mundo. Parceria oficial Trip.com."
+              themeColor="indigo"
+            />
+          )}
+
+          {/* NOVA ABA: Ofertas de Hotéis */}
+          {activeTab === 'ofertas_hoteis' && (
+            <PartnerIframe 
+              title="Ofertas Especiais de Hotéis no Brasil"
+              url="https://br.trip.com/hotels/list?flexType=1&cityId=-1&provinceId=0&countryId=19&cityName=&destName=Brasil&searchWord=Brasil&searchType=C&searchValue=140|19**19&checkin=2026-08-17&checkout=2026-08-18&crn=1&adult=2&listFilters=29~1*29*1~2*2,17~3*17*3,80~2~1*80*2&curr=BRL&locale=pt-BR&old=1&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374"
+              noticeText="Aproveite tarifas reduzidas para hospedagens em todo o Brasil. Parceria oficial Trip.com."
               themeColor="indigo"
             />
           )}
