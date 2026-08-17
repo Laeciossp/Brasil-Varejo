@@ -123,6 +123,9 @@ const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
 // ==========================================
 // 4. SUBCOMPONENTE EXCLUSIVO RENTCARS (<OBJECT>)
 // ==========================================
+// ==========================================
+// 4. SUBCOMPONENTE EXCLUSIVO RENTCARS (CORRIGIDO PARA IFRAME)
+// ==========================================
 const RentcarsWidget = () => {
   return (
     <div className="animate-in fade-in zoom-in-95 duration-500 w-full h-full flex-grow flex flex-col items-center">
@@ -136,19 +139,23 @@ const RentcarsWidget = () => {
 
        {/* O Container do Widget com sombra e bordas arredondadas para um visual premium */}
        <div className="w-full max-w-[800px] bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 flex justify-center items-center p-4 md:p-8">
-           <object 
-             data="https://widgets.rentcars.com/widget-v13.html?requestor=11058&locale=pt-br&utm_source=www.palastore.com.br&utm_medium=afiliado-widget" 
+           
+           {/* TROCAMOS O <object> PELO <iframe> PARA O REACT NÃO BLOQUEAR! */}
+           <iframe 
+             src="https://widgets.rentcars.com/widget-v13.html?requestor=11058&locale=pt-br&utm_source=www.palastore.com.br&utm_medium=afiliado-widget" 
              width="100%" 
              height="450" 
              className="max-w-[600px] w-full"
              style={{ border: 'none', overflow: 'hidden' }}
+             title="Motor de Busca Rentcars"
+             scrolling="no"
            >
-           </object>
+           </iframe>
+           
        </div>
     </div>
   );
 };
-
 // ==========================================
 // 5. PÁGINA PRINCIPAL: PALASTORE VIAGENS (WEB)
 // ==========================================
