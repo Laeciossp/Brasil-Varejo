@@ -89,7 +89,6 @@ const KiwiSuggestionsWidget = () => {
 // 3. COMPONENTE AUXILIAR PARA RENDERIZAR OS PARCEIROS (IFRAMES)
 // ==========================================
 const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
-  // Configuração simples de cores para os avisos
   const themeClasses = {
     green: "bg-green-50 border-green-100 text-green-800",
     blue: "bg-blue-50 border-blue-100 text-blue-800",
@@ -122,18 +121,48 @@ const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
 };
 
 // ==========================================
-// 4. PÁGINA PRINCIPAL: PALASTORE VIAGENS (WEB)
+// 4. SUBCOMPONENTE EXCLUSIVO RENTCARS (<OBJECT>)
+// ==========================================
+const RentcarsWidget = () => {
+  return (
+    <div className="animate-in fade-in zoom-in-95 duration-500 w-full h-full flex-grow flex flex-col items-center">
+       <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-4 text-center uppercase italic tracking-tight">
+         Aluguel de Carros (Rentcars)
+       </h2>
+       
+       <div className="bg-indigo-50 border border-indigo-100 text-indigo-800 p-4 rounded-xl mb-6 flex justify-between items-center w-full max-w-[800px]">
+         <p className="text-sm font-medium text-center w-full">Compare as melhores locadoras do mundo e garanta o melhor preço.</p>
+       </div>
+
+       {/* O Container do Widget com sombra e bordas arredondadas para um visual premium */}
+       <div className="w-full max-w-[800px] bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 flex justify-center items-center p-4 md:p-8">
+           <object 
+             data="https://widgets.rentcars.com/widget-v13.html?requestor=11058&locale=pt-br&utm_source=www.palastore.com.br&utm_medium=afiliado-widget" 
+             width="100%" 
+             height="450" 
+             className="max-w-[600px] w-full"
+             style={{ border: 'none', overflow: 'hidden' }}
+           >
+           </object>
+       </div>
+    </div>
+  );
+};
+
+// ==========================================
+// 5. PÁGINA PRINCIPAL: PALASTORE VIAGENS (WEB)
 // ==========================================
 export default function ViagensPage() {
   const [activeTab, setActiveTab] = useState('voos');
 
-  // O seu novo Menu de Agência Multinacional agora com 10 opções
+  // Menu de Agência Multinacional com 11 opções (adicionado Rentcars)
   const menuItems = [
     { id: 'voos', label: 'Voos', icon: Plane },
     { id: 'hoteis', label: 'Hotéis', icon: Building },
     { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Star },
     { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
-    { id: 'carros', label: 'Carros', icon: Car },
+    { id: 'carros', label: 'Carros (Trip)', icon: Car },
+    { id: 'rentcars', label: 'Carros (Rent)', icon: Car },
     { id: 'onibus', label: 'Ônibus Nacionais', icon: Bus },
     { id: 'seguros', label: 'Seguros', icon: ShieldCheck },
     { id: 'translado', label: 'Translado', icon: MapPin },
@@ -165,7 +194,6 @@ export default function ViagensPage() {
 
         {/* ========================================================
             NOVO MENU: GRID DE CARDS ELEGANTES
-            Eles se adaptam à tela (2 ou 3 linhas no celular, 1 linha no PC)
         ======================================================== */}
         <div className="flex flex-wrap justify-center gap-3 md:gap-4 mb-10">
             {menuItems.map((tab) => {
@@ -188,10 +216,9 @@ export default function ViagensPage() {
             })}
         </div>
 
-        {/* ÁREA DE CONTEÚDO PRINCIPAL (PESQUISAS E IFRAMES EMBUTIDOS) */}
+        {/* ÁREA DE CONTEÚDO PRINCIPAL */}
         <div className="bg-white rounded-3xl shadow-xl p-2 md:p-6 border border-gray-100 min-h-[700px] flex flex-col overflow-hidden mb-12">
           
-          {/* Aba Principal (Voos) */}
           {activeTab === 'voos' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow">
                <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-4 text-center uppercase italic tracking-tight">
@@ -201,7 +228,6 @@ export default function ViagensPage() {
             </div>
           )}
 
-          {/* Ônibus (FlixBus) */}
           {activeTab === 'onibus' && (
             <PartnerIframe 
               title="Viaje de Ônibus"
@@ -211,7 +237,6 @@ export default function ViagensPage() {
             />
           )}
 
-          {/* Seguros (Hotsite Palastore) */}
           {activeTab === 'seguros' && (
             <PartnerIframe 
               title="Seguro Viagem"
@@ -221,7 +246,6 @@ export default function ViagensPage() {
             />
           )}
 
-          {/* PARCEIROS TRIP.COM */}
           {activeTab === 'voo_hotel' && (
             <PartnerIframe 
               title="Pacotes Voo + Hotel"
@@ -240,7 +264,6 @@ export default function ViagensPage() {
             />
           )}
 
-          {/* NOVA ABA: Ofertas de Hotéis */}
           {activeTab === 'ofertas_hoteis' && (
             <PartnerIframe 
               title="Ofertas Especiais de Hotéis no Brasil"
@@ -248,6 +271,11 @@ export default function ViagensPage() {
               noticeText="Aproveite tarifas reduzidas para hospedagens em todo o Brasil. Parceria oficial Trip.com."
               themeColor="indigo"
             />
+          )}
+
+          {/* NOVA ABA: Rentcars Widget Elegante */}
+          {activeTab === 'rentcars' && (
+            <RentcarsWidget />
           )}
 
           {activeTab === 'carros' && (
