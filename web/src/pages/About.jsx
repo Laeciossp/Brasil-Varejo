@@ -12,7 +12,7 @@ export default function About() {
         </p>
         
         <p>
-          Operada sob a razão social <strong>42.361.289 LAECIO SANTOS SÃO PEDRO</strong> (CNPJ 42.361.289/0001-14), dividimos nossa expertise em três grandes vertentes: um e-commerce de alto nível, o desenvolvimento de <strong>softwares avançados de navegação e roteamento GPS</strong>, e a atuação consolidada como <strong>Operadora Turística e Agência de Viagens</strong>, oferecendo pacotes, roteiros regulares e passagens com padrões de grandes players do mercado mundial.
+          Operada sob a razão social <strong>LAECIO S S PEDRO E-COMMERCE</strong> (CNPJ 42.361.289/0001-14), dividimos nossa expertise em três grandes vertentes: um e-commerce de alto nível, o desenvolvimento de <strong>softwares avançados de navegação e roteamento GPS</strong>, e a atuação consolidada como <strong>Operadora Turística e Agência de Viagens</strong>, oferecendo pacotes, roteiros regulares e passagens com padrões de grandes players do mercado mundial.
         </p>
 
         <h3 className="text-xl font-black text-slate-900 mt-8 mb-4">Nossa Missão</h3>
