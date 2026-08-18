@@ -93,7 +93,7 @@ const RoteirosExclusivos = () => {
            <h2 className="text-xl md:text-2xl font-black text-gray-800 uppercase italic tracking-tight mb-2">
              Roteiros Exclusivos
            </h2>
-           <p className="text-gray-500 text-sm text-center mb-6">Operados com excelência Queensberry. Finalize direto no nosso carrinho.</p>
+           <p className="text-gray-500 text-sm text-center mb-6">Operados com excelência Palastore. Finalize direto no nosso carrinho.</p>
            
            <div className="w-full max-w-xl relative">
               <input 
@@ -464,7 +464,7 @@ export default function ViagensPage() {
           )}
         </div>
 
-        {/* ================= SESSÃO DE OFERTAS IMPERDÍVEIS ================= */}
+        {/* ================= SESSÃO DE OFERTAS IMPERDÍVEIS DE VOOS ================= */}
         <div className="w-full mt-12 mb-8">
             <div className="flex items-center gap-4 justify-center mb-8">
                <div className="h-[2px] w-12 bg-orange-500"></div>
