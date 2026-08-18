@@ -34,9 +34,9 @@ export default function Footer() {
                 </a>
               </li>
               <li>
-                <a href="mailto:laeciossp@gmail.com" className="hover:text-orange-400 transition-colors flex items-center gap-3 group">
+                <a href="mailto:cantato@palastore.com.br" className="hover:text-orange-400 transition-colors flex items-center gap-3 group">
                   <span className="bg-white/10 p-2 rounded-full group-hover:bg-orange-500 transition-all"><Mail size={16} className="text-white"/></span>
-                  laeciossp@gmail.com
+                  cantato@palastore.com.br
                 </a>
               </li>
               <li className="text-xs text-gray-400 pt-2 pl-11">Seg. a Sex. das 09h às 18h</li>

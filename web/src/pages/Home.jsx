@@ -221,7 +221,7 @@ const FeaturedBannersBlock = ({ data }) => {
   );
 };
 
-// --- Bloco D: Carrossel de Produtos (ATUALIZADO) ---
+// --- Bloco D: Carrossel de Produtos (ATUALIZADO PARA -5%) ---
 const ProductCarouselBlock = ({ data }) => {
   const rawProducts = data.products || [];
   const products = rawProducts.filter(prod => prod && prod.isActive !== false);
@@ -281,7 +281,6 @@ const ProductCarouselBlock = ({ data }) => {
       
      <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-6 scrollbar-hide scroll-smooth px-1 snap-x snap-mandatory">
         {products.map((prod) => {
-          // Busca o preço real na grade de tamanhos (que foi atualizada pelo script) ou cai pro preço raiz
           const currentPrice = prod.variants?.[0]?.sizes?.[0]?.price || prod.variants?.[0]?.price || prod.price;
           const currentOldPrice = prod.variants?.[0]?.sizes?.[0]?.oldPrice || prod.variants?.[0]?.oldPrice || prod.oldPrice;
 
@@ -303,7 +302,7 @@ const ProductCarouselBlock = ({ data }) => {
                  {currentOldPrice > currentPrice && <span className="text-[10px] text-gray-400 line-through block mb-0.5">de {formatCurrency(currentOldPrice)}</span>}
                   <span className="text-base font-black text-green-700 block tracking-tight leading-none">{currentPrice ? formatCurrency(currentPrice) : 'Sob Consulta'}</span>
                   <div className="mt-1 flex flex-col gap-0.5">
-                      <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span>
+                      <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-5% à vista</span>
                       <span className="text-[10px] text-gray-400 font-medium">Em até 12x</span>
                   </div>
                </div>
@@ -342,7 +341,6 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Query completa incluindo 'variants'
     const query = `*[_type == "homePage"][0]{
       pageBuilder[]{
         _type, _key,

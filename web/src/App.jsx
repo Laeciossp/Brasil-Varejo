@@ -13,7 +13,8 @@ import Profile from './pages/Profile';
 import Success from './pages/Success';
 import Favorites from './pages/Favorites';
 import SearchPage from './pages/SearchPage';
-import ViagensPage from './pages/ViagensPage'; // 👈 Sua página de viagens importada aqui
+import ViagensPage from './pages/ViagensPage';
+import TourDetails from './pages/TourDetails'; // 👈 1. IMPORTAMOS A TELA DO ROTEIRO AQUI
 
 // Importar a página de Marcas
 import BrandPage from './pages/BrandPage';
@@ -45,6 +46,9 @@ function App() {
           <Route path="/product/:slug" element={<ProductDetails />} />
           <Route path="/produto/:slug" element={<ProductDetails />} />
           
+          {/* 👇 2. ADICIONAMOS A ROTA DO ROTEIRO INDIVIDUAL DE VIAGEM */}
+          <Route path="/roteiro/:slug" element={<TourDetails />} />
+          
           {/* Rotas de Categoria */}
           <Route path="/category/:slug" element={<CategoryPage />} />
           <Route path="/categoria/:slug" element={<CategoryPage />} />
@@ -57,7 +61,7 @@ function App() {
           <Route path="/cart" element={<Cart />} />
           <Route path="/favoritos" element={<Favorites />} />
 
-          {/* 👇 NOVA ROTA DE VIAGENS (WIDGET DA KIWI) */}
+          {/* Rota de Viagens (Central de Viagens) */}
           <Route path="/viagens" element={<ViagensPage />} />
                
           {/* Páginas Institucionais */}

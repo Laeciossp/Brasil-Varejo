@@ -322,7 +322,7 @@ export default function CategoryPage() {
                                           <p className="text-lg font-black text-green-700 block tracking-tight leading-none">{price ? formatPrice(price) : 'Consulte'}</p>
                                           {price > 0 && (
                                             <div className="mt-1 flex flex-col gap-0.5">
-                                                <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span>
+                                                <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-5% à vista</span>
                                                 <span className="text-[10px] text-gray-400 font-medium">Em até 12x</span>
                                             </div>
                                           )}

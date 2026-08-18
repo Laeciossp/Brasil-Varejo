@@ -14,14 +14,13 @@ export default {
     try {
       const url = new URL(req.url);
 
-      // --- ROTA DE FRETE (COM DIAGNÓSTICO DE ERRO) ---
+      // --- ROTA DE FRETE (Mantida Intacta) ---
       if (url.pathname === "/shipping") {
         const body = await req.json();
         const { to, products } = body; 
 
         const meToken = env.MELHORENVIO_TOKEN; 
         
-        // DEDO-DURO 1: Se não tiver token configurado
         if (!meToken) {
              return new Response(JSON.stringify([{
                  name: "ERRO: Token Ausente",
@@ -34,7 +33,7 @@ export default {
         const cleanToCep = to.postal_code.replace(/\D/g, '');
 
         const payload = {
-            from: { postal_code: "43850000" }, // Seu CEP (São Sebastião)
+            from: { postal_code: "43850000" }, 
             to: { postal_code: cleanToCep },
             products: products.map(p => ({
                 id: p.id,
@@ -46,7 +45,7 @@ export default {
                 quantity: Number(p.quantity) || 1
             })),
             options: { receipt: false, own_hand: false },
-            services: "1,2" // Correios (PAC/SEDEX)
+            services: "1,2" 
         };
 
         const resp = await fetch("https://melhorenvio.com.br/api/v2/me/shipment/calculate", {
@@ -59,7 +58,6 @@ export default {
             body: JSON.stringify(payload)
         });
 
-        // DEDO-DURO 2: Se a API der erro, mostra no site
         if (!resp.ok) {
             const errorText = await resp.text();
             console.error("Erro API:", errorText);
@@ -75,9 +73,9 @@ export default {
         return new Response(JSON.stringify(data), { headers });
       }
 
-      // --- ROTA CHECKOUT (Mantida Intacta) ---
+      // --- ROTA CHECKOUT (ATUALIZADA PARA 100/100 MERCADO PAGO) ---
       if (url.pathname === "/checkout") {
-        const { items, shipping, email, tipoPagamento, shippingAddress, customerDocument, totalAmount, orderId } = await req.json();
+        const { items, shipping, email, tipoPagamento, shippingAddress, customerDocument, totalAmount, orderId, customerName } = await req.json();
 
         let excludedPaymentTypes = [];
         let maxInstallments = 12;
@@ -94,26 +92,38 @@ export default {
         const grossTotal = itemsTotal + shippingCost;
         
         let mpItems = items.map(item => ({
+            id: item.id || `item-${Date.now()}`,
             title: item.title,
+            description: item.title,
             quantity: Number(item.quantity),
             currency_id: "BRL",
-            unit_price: Number(item.price)
+            unit_price: Number(item.price),
+            picture_url: item.picture_url
         }));
 
         if (totalAmount < grossTotal) {
             const discountDiff = grossTotal - totalAmount;
             mpItems.push({
-                title: "Desconto PIX (-10%)",
+                id: 'discount-pix',
+                title: "Desconto PIX (-5%)",
+                description: "Desconto PIX (-5%)",
+                // ...
                 quantity: 1,
                 currency_id: "BRL",
                 unit_price: -Number(discountDiff.toFixed(2))
             });
         }
 
+        const nomeCompleto = customerName ? customerName.trim().split(' ') : ['Cliente', ''];
+        const nomePayer = nomeCompleto[0];
+        const sobrenomePayer = nomeCompleto.length > 1 ? nomeCompleto.slice(1).join(' ') : 'Palastore';
+
         const preferenceBody = {
           items: mpItems,
           shipments: { cost: shippingCost, mode: "not_specified" },
           payer: {
+            name: nomePayer,
+            surname: sobrenomePayer,
             email: email,
             identification: { type: "CPF", number: customerDocument },
             address: {

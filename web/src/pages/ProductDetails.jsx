@@ -670,10 +670,10 @@ export default function ProductDetails() {
                     <span className="text-gray-400 line-through text-xs block mb-1">De: {formatCurrency(currentOldPrice)}</span>
                 )}
                 <span className="text-4xl font-black text-gray-900 tracking-tighter block">{formatCurrency(currentPrice)}</span>
-                <p className="text-xs text-green-700 mt-2 font-bold flex items-center gap-2">
-                    <span className="bg-green-100 px-2 py-0.5 rounded">10% OFF no Pix</span>
-                    <span className="text-gray-400 font-normal">ou em até 12x</span>
-                </p>
+               <p className="text-xs text-green-700 mt-2 font-bold flex items-center gap-2">
+    <span className="bg-green-100 px-2 py-0.5 rounded">5% OFF no Pix</span>
+    <span className="text-gray-400 font-normal">ou em até 12x</span>
+</p>
                 {isFreeShipping && (
                     <div className="mt-3 flex items-center gap-2 text-xs font-bold text-purple-700">
                         <Truck size={14} /> Frete Grátis disponível
@@ -729,7 +729,7 @@ export default function ProductDetails() {
                 )}
             </div>
 
-            <div className="flex flex-col gap-3">
+           <div className="flex flex-col gap-3">
                 <button onClick={handleBuyNow} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2">
                     Comprar Agora <ArrowRight size={18} />
                 </button>
@@ -763,6 +763,7 @@ export default function ProductDetails() {
                  </div>
                )}
            </div>
+           
           {relatedProducts.length > 0 && (
           <div className="mt-8">
             <div className="flex items-center justify-between mb-4">
@@ -774,9 +775,9 @@ export default function ProductDetails() {
             </div>
             <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-6 snap-x scrollbar-hide scroll-smooth px-1">
               {relatedProducts.map((rel) => {
-                // A mesma lógica de fallback para garantir que o preço do carrossel bate com o produto
                 const relPrice = rel.variants?.[0]?.sizes?.[0]?.price || rel.variants?.[0]?.price || rel.price;
                 const relOldPrice = rel.variants?.[0]?.sizes?.[0]?.oldPrice || rel.variants?.[0]?.oldPrice || rel.oldPrice;
+                
                 return (
                   <Link 
                     to={`/product/${rel.slug.current}`} 
@@ -805,11 +806,11 @@ export default function ProductDetails() {
                             {formatCurrency(relPrice)}
                             </span>
                             <div className="mt-1 flex flex-col gap-0.5">
-                                <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-10% à vista</span>
+                                <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded w-fit">-5% à vista</span>
                                 <span className="text-[10px] text-gray-400 font-medium">Em até 12x</span>
                             </div>
-                        </div>
-
+                        </div> 
+                        
                          <button 
                             onClick={(e) => handleQuickAdd(e, rel)}
                             className="mb-1 bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-orange-700 transition-colors flex-shrink-0 ml-2"
