@@ -237,9 +237,9 @@ export default function ViagensPage() {
 
           {activeTab === 'onibus' && (
             <PartnerIframe 
-              title="Viaje de Ônibus"
-              url="https://www.awin1.com/cread.php?awinmid=30765&awinaffid=910543"
-              noticeText="Pesquisa e reserva seguras processadas pela FlixBus, parceira oficial."
+              title="Passagens de Ônibus"
+              url="https://www.awin1.com/cread.php?awinmid=65292&awinaffid=910543"
+              noticeText="Compare e reserve passagens de ônibus para milhares de destinos em todo o Brasil. Processamento seguro via parceiro oficial."
               themeColor="green"
             />
           )}

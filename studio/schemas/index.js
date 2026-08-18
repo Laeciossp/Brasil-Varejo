@@ -7,7 +7,10 @@ import shippingSettings from './shippingSettings'
 import carrierConfig from './carrierConfig'
 import order from './order'
 import customer from './customer'
-import staff from './staff' // <--- NOVO IMPORT
+import staff from './staff'
+
+// ---> ADICIONE A IMPORTAÇÃO DO TOUR AQUI <---
+import tour from './tour'
 
 // --- Schemas da Home / Page Builder (Novos) ---
 import hero from './hero'
@@ -24,7 +27,9 @@ export const schemaTypes = [
   carrierConfig,
   order,
   customer,
-  staff, // <--- ADICIONADO AQUI
+  staff,
+  
+  tour, // <--- DECLARE O TOUR AQUI NA LISTA
 
   // Page Builder da Home
   hero,
