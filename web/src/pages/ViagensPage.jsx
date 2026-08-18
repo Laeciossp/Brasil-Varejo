@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { createClient } from "@sanity/client";
+import { formatCurrency } from '../lib/utils';
+import useCartStore from '../store/useCartStore';
 import { 
   Plane, 
   Bus, 
@@ -11,11 +15,158 @@ import {
   MapPin,
   Compass,
   Train,
-  Star
+  Star,
+  Search
 } from 'lucide-react';
 
+const client = createClient({
+  projectId: 'o4upb251',
+  dataset: 'production',
+  useCdn: false,
+  apiVersion: '2023-05-03',
+});
+
 // ==========================================
-// 1. SUBCOMPONENTE: WIDGET DA KIWI (PESQUISA PRINCIPAL)
+// 1. SUBCOMPONENTE: ROTEIROS QUEENSBERRY (NOVO)
+// ==========================================
+const RoteirosExclusivos = () => {
+  const [tours, setTours] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  const { addItem, setShipping } = useCartStore();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchTours = async () => {
+      try {
+        const query = `*[_type == "tour" && isActive == true] | order(_createdAt desc) {
+          _id, 
+          title, 
+          price,
+          "slug": slug.current,
+          "imageUrl": images[0].asset->url,
+          tags
+        }`;
+        const data = await client.fetch(query);
+        setTours(data);
+      } catch (err) {
+        console.error("Erro ao buscar roteiros:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTours();
+  }, []);
+
+  const handleQuickBook = (e, tour) => {
+    e.preventDefault();
+    e.stopPropagation();
+    addItem({
+      _id: tour._id,
+      title: tour.title,
+      slug: { current: tour.slug },
+      price: tour.price,
+      image: tour.imageUrl,
+      sku: `TOUR-${tour._id.slice(-6)}`,
+      variantName: "Pacote Duplo",
+      isTravel: true
+    });
+    setShipping({
+        name: "Emissão Digital (E-Ticket / Voucher)",
+        price: 0,
+        delivery_time: 1,
+        company: "Operadora"
+    });
+    alert("Roteiro adicionado! Finalize a reserva no carrinho.");
+    navigate('/cart');
+  };
+
+  const filteredTours = tours.filter(tour => 
+    tour.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (tour.tags && tour.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
+  );
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow flex flex-col">
+       <div className="flex flex-col items-center mb-8">
+           <h2 className="text-xl md:text-2xl font-black text-gray-800 uppercase italic tracking-tight mb-2">
+             Roteiros Exclusivos
+           </h2>
+           <p className="text-gray-500 text-sm text-center mb-6">Operados com excelência Queensberry. Finalize direto no nosso carrinho.</p>
+           
+           <div className="w-full max-w-xl relative">
+              <input 
+                 type="text" 
+                 placeholder="Busque destinos, países ou temáticas..." 
+                 value={searchTerm}
+                 onChange={(e) => setSearchTerm(e.target.value)}
+                 className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 text-sm font-medium focus:outline-none focus:border-orange-500 transition-all bg-gray-50"
+              />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+           </div>
+       </div>
+
+       {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+             {[...Array(8)].map((_, i) => <div key={i} className="h-64 bg-gray-100 animate-pulse rounded-xl"></div>)}
+          </div>
+       ) : filteredTours.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+             {filteredTours.map((tour) => (
+                <Link 
+                   key={tour._id} 
+                   to={`/roteiro/${tour.slug}`} 
+                   className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl hover:border-orange-200 transition-all group flex flex-col h-full relative"
+                >
+                   <div className="h-48 w-full relative overflow-hidden bg-gray-100">
+                      {tour.imageUrl ? (
+                         <img src={tour.imageUrl} alt={tour.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      ) : (
+                         <div className="w-full h-full flex items-center justify-center text-gray-300"><Compass size={32}/></div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                   </div>
+
+                   <div className="p-4 flex flex-col flex-1">
+                      {tour.tags && tour.tags.length > 0 && (
+                         <span className="text-[9px] font-black uppercase text-orange-600 mb-1 tracking-wider line-clamp-1">
+                            {tour.tags.slice(0, 2).join(' • ')}
+                         </span>
+                      )}
+                      <h3 className="font-bold text-gray-800 text-sm leading-snug line-clamp-2 mb-2 group-hover:text-orange-600 transition-colors">
+                         {tour.title}
+                      </h3>
+                      
+                      <div className="mt-auto pt-3 border-t border-gray-50 flex justify-between items-end">
+                         <div>
+                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">A partir de</p>
+                            <p className="text-lg font-black text-gray-900 leading-none">{formatCurrency(tour.price)}</p>
+                         </div>
+                         <button 
+                            onClick={(e) => handleQuickBook(e, tour)}
+                            className="w-8 h-8 bg-gray-900 text-white rounded-full flex items-center justify-center hover:bg-orange-600 transition-colors shadow-md transform active:scale-95 flex-shrink-0"
+                            title="Reservar Rapidamente"
+                         >
+                            <ArrowRight size={14} />
+                         </button>
+                      </div>
+                   </div>
+                </Link>
+             ))}
+          </div>
+       ) : (
+          <div className="text-center py-16 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+             <Compass size={40} className="mx-auto text-gray-300 mb-3" />
+             <h3 className="font-bold text-gray-800">Nenhum roteiro encontrado.</h3>
+          </div>
+       )}
+    </div>
+  );
+};
+
+// ==========================================
+// 2. SUBCOMPONENTE: WIDGET DA KIWI (PESQUISA PRINCIPAL)
 // ==========================================
 const KiwiWidget = () => {
   const widgetContainerRef = useRef(null);
@@ -42,14 +193,12 @@ const KiwiWidget = () => {
   }, []);
 
   return (
-    <div id="widget-holder" ref={widgetContainerRef} className="w-full h-full min-h-[600px]">
-      {/* Script da Kiwi renderiza o buscador aqui */}
-    </div>
+    <div id="widget-holder" ref={widgetContainerRef} className="w-full h-full min-h-[600px]"></div>
   );
 };
 
 // ==========================================
-// 2. SUBCOMPONENTE: WIDGET DA KIWI (VITRINE DE OFERTAS)
+// 3. SUBCOMPONENTE: WIDGET DA KIWI (VITRINE DE OFERTAS)
 // ==========================================
 const KiwiSuggestionsWidget = () => {
   const htmlContent = `
@@ -86,7 +235,7 @@ const KiwiSuggestionsWidget = () => {
 };
 
 // ==========================================
-// 3. COMPONENTE AUXILIAR PARA RENDERIZAR OS PARCEIROS (IFRAMES)
+// 4. COMPONENTE AUXILIAR PARA RENDERIZAR OS PARCEIROS (IFRAMES)
 // ==========================================
 const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
   const themeClasses = {
@@ -95,7 +244,6 @@ const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
     indigo: "bg-indigo-50 border-indigo-100 text-indigo-800",
     orange: "bg-orange-50 border-orange-100 text-orange-800"
   };
-
   const currentTheme = themeClasses[themeColor] || themeClasses.indigo;
 
   return (
@@ -111,20 +259,13 @@ const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
          </a>
        </div>
 
-       <iframe 
-         src={url} 
-         className="w-full flex-grow min-h-[700px] border-0 rounded-2xl bg-gray-50 shadow-inner"
-         title={title}
-       />
+       <iframe src={url} className="w-full flex-grow min-h-[700px] border-0 rounded-2xl bg-gray-50 shadow-inner" title={title}/>
     </div>
   );
 };
 
 // ==========================================
-// 4. SUBCOMPONENTE EXCLUSIVO RENTCARS (<OBJECT>)
-// ==========================================
-// ==========================================
-// 4. SUBCOMPONENTE EXCLUSIVO RENTCARS (CORRIGIDO PARA IFRAME)
+// 5. SUBCOMPONENTE EXCLUSIVO RENTCARS
 // ==========================================
 const RentcarsWidget = () => {
   return (
@@ -137,10 +278,7 @@ const RentcarsWidget = () => {
          <p className="text-sm font-medium text-center w-full">Compare as melhores locadoras do mundo e garanta o melhor preço.</p>
        </div>
 
-       {/* O Container do Widget com sombra e bordas arredondadas para um visual premium */}
        <div className="w-full max-w-[800px] bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 flex justify-center items-center p-4 md:p-8">
-           
-           {/* TROCAMOS O <object> PELO <iframe> PARA O REACT NÃO BLOQUEAR! */}
            <iframe 
              src="https://widgets.rentcars.com/widget-v13.html?requestor=11058&locale=pt-br&utm_source=www.palastore.com.br&utm_medium=afiliado-widget" 
              width="100%" 
@@ -149,21 +287,21 @@ const RentcarsWidget = () => {
              style={{ border: 'none', overflow: 'hidden' }}
              title="Motor de Busca Rentcars"
              scrolling="no"
-           >
-           </iframe>
-           
+           ></iframe>
        </div>
     </div>
   );
 };
+
 // ==========================================
-// 5. PÁGINA PRINCIPAL: PALASTORE VIAGENS (WEB)
+// 6. PÁGINA PRINCIPAL: PALASTORE VIAGENS (WEB)
 // ==========================================
 export default function ViagensPage() {
-  const [activeTab, setActiveTab] = useState('voos');
+  // Aba padrão agora é 'roteiros' (Queensberry)
+  const [activeTab, setActiveTab] = useState('roteiros');
 
-  // Menu de Agência Multinacional com 11 opções (adicionado Rentcars)
   const menuItems = [
+    { id: 'roteiros', label: 'Roteiros Exclusivos', icon: Compass },
     { id: 'voos', label: 'Voos', icon: Plane },
     { id: 'hoteis', label: 'Hotéis', icon: Building },
     { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Star },
@@ -224,8 +362,13 @@ export default function ViagensPage() {
         </div>
 
         {/* ÁREA DE CONTEÚDO PRINCIPAL */}
-        <div className="bg-white rounded-3xl shadow-xl p-2 md:p-6 border border-gray-100 min-h-[700px] flex flex-col overflow-hidden mb-12">
+        <div className="bg-white rounded-3xl shadow-xl p-4 md:p-6 border border-gray-100 min-h-[700px] flex flex-col overflow-hidden mb-12">
           
+          {/* NOVA ABA: Roteiros Queensberry */}
+          {activeTab === 'roteiros' && (
+             <RoteirosExclusivos />
+          )}
+
           {activeTab === 'voos' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow">
                <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-4 text-center uppercase italic tracking-tight">
@@ -280,7 +423,6 @@ export default function ViagensPage() {
             />
           )}
 
-          {/* NOVA ABA: Rentcars Widget Elegante */}
           {activeTab === 'rentcars' && (
             <RentcarsWidget />
           )}
