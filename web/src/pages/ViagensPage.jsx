@@ -317,7 +317,8 @@ const KiwiWidget = () => {
         }`;
         
         const data = await client.fetch(query);
-        setTours(data);
+console.log("DADOS DO SANITY:", data); // 👈 ADICIONE ESTA LINHA AQUI
+setTours(data);
       } catch (err) {
         console.error("Erro ao buscar roteiros:", err);
       } finally {
