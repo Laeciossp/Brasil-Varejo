@@ -58,11 +58,28 @@ const RoteirosExclusivos = () => {
   useEffect(() => {
     const fetchTours = async () => {
       try {
-        const query = `*[_type == "tour" && (!defined(isActive) || isActive == true) && !(_id in path("drafts.**"))] | order(_createdAt desc) {
+        // [0...2000] Força o Sanity a trazer TODO o catálogo de vez (burlar o limite de 100 itens)
+        const query = `*[_type == "tour" && (!defined(isActive) || isActive == true) && !(_id in path("drafts.**"))][0...2000] | order(_createdAt desc) {
           _id, title, price, "slug": slug.current, "imageUrl": images[0].asset->url, "tags": coalesce(tags, tematicas, []) 
         }`;
+        
         const data = await client.fetch(query);
-        setTours(data);
+        
+        // NORMALIZAÇÃO BRUTAL: Limpa a sujeira do banco de dados antigo
+        const normalizedData = data.map(tour => {
+           let rawTags = tour.tags || [];
+           if (typeof rawTags === 'string') rawTags = [rawTags]; // Se for uma string única, vira Array
+           
+           // Quebra as vírgulas (Ex: "China, Tours regulares") e joga tudo para MAIÚSCULO
+           let cleanTags = rawTags
+              .flatMap(tag => tag.split(','))
+              .map(t => t.trim().toUpperCase())
+              .filter(t => t.length > 0);
+              
+           return { ...tour, normalizedTags: cleanTags };
+        });
+
+        setTours(normalizedData);
       } catch (err) {
         console.error("Erro ao buscar roteiros:", err);
       } finally {
@@ -84,14 +101,15 @@ const RoteirosExclusivos = () => {
     navigate('/cart');
   };
 
+  // Separa os países e regiões que NÃO são Temáticas principais
   const availableCountries = useMemo(() => {
-    const macroThemes = themes.map(t => t.id);
-    const allTags = tours.flatMap(t => t.tags || []);
-    const uniqueTags = [...new Set(allTags)].filter(tag => !macroThemes.includes(tag) && tag.length > 2);
+    const macroThemesUpper = themes.map(t => t.id.toUpperCase());
+    const allTags = tours.flatMap(t => t.normalizedTags || []);
+    // Tudo o que sobrar que não for o "Tema Principal", é listado como País
+    const uniqueTags = [...new Set(allTags)].filter(tag => !macroThemesUpper.includes(tag) && tag.length > 2);
     return uniqueTags.sort();
   }, [tours]);
 
-  // 👉 A MÁGICA DO FILTRO AQUI
   const toggleCountry = (country) => {
     setActiveTheme('Todos'); // Pula o menu para "Todos" automaticamente!
     setSelectedCountries(prev => prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]);
@@ -106,19 +124,29 @@ const RoteirosExclusivos = () => {
     setSearchTerm('');
   };
 
+  // Aplica todos os filtros simultaneamente usando a array NORMALIZADA
   const filteredTours = tours.filter(tour => {
-    const matchSearch = tour.title.toLowerCase().includes(searchTerm.toLowerCase()) || (tour.tags && tour.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())));
-    const matchTheme = activeTheme === 'Todos' || (tour.tags && tour.tags.includes(activeTheme));
+    const searchLower = searchTerm.toLowerCase();
+    const matchSearch = tour.title.toLowerCase().includes(searchLower) || 
+                        (tour.normalizedTags && tour.normalizedTags.some(tag => tag.toLowerCase().includes(searchLower)));
+                        
+    const matchTheme = activeTheme === 'Todos' || 
+                       (tour.normalizedTags && tour.normalizedTags.includes(activeTheme.toUpperCase()));
+                       
     const tourPrice = tour.price || 0;
     const matchMin = priceRange.min ? tourPrice >= parseFloat(priceRange.min) : true;
     const matchMax = priceRange.max ? tourPrice <= parseFloat(priceRange.max) : true;
-    const matchCountry = selectedCountries.length === 0 || (tour.tags && selectedCountries.some(c => tour.tags.includes(c)));
+    
+    const matchCountry = selectedCountries.length === 0 || 
+                         (tour.normalizedTags && selectedCountries.some(c => tour.normalizedTags.includes(c.toUpperCase())));
+
     return matchSearch && matchTheme && matchMin && matchMax && matchCountry;
   });
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex flex-col">
        
+       {/* MENU DE TEMÁTICAS SUPERIOR */}
        <div className="w-full overflow-x-auto scrollbar-hide mb-8 pb-4 border-b border-gray-100">
           <div className="flex gap-4 px-2 min-w-max">
              {themes.map(theme => {
@@ -169,7 +197,7 @@ const RoteirosExclusivos = () => {
                    <h3 className="font-bold text-gray-900 mb-3 text-sm uppercase tracking-wide">País / Região</h3>
                    <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
                       
-                      {/* 👉 BOTÃO TODOS OS PAÍSES CORRIGIDO */}
+                      {/* BOTÃO TODOS OS PAÍSES CORRIGIDO */}
                       <label className="flex items-center gap-3 cursor-pointer group select-none hover:bg-gray-50 p-2 rounded-lg transition-colors border-b border-gray-100 mb-2">
                          <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${selectedCountries.length === 0 ? 'bg-orange-600 border-orange-600' : 'border-gray-300 bg-white group-hover:border-orange-400'}`}>
                             {selectedCountries.length === 0 && <span className="text-white text-[10px] font-bold">✓</span>}
@@ -183,7 +211,8 @@ const RoteirosExclusivos = () => {
                             <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${selectedCountries.includes(country) ? 'bg-orange-600 border-orange-600' : 'border-gray-300 bg-white group-hover:border-orange-400'}`}>
                                {selectedCountries.includes(country) && <span className="text-white text-[10px] font-bold">✓</span>}
                             </div>
-                            <span className="text-sm text-gray-600 group-hover:text-orange-600 transition-colors line-clamp-1">{country}</span>
+                            {/* Usa CSS capitalize para deixar Bonito na tela, ex: China ao invés de CHINA */}
+                            <span className="text-sm text-gray-600 group-hover:text-orange-600 transition-colors line-clamp-1 capitalize">{country.toLowerCase()}</span>
                             <input type="checkbox" className="hidden" onChange={() => toggleCountry(country)} checked={selectedCountries.includes(country)} />
                          </label>
                       ))}
@@ -216,9 +245,9 @@ const RoteirosExclusivos = () => {
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                             
                             <div className="absolute bottom-4 left-4 right-4">
-                               {tour.tags && tour.tags.length > 0 && (
+                               {tour.normalizedTags && tour.normalizedTags.length > 0 && (
                                   <span className="text-[10px] font-black uppercase text-white bg-orange-600/90 backdrop-blur-sm px-2 py-1 rounded tracking-wider line-clamp-1 w-fit mb-2 block">
-                                     {tour.tags.slice(0, 2).join(' • ')}
+                                     {tour.normalizedTags.slice(0, 2).join(' • ')}
                                   </span>
                                )}
                                <h3 className="font-bold text-white text-lg leading-tight line-clamp-2 drop-shadow-md">{tour.title}</h3>
