@@ -6,7 +6,8 @@ import useCartStore from '../store/useCartStore';
 import { 
   Plane, Bus, ShieldCheck, ArrowRight, ExternalLink, Briefcase, 
   Building, Car, MapPin, Compass, Train, Star, Search,
-  Globe, Castle, Mountain, Sun, Waves, Palmtree, Filter, X
+  Globe, Castle, Mountain, Sun, Waves, Palmtree, Filter, X,
+  Snowflake, Ship, Calendar, Tag, CheckCircle, TreePine, Gift, Coffee, Wand2
 } from 'lucide-react';
 
 const client = createClient({
@@ -33,17 +34,25 @@ const RoteirosExclusivos = () => {
   const { addItem, setShipping } = useCartStore();
   const navigate = useNavigate();
 
-  // Menu de Temáticas (Macro Regiões)
+  // Menu de Temáticas (Dados reais importados da Queensberry)
   const themes = [
-    { id: 'Todos', label: 'Todos os Destinos', icon: Globe },
-    { id: 'Europa', label: 'Europa', icon: Castle },
-    { id: 'Ásia', label: 'Ásia', icon: MapPin },
-    { id: 'África', label: 'África', icon: Sun },
-    { id: 'América do Sul', label: 'América do Sul', icon: Mountain },
-    { id: 'América do Norte', label: 'América do Norte', icon: Building },
-    { id: 'Oriente Médio', label: 'Oriente Médio', icon: Star },
-    { id: 'Oceania', label: 'Oceania', icon: Waves },
-    { id: 'Exóticos', label: 'Exóticos', icon: Palmtree },
+    { id: 'Todos', label: 'Todos os Roteiros', icon: Globe },
+    { id: 'Disney', label: 'Disney', icon: Wand2 },
+    { id: 'Férias na neve', label: 'Férias na Neve', icon: Snowflake },
+    { id: 'CRUZEIROS', label: 'Cruzeiros', icon: Ship },
+    { id: 'RESORTS BRASIL', label: 'Resorts Brasil', icon: Sun },
+    { id: 'Brasil IN', label: 'Brasil IN', icon: MapPin },
+    { id: 'Parques Nacionais', label: 'Parques Nacionais', icon: TreePine },
+    { id: 'Aéreo + Hotel', label: 'Aéreo + Hotel', icon: Briefcase },
+    { id: 'Viagens personalizadas', label: 'Personalizadas', icon: Compass },
+    { id: 'Tours regulares', label: 'Tours Regulares', icon: Bus },
+    { id: 'GBM - Europa 2026', label: 'GBM Europa 2026', icon: Castle },
+    { id: 'GBM - 4 Continentes 2026', label: '4 Continentes', icon: Globe },
+    { id: 'GBM - Slow Travel 2026', label: 'Slow Travel', icon: Coffee },
+    { id: 'GBM - Natal e Réveillon 2026/2027', label: 'Natal e Réveillon', icon: Gift },
+    { id: 'GBM - SAÍDAS GARANTIDAS', label: 'Saídas Garantidas', icon: CheckCircle },
+    { id: 'GBM - Baixa Temporada 2026', label: 'Baixa Temp. 2026', icon: Tag },
+    { id: 'GBM - Baixa Temporada 2027', label: 'Baixa Temp. 2027', icon: Tag },
   ];
 
   useEffect(() => {
@@ -303,29 +312,21 @@ const KiwiWidget = () => {
   const widgetContainerRef = useRef(null);
 
   useEffect(() => {
-    const fetchTours = async () => {
-      try {
-        // A MÁGICA ESTÁ AQUI: Aceitar isActive == true OU se a variável não estiver definida (!defined)
-        // Além disso, ignoramos rascunhos (!(_id in path("drafts.**")))
-        const query = `*[_type == "tour" && (!defined(isActive) || isActive == true) && !(_id in path("drafts.**"))] | order(_createdAt desc) {
-          _id, 
-          title, 
-          price,
-          "slug": slug.current,
-          "imageUrl": images[0].asset->url,
-          tags
-        }`;
-        
-        const data = await client.fetch(query);
-console.log("DADOS DO SANITY:", data); // 👈 ADICIONE ESTA LINHA AQUI
-setTours(data);
-      } catch (err) {
-        console.error("Erro ao buscar roteiros:", err);
-      } finally {
-        setLoading(false);
+    const script = document.createElement('script');
+    script.src = "https://widgets.kiwi.com/scripts/widget-search-iframe.js";
+    script.async = true;
+    script.setAttribute("data-affilid", "lptbenspalastorewidget");
+    script.setAttribute("data-from", "sao-paulo_sp_br");
+    script.setAttribute("data-return", "anytime");
+    script.setAttribute("data-transport-types", "FLIGHT");
+
+    if (widgetContainerRef.current) widgetContainerRef.current.appendChild(script);
+
+    return () => {
+      if (widgetContainerRef.current && widgetContainerRef.current.contains(script)) {
+        widgetContainerRef.current.removeChild(script);
       }
     };
-    fetchTours();
   }, []);
 
   return <div id="widget-holder" ref={widgetContainerRef} className="w-full h-full min-h-[600px]"></div>;
