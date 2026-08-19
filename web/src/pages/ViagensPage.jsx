@@ -49,9 +49,18 @@ const RoteirosExclusivos = () => {
   useEffect(() => {
     const fetchTours = async () => {
       try {
-        const query = `*[_type == "tour" && isActive == true] | order(_createdAt desc) {
-          _id, title, price, "slug": slug.current, "imageUrl": images[0].asset->url, tags
+        // CORREÇÃO DEFINITIVA: 
+        // 1. Aceita isActive vazio ou true
+        // 2. Transforma o campo "tematicas" do robô na variável "tags" do site
+        const query = `*[_type == "tour" && (!defined(isActive) || isActive == true) && !(_id in path("drafts.**"))] | order(_createdAt desc) {
+          _id, 
+          title, 
+          price,
+          "slug": slug.current,
+          "imageUrl": images[0].asset->url,
+          "tags": coalesce(tags, tematicas, []) 
         }`;
+        
         const data = await client.fetch(query);
         setTours(data);
       } catch (err) {
@@ -294,21 +303,28 @@ const KiwiWidget = () => {
   const widgetContainerRef = useRef(null);
 
   useEffect(() => {
-    const script = document.createElement('script');
-    script.src = "https://widgets.kiwi.com/scripts/widget-search-iframe.js";
-    script.async = true;
-    script.setAttribute("data-affilid", "lptbenspalastorewidget");
-    script.setAttribute("data-from", "sao-paulo_sp_br");
-    script.setAttribute("data-return", "anytime");
-    script.setAttribute("data-transport-types", "FLIGHT");
-
-    if (widgetContainerRef.current) widgetContainerRef.current.appendChild(script);
-
-    return () => {
-      if (widgetContainerRef.current && widgetContainerRef.current.contains(script)) {
-        widgetContainerRef.current.removeChild(script);
+    const fetchTours = async () => {
+      try {
+        // A MÁGICA ESTÁ AQUI: Aceitar isActive == true OU se a variável não estiver definida (!defined)
+        // Além disso, ignoramos rascunhos (!(_id in path("drafts.**")))
+        const query = `*[_type == "tour" && (!defined(isActive) || isActive == true) && !(_id in path("drafts.**"))] | order(_createdAt desc) {
+          _id, 
+          title, 
+          price,
+          "slug": slug.current,
+          "imageUrl": images[0].asset->url,
+          tags
+        }`;
+        
+        const data = await client.fetch(query);
+        setTours(data);
+      } catch (err) {
+        console.error("Erro ao buscar roteiros:", err);
+      } finally {
+        setLoading(false);
       }
     };
+    fetchTours();
   }, []);
 
   return <div id="widget-holder" ref={widgetContainerRef} className="w-full h-full min-h-[600px]"></div>;
