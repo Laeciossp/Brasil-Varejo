@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  Trash2, ShoppingCart, ArrowRight, ShieldCheck, MapPin, Lock, Truck, CreditCard, QrCode, Ticket
+  Trash2, ShoppingCart, ArrowRight, ShieldCheck, MapPin, Lock, Truck, CreditCard, QrCode, Ticket, Users
 } from 'lucide-react';
 import { useUser } from "@clerk/clerk-react";
 import { createClient } from "@sanity/client"; 
@@ -35,6 +35,9 @@ export default function Cart() {
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   const [customerName, setCustomerName] = useState('');
   
+  // --- STATE PARA OS PASSAGEIROS ---
+  const [passengers, setPassengers] = useState([]);
+
   const { 
     items, removeItem, updateQuantity, selectedShipping, setShipping,
     customer, setActiveAddress, addAddress, setDocument, 
@@ -43,6 +46,7 @@ export default function Cart() {
   
   // --- DETECÇÃO DO CARRINHO HÍBRIDO (IS_TRAVEL) ---
   const isDigitalCart = items.length > 0 && items.every(item => item.isTravel === true);
+  const totalTickets = items.filter(i => i.isTravel).reduce((acc, item) => acc + item.quantity, 0);
 
   // --- LÓGICA FINANCEIRA ---
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
@@ -54,10 +58,39 @@ export default function Cart() {
 
   useEffect(() => { if (user && !customerName) setCustomerName(user.fullName || ''); }, [user]);
 
+  // --- GERENCIADOR DE FORMULÁRIOS DE PASSAGEIROS ---
+  useEffect(() => {
+    if (isDigitalCart) {
+      setPassengers(prev => {
+        if (prev.length === totalTickets) return prev;
+        const newArr = [...prev];
+        if (newArr.length < totalTickets) {
+          for (let i = newArr.length; i < totalTickets; i++) {
+            newArr.push({ 
+                name: '', dob: '', relationship: '', gender: '', 
+                cpf: '', rg: '', rgIssuer: '', nationality: 'Brasileira', 
+                passport: '', passportExpiry: '', email: '', phone: '' 
+            });
+          }
+        } else {
+          newArr.splice(totalTickets);
+        }
+        return newArr;
+      });
+    }
+  }, [totalTickets, isDigitalCart]);
+
+  const handlePaxChange = (index, field, value) => {
+     setPassengers(prev => {
+        const newArr = [...prev];
+        newArr[index][field] = value;
+        return newArr;
+     });
+  };
+
   // --- RECALCULAR FRETE (COM MÓDULO TRAVEL) ---
   useEffect(() => {
     const recalculate = async () => {
-      // 1. SE FOR UM CARRINHO 100% DE VIAGENS/PRODUTOS DIGITAIS:
       if (isDigitalCart) {
          const digitalShipping = {
              name: "Emissão Digital (E-Ticket / Voucher)",
@@ -67,10 +100,9 @@ export default function Cart() {
          };
          setShippingOptions([digitalShipping]);
          setShipping(digitalShipping);
-         return; // Pula toda a lógica de Correios
+         return; 
       }
 
-      // 2. SE FOR PRODUTO FÍSICO (ROUPAS, MALAS, ETC):
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
       if (!targetZip || items.length === 0) {
           if (!targetZip) setShipping(null);
@@ -86,7 +118,6 @@ export default function Cart() {
       const postingDays = 1;
       let finalOptions = [];
 
-      // Filtra apenas itens físicos E pagos
       const physicalItems = items.filter(i => !i.isTravel);
       const paidItems = physicalItems.filter(i => !i.freeShipping);
       const hasPaidItems = paidItems.length > 0;
@@ -186,7 +217,6 @@ export default function Cart() {
               delivery_time: 12,
               company: 'Transportadora'
           }];
-
       } else {
           if (finalOptions.length === 0) {
                if (isLocal) {
@@ -204,7 +234,6 @@ export default function Cart() {
       if (finalOptions.length > 0) {
           const currentName = selectedShipping?.name;
           const sameOption = finalOptions.find(o => o.name === currentName);
-          
           if (typeof setShipping === 'function') {
               setShipping(sameOption || finalOptions[0]);
           }
@@ -225,22 +254,39 @@ export default function Cart() {
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login para continuar.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione a forma de entrega e preencha seu endereço de faturamento.");
-    if (!customer.document) return alert("Informe o CPF.");
+    
+    // Validação específica para Carrinho Híbrido/Roteiros
+    if (isDigitalCart) {
+        const invalidPax = passengers.some(p => !p.name || !p.cpf || !p.dob || !p.relationship || !p.gender || !p.rg);
+        if (invalidPax) return alert("Por favor, preencha todos os campos obrigatórios dos passageiros (Nome, Data Nasc., Parentesco, Gênero, CPF e RG).");
+    } else {
+        if (!customer.document || !customerName) return alert("Informe seus dados pessoais completos.");
+    }
+
     setLoading(true);
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
       
+      const finalCustomerName = isDigitalCart && passengers[0] ? passengers[0].name : customerName;
+      const finalCustomerDoc = isDigitalCart && passengers[0] ? passengers[0].cpf : customer.document;
+
+      let internalNotes = `Venda Site. Is Digital: ${isDigitalCart}`;
+      if (isDigitalCart) {
+          internalNotes += `\nPassageiros:\n${passengers.map((p, i) => `Pax ${i+1}: ${p.name} - CPF: ${p.cpf} - RG: ${p.rg} - Nasc: ${p.dob} - Passaporte: ${p.passport || 'N/A'}`).join('\n')}`;
+      }
+      
       // 1. SALVAR NO SANITY
       const orderDoc = {
         _type: 'order', orderNumber, status: 'pending',
-        customer: { name: customerName, email: user.primaryEmailAddress?.emailAddress, cpf: customer.document, phone: "" },
+        customer: { name: finalCustomerName, email: user.primaryEmailAddress?.emailAddress, cpf: finalCustomerDoc, phone: "" },
         items: items.map(item => ({
             _key: Math.random().toString(36).substring(7),
             productName: item.title || item.name, variantName: item.variantName || "Padrão", quantity: item.quantity, price: item.price, imageUrl: item.image,
-            product: item.isTravel ? { _type: 'reference', _ref: item._id } : { _type: 'reference', _ref: item._id } // Adapta dependendo de como vc referenciar roteiros vs roupas
+            product: { _type: 'reference', _ref: item._id } 
         })),
-        shippingAddress: activeAddress, billingAddress: activeAddress, carrier: selectedShipping.name, shippingCost: parseFloat(selectedShipping.price), totalAmount: totalFinal, paymentMethod: tipoPagamento, internalNotes: `Venda Site. Is Digital: ${isDigitalCart}`
+        shippingAddress: activeAddress, billingAddress: activeAddress, carrier: selectedShipping.name, shippingCost: parseFloat(selectedShipping.price), totalAmount: totalFinal, paymentMethod: tipoPagamento, internalNotes
       };
+      
       const createdOrder = await client.create(orderDoc);
       const sanityId = createdOrder._id;
       
@@ -260,10 +306,10 @@ export default function Cart() {
             email: user.primaryEmailAddress.emailAddress, 
             tipoPagamento, 
             shippingAddress: activeAddress, 
-            customerDocument: customer.document, 
+            customerDocument: finalCustomerDoc, 
             totalAmount: totalFinal, 
             orderId: sanityId,
-            customerName: customerName
+            customerName: finalCustomerName
         })
       });
       const data = await response.json();
@@ -275,6 +321,10 @@ export default function Cart() {
       } else { window.location.href = data.url; }
     } catch (error) { alert("Erro ao processar: " + error.message); } finally { setLoading(false); }
   };
+
+  const canCheckout = isDigitalCart 
+     ? (selectedShipping && activeAddress && passengers.length > 0 && passengers.every(p => p.name && p.cpf))
+     : (selectedShipping && activeAddress && customer.document && customerName);
 
   if (items.length === 0) return (
     <div className="min-h-[70vh] flex flex-col items-center justify-center bg-white">
@@ -315,9 +365,9 @@ export default function Cart() {
                         </div>
                         <div className="flex justify-between items-end">
                             <div className="flex items-center border rounded-lg">
-                              <button onClick={() => updateQuantity(item._id, item.quantity - 1, item.sku)} disabled={item.quantity <= 1 || item.isTravel} className="px-3 py-1 disabled:opacity-50">-</button>
+                              <button onClick={() => updateQuantity(item._id, item.quantity - 1, item.sku)} disabled={item.quantity <= 1} className="px-3 py-1 disabled:opacity-50">-</button>
                               <span className="px-2 text-sm font-bold">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item._id, item.quantity + 1, item.sku)} disabled={item.isTravel} className="px-3 py-1 disabled:opacity-50">+</button>
+                              <button onClick={() => updateQuantity(item._id, item.quantity + 1, item.sku)} className="px-3 py-1 hover:bg-gray-100 transition-colors">+</button>
                             </div>
                             <p className="text-lg font-bold text-gray-900">{formatCurrency(item.price * item.quantity)}</p>
                         </div>
@@ -363,9 +413,73 @@ export default function Cart() {
                         </div>
                     ))}
                 </div>
-                <div className="pt-4 border-t space-y-3"><h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados</h2><input placeholder="Nome Completo" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/><input placeholder="CPF / CNPJ" value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/></div>
+
+                {/* --- RENDERIZAÇÃO CONDICIONAL: PASSAGEIROS OU DADOS PADRÃO --- */}
+                {isDigitalCart ? (
+                    <div className="pt-6 border-t border-gray-100 space-y-4">
+                        <h2 className="text-lg font-bold flex items-center gap-2 text-gray-900">
+                           <Users className="text-orange-500"/> Dados dos Passageiros
+                        </h2>
+                        <div className="bg-orange-50 border border-orange-100 p-3 rounded-lg text-sm text-orange-800 font-medium">
+                           *Os roteiros são personalizados, por isso, as datas serão agendadas após o pagamento, de acordo com a preferência do cliente.
+                        </div>
+
+                        <div className="space-y-4">
+                           {passengers.map((pax, index) => (
+                              <div key={index} className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+                                 <h3 className="font-bold text-sm text-gray-800 flex items-center gap-2">
+                                    <span className="bg-gray-900 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs">{index + 1}</span> Passageiro
+                                 </h3>
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <input placeholder="Nome Completo" value={pax.name} onChange={e => handlePaxChange(index, 'name', e.target.value)} className="w-full p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+                                    <div className="relative">
+                                      <label className="text-[10px] absolute -top-2 left-2 bg-white px-1 text-gray-500">Data de Nasc.</label>
+                                      <input type="date" value={pax.dob} onChange={e => handlePaxChange(index, 'dob', e.target.value)} className="w-full p-2 border rounded-md text-sm text-gray-600 outline-none focus:border-blue-500"/>
+                                    </div>
+                                    <select value={pax.relationship} onChange={e => handlePaxChange(index, 'relationship', e.target.value)} className="w-full p-2 border rounded-md text-sm text-gray-600 outline-none focus:border-blue-500">
+                                       <option value="">Parentesco...</option>
+                                       <option value="Titular">Titular</option>
+                                       <option value="Cônjuge">Cônjuge</option>
+                                       <option value="Filho(a)">Filho(a)</option>
+                                       <option value="Parente">Outro Parente</option>
+                                       <option value="Amigo(a)">Amigo(a)</option>
+                                    </select>
+                                    <select value={pax.gender} onChange={e => handlePaxChange(index, 'gender', e.target.value)} className="w-full p-2 border rounded-md text-sm text-gray-600 outline-none focus:border-blue-500">
+                                       <option value="">Gênero...</option>
+                                       <option value="Masculino">Masculino</option>
+                                       <option value="Feminino">Feminino</option>
+                                       <option value="Outro">Outro</option>
+                                    </select>
+                                    <input placeholder="CPF" value={pax.cpf} onChange={e => handlePaxChange(index, 'cpf', e.target.value)} className="w-full p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+                                    <div className="flex gap-2">
+                                       <input placeholder="RG" value={pax.rg} onChange={e => handlePaxChange(index, 'rg', e.target.value)} className="w-2/3 p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+                                       <input placeholder="Órgão Exp." value={pax.rgIssuer} onChange={e => handlePaxChange(index, 'rgIssuer', e.target.value)} className="w-1/3 p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+                                    </div>
+                                    <input placeholder="Nacionalidade" value={pax.nationality} onChange={e => handlePaxChange(index, 'nationality', e.target.value)} className="w-full p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+                                    <div className="flex gap-2">
+                                       <input placeholder="Passaporte (Opcional)" value={pax.passport} onChange={e => handlePaxChange(index, 'passport', e.target.value)} className="w-1/2 p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+                                       <div className="relative w-1/2">
+                                          <label className="text-[10px] absolute -top-2 left-2 bg-white px-1 text-gray-500">Validade</label>
+                                          <input type="date" value={pax.passportExpiry} onChange={e => handlePaxChange(index, 'passportExpiry', e.target.value)} className="w-full p-2 border rounded-md text-sm text-gray-600 outline-none focus:border-blue-500"/>
+                                       </div>
+                                    </div>
+                                    <input placeholder="E-mail" value={pax.email} onChange={e => handlePaxChange(index, 'email', e.target.value)} className="w-full p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+                                    <input placeholder="Telefone" value={pax.phone} onChange={e => handlePaxChange(index, 'phone', e.target.value)} className="w-full p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+                                 </div>
+                              </div>
+                           ))}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="pt-6 border-t border-gray-100 space-y-3">
+                        <h2 className="text-lg font-bold flex gap-2"><ShieldCheck className="text-gray-400"/> Dados Comprador</h2>
+                        <input placeholder="Nome Completo" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
+                        <input placeholder="CPF / CNPJ" value={customer.document || ''} onChange={e => setDocument(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50"/>
+                    </div>
+                )}
             </div>
           </div>
+
           <div className="lg:w-[380px] h-fit sticky top-6">
             <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
                 <h3 className="text-lg font-bold mb-6">Resumo</h3>
@@ -399,7 +513,7 @@ export default function Cart() {
                     </label>
                 </div>
                 <div className="flex justify-between items-end mb-6 pt-4 border-t"><span className="font-medium">Total Final</span><span className="text-3xl font-black text-gray-900">{formatCurrency(totalFinal)}</span></div>
-                <button onClick={handleCheckout} disabled={loading || !selectedShipping || !activeAddress || !customer.document || !customerName} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-lg shadow-orange-200 transform active:scale-95">{loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/></button>
+                <button onClick={handleCheckout} disabled={loading || !canCheckout} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-lg shadow-orange-200 transform active:scale-95">{loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/></button>
                 <MercadoPagoTrust />
             </div>
           </div>
