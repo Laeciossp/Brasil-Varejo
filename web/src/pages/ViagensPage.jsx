@@ -58,19 +58,16 @@ const RoteirosExclusivos = () => {
   useEffect(() => {
     const fetchTours = async () => {
       try {
-        // [0...2000] Força o Sanity a trazer TODO o catálogo de vez (burlar o limite de 100 itens)
         const query = `*[_type == "tour" && (!defined(isActive) || isActive == true) && !(_id in path("drafts.**"))][0...2000] | order(_createdAt desc) {
           _id, title, price, "slug": slug.current, "imageUrl": images[0].asset->url, "tags": coalesce(tags, tematicas, []) 
         }`;
         
         const data = await client.fetch(query);
         
-        // NORMALIZAÇÃO BRUTAL: Limpa a sujeira do banco de dados antigo
         const normalizedData = data.map(tour => {
            let rawTags = tour.tags || [];
-           if (typeof rawTags === 'string') rawTags = [rawTags]; // Se for uma string única, vira Array
+           if (typeof rawTags === 'string') rawTags = [rawTags]; 
            
-           // Quebra as vírgulas (Ex: "China, Tours regulares") e joga tudo para MAIÚSCULO
            let cleanTags = rawTags
               .flatMap(tag => tag.split(','))
               .map(t => t.trim().toUpperCase())
@@ -101,17 +98,15 @@ const RoteirosExclusivos = () => {
     navigate('/cart');
   };
 
-  // Separa os países e regiões que NÃO são Temáticas principais
   const availableCountries = useMemo(() => {
     const macroThemesUpper = themes.map(t => t.id.toUpperCase());
     const allTags = tours.flatMap(t => t.normalizedTags || []);
-    // Tudo o que sobrar que não for o "Tema Principal", é listado como País
     const uniqueTags = [...new Set(allTags)].filter(tag => !macroThemesUpper.includes(tag) && tag.length > 2);
     return uniqueTags.sort();
   }, [tours]);
 
   const toggleCountry = (country) => {
-    setActiveTheme('Todos'); // Pula o menu para "Todos" automaticamente!
+    setActiveTheme('Todos');
     setSelectedCountries(prev => prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]);
   };
 
@@ -124,7 +119,6 @@ const RoteirosExclusivos = () => {
     setSearchTerm('');
   };
 
-  // Aplica todos os filtros simultaneamente usando a array NORMALIZADA
   const filteredTours = tours.filter(tour => {
     const searchLower = searchTerm.toLowerCase();
     const matchSearch = tour.title.toLowerCase().includes(searchLower) || 
@@ -145,8 +139,6 @@ const RoteirosExclusivos = () => {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex flex-col">
-       
-       {/* MENU DE TEMÁTICAS SUPERIOR */}
        <div className="w-full overflow-x-auto scrollbar-hide mb-8 pb-4 border-b border-gray-100">
           <div className="flex gap-4 px-2 min-w-max">
              {themes.map(theme => {
@@ -197,7 +189,6 @@ const RoteirosExclusivos = () => {
                    <h3 className="font-bold text-gray-900 mb-3 text-sm uppercase tracking-wide">País / Região</h3>
                    <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
                       
-                      {/* BOTÃO TODOS OS PAÍSES CORRIGIDO */}
                       <label className="flex items-center gap-3 cursor-pointer group select-none hover:bg-gray-50 p-2 rounded-lg transition-colors border-b border-gray-100 mb-2">
                          <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${selectedCountries.length === 0 ? 'bg-orange-600 border-orange-600' : 'border-gray-300 bg-white group-hover:border-orange-400'}`}>
                             {selectedCountries.length === 0 && <span className="text-white text-[10px] font-bold">✓</span>}
@@ -211,7 +202,6 @@ const RoteirosExclusivos = () => {
                             <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${selectedCountries.includes(country) ? 'bg-orange-600 border-orange-600' : 'border-gray-300 bg-white group-hover:border-orange-400'}`}>
                                {selectedCountries.includes(country) && <span className="text-white text-[10px] font-bold">✓</span>}
                             </div>
-                            {/* Usa CSS capitalize para deixar Bonito na tela, ex: China ao invés de CHINA */}
                             <span className="text-sm text-gray-600 group-hover:text-orange-600 transition-colors line-clamp-1 capitalize">{country.toLowerCase()}</span>
                             <input type="checkbox" className="hidden" onChange={() => toggleCountry(country)} checked={selectedCountries.includes(country)} />
                          </label>
@@ -322,9 +312,54 @@ const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
        <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-4 text-center uppercase italic tracking-tight">{title}</h2>
        <div className={`p-4 rounded-xl mb-4 flex justify-between items-center border ${currentTheme}`}>
          <p className="text-sm font-medium">{noticeText}</p>
-         <a href={url} target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 font-bold hover:underline opacity-80 hover:opacity-100">Abrir em tela cheia <ExternalLink size={16}/></a>
+         <a href={url} target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 font-bold hover:underline opacity-80 hover:opacity-100 whitespace-nowrap">Abrir em tela cheia <ExternalLink size={16}/></a>
        </div>
        <iframe src={url} className="w-full flex-grow min-h-[700px] border-0 rounded-2xl bg-gray-50 shadow-inner" title={title}/>
+    </div>
+  );
+};
+
+// ==========================================
+// 4.5. SUBCOMPONENTE EXCLUSIVO WIDGET VIATOR (COM TELA CHEIA)
+// ==========================================
+const PartnerWidgetViator = ({ title, url, noticeText, themeColor }) => {
+  useEffect(() => {
+    // Carrega o script da Viator dinamicamente
+    const script = document.createElement('script');
+    script.src = "https://www.viator.com/orion/partner/widget.js";
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  const themeClasses = { orange: "bg-orange-50 border-orange-100 text-orange-800" };
+  const currentTheme = themeClasses[themeColor] || "bg-orange-50 border-orange-100 text-orange-800";
+
+  return (
+    <div className="animate-in fade-in zoom-in-95 duration-500 w-full h-full flex-grow flex flex-col">
+       <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-4 text-center uppercase italic tracking-tight">{title}</h2>
+       
+       {/* Barra superior de aviso com o botão Expandir mantido! */}
+       <div className={`p-4 rounded-xl mb-4 flex justify-between items-center border ${currentTheme}`}>
+         <p className="text-sm font-medium">{noticeText}</p>
+         <a href={url} target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 font-bold hover:underline opacity-80 hover:opacity-100 whitespace-nowrap">
+           Abrir em tela cheia <ExternalLink size={16}/>
+         </a>
+       </div>
+       
+       <div className="w-full flex-grow min-h-[700px] bg-white border border-gray-100 rounded-2xl shadow-inner p-4 md:p-8 flex justify-center overflow-hidden">
+          {/* DIV OFICIAL DO WIDGET VIATOR */}
+          <div 
+              data-vi-partner-id="P00314757" 
+              data-vi-widget-ref="W-1dd6037e-f3a5-4569-a33c-b9716be9acfd"
+              className="w-full"
+          ></div>
+       </div>
     </div>
   );
 };
@@ -343,51 +378,11 @@ const RentcarsWidget = () => {
 };
 
 // ==========================================
-// 6. SUBCOMPONENTE EXCLUSIVO WIDGET VIATOR
-// ==========================================
-const ViatorWidget = () => {
-  useEffect(() => {
-    // Cria a tag de script dinamicamente toda vez que a aba "Passeios" é aberta
-    const script = document.createElement('script');
-    script.src = "https://www.viator.com/orion/partner/widget.js";
-    script.async = true;
-    document.body.appendChild(script);
-
-    return () => {
-      // Limpa o script ao sair da aba para não bugar o React
-      if (document.body.contains(script)) {
-        document.body.removeChild(script);
-      }
-    };
-  }, []);
-
-  return (
-    <div className="animate-in fade-in zoom-in-95 duration-500 w-full flex flex-col items-center mt-12 border-t border-gray-100 pt-10">
-       <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-4 text-center uppercase italic tracking-tight">Atrações e Tours Globais (Viator)</h2>
-       <div className="bg-orange-50 border border-orange-100 text-orange-800 p-4 rounded-xl mb-6 flex justify-between items-center w-full">
-         <p className="text-sm font-medium text-center w-full">Descubra e reserve atrações turísticas e experiências inesquecíveis em todo o mundo com a Viator.</p>
-       </div>
-       
-       <div className="w-full min-h-[400px] flex justify-center bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 p-4">
-          {/* Div do Widget Oficial da Viator sem a tag limitadora <Location> */}
-          <div 
-              data-vi-partner-id="P00314757"
-              data-vi-widget-ref="W-9fbbdb7f-28f9-4071-ae3e-e8af2e4f6a73"
-              className="w-full"
-          ></div>
-       </div>
-    </div>
-  );
-};
-
-
-// ==========================================
 // 7. PÁGINA PRINCIPAL: PALASTORE VIAGENS (WEB)
 // ==========================================
 export default function ViagensPage() {
   const [activeTab, setActiveTab] = useState('roteiros');
   
-  // ATENÇÃO: Adicionado o novo card "viator" com ícone de Coqueiro (Palmtree)
   const menuItems = [
     { id: 'roteiros', label: 'Roteiros Exclusivos', icon: Compass },
     { id: 'voos', label: 'Voos', icon: Plane },
@@ -400,7 +395,7 @@ export default function ViagensPage() {
     { id: 'seguros', label: 'Seguros', icon: ShieldCheck },
     { id: 'translado', label: 'Translado', icon: MapPin },
     { id: 'passeios', label: 'Passeios (Trip)', icon: Compass },
-    { id: 'viator', label: 'Passeios (Viator)', icon: Palmtree }, // NOVO CARD
+    { id: 'viator', label: 'Passeios (Viator)', icon: Palmtree }, 
     { id: 'trens', label: 'Trens Internacionais', icon: Train },
   ];
 
@@ -443,17 +438,17 @@ export default function ViagensPage() {
           {activeTab === 'rentcars' && <RentcarsWidget />}
           {activeTab === 'carros' && <PartnerIframe title="Aluguel de Carros" url="https://br.trip.com/carhire/?channelid=14409&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Alugue veículos com as melhores locadoras globais. Processado via Trip.com." themeColor="indigo" />}
           {activeTab === 'translado' && <PartnerIframe title="Translado Aeroporto" url="https://br.trip.com/airport-transfers/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Chegue ao seu destino sem preocupações. Veículos exclusivos Trip.com." themeColor="indigo" />}
+          {activeTab === 'passeios' && <PartnerIframe title="Passeios e Ingressos (Trip.com)" url="https://br.trip.com/things-to-do/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Compre ingressos para atrações turísticas pelo mundo com nosso parceiro Trip.com." themeColor="indigo" />}
           
-          {/* ABA PASSEIOS (Trip.com em cima, Viator logo abaixo) */}
-          {activeTab === 'passeios' && (
-            <div className="w-full flex flex-col gap-10">
-              <PartnerIframe title="Passeios e Ingressos (Trip.com)" url="https://br.trip.com/things-to-do/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Compre ingressos para atrações turísticas pelo mundo com nosso parceiro Trip.com." themeColor="indigo" />
-              <ViatorWidget />
-            </div>
+          {/* NOVA ABA EXCLUSIVA VIATOR COM O WIDGET E LINK EXTERNO */}
+          {activeTab === 'viator' && (
+            <PartnerWidgetViator 
+               title="Experiências e Passeios (Viator)" 
+               url="https://www.viator.com/pt-BR/Brazil/d79-ttd?localeSwitch=1&pid=P00314757&mcid=42383&medium=link&medium_version=selector&campaign=Palastore" 
+               noticeText="Descubra e reserve atrações inesquecíveis no Brasil e no mundo. Parceria oficial Viator." 
+               themeColor="orange" 
+            />
           )}
-
-          {/* NOVA ABA EXCLUSIVA: VIATOR */}
-          {activeTab === 'viator' && <PartnerIframe title="Experiências e Passeios (Viator)" url="https://www.viator.com/pt-BR/Brazil/d79-ttd?localeSwitch=1&pid=P00314757&mcid=42383&medium=link&medium_version=selector&campaign=Palastore" noticeText="Descubra e reserve atrações inesquecíveis no Brasil e no mundo. Parceria oficial Viator." themeColor="orange" />}
           
           {activeTab === 'trens' && <PartnerIframe title="Trens Internacionais" url="https://br.trip.com/trains/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Viaje pela Europa e Ásia com os melhores Trens Internacionais. Processado via Trip.com." themeColor="indigo" />}
         </div>
