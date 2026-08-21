@@ -31,19 +31,19 @@ const cleanHTML = (html) => {
 const SafeContent = ({ content }) => {
   if (!content) return <p className="text-gray-500 italic py-4">Informação não disponível.</p>;
 
-  // Se for Array de blocos do Sanity (Padrão)
   if (Array.isArray(content)) {
-    // Vamos verificar se o primeiro bloco tem muito HTML escondido dentro dele (caso do robô)
     const firstBlockText = content[0]?.children?.[0]?.text || '';
     if (firstBlockText.includes('<p>') || firstBlockText.includes('<strong>')) {
       const fullText = content.map(block => block.children.map(c => c.text).join('')).join('\n');
-      return <div className="prose prose-sm text-gray-600 max-w-none whitespace-pre-line">{cleanHTML(fullText)}</div>;
+      // 🔥 ADD: text-justify
+      return <div className="prose prose-sm text-gray-600 text-justify max-w-none whitespace-pre-line">{cleanHTML(fullText)}</div>;
     }
-    return <div className="prose prose-sm text-gray-600 max-w-none"><PortableText value={content} /></div>;
+    // 🔥 ADD: text-justify
+    return <div className="prose prose-sm text-gray-600 text-justify max-w-none"><PortableText value={content} /></div>;
   }
 
-  // Se for String com HTML (Fallback)
-  return <div className="prose prose-sm text-gray-600 max-w-none whitespace-pre-line">{cleanHTML(content)}</div>;
+  // 🔥 ADD: text-justify
+  return <div className="prose prose-sm text-gray-600 text-justify max-w-none whitespace-pre-line">{cleanHTML(content)}</div>;
 };
 
 // ==========================================

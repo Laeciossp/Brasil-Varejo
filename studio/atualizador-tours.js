@@ -1,6 +1,6 @@
 // atualizador-tours.js
 // FUNÇÃO: Varre o banco de dados atual, visita a URL original de cada roteiro,
-// DELETA SCRIPTS, captura os textos limpos, LIMPA "MAIS IMAGENS", CORTA "ACOMODAÇÕES", e aplica +5%.
+// DELETA SCRIPTS, captura os textos limpos, LÊ LINHA DO TEMPO, LIMPA "MAIS IMAGENS", CORTA "ACOMODAÇÕES", e aplica +5%.
 
 const { createClient } = require('@sanity/client');
 const puppeteer = require('puppeteer-extra');
@@ -32,7 +32,7 @@ const toCleanSanityBlock = (textString) => {
 };
 
 async function startUpdater() {
-    console.log('🚀 Iniciando Atualizador Inteligente de Tours (Com Faxineiro Nível Máximo + Escudo de Acomodações)...');
+    console.log('🚀 Iniciando Atualizador Inteligente de Tours (Com Leitor de Linha do Tempo)...');
     
     let tours;
     try {
@@ -60,20 +60,17 @@ async function startUpdater() {
             await new Promise(r => setTimeout(r, 2500)); 
 
             const scrapedData = await page.evaluate(() => {
-                // 🔥 Remove todo o lixo de código Javascript e CSS da página antes de ler
+                // 🔥 Remove lixo de código Javascript e CSS da página
                 document.querySelectorAll('script, style, noscript').forEach(el => el.remove());
 
-                // FAXINEIRO SUPREMO: Limpa textos residuais, botões com números dinâmicos, blocos de código e espaços vazios
+                // FAXINEIRO SUPREMO
                 const cleanLixo = (str) => {
                     if (!str) return '';
-                    
-                    // CORTA O TEXTO: Joga fora tudo que vier depois de "Acomodações possíveis..."
                     let cleanedStr = str;
                     const stopIndex = cleanedStr.toUpperCase().indexOf('ACOMODAÇÕES POSSÍVEIS');
                     if (stopIndex !== -1) {
                         cleanedStr = cleanedStr.substring(0, stopIndex);
                     }
-
                     return cleanedStr
                         .replace(/Saiba maisLeia menos/gi, '')
                         .replace(/Saiba mais/gi, '')
@@ -81,7 +78,7 @@ async function startUpdater() {
                         .replace(/Mais imagens \(\d+\)/gi, '') 
                         .replace(/^Circuitos/gi, '') 
                         .replace(/Serviços adicionais:[\s\S]*?Incluido/gi, '') 
-                        .replace(/openHotelMap = function\(\) \{.*?\}/gis, '') // 👈 MATA O CÓDIGO JAVASCRIPT SOLTO
+                        .replace(/openHotelMap = function\(\) \{.*?\}/gis, '') 
                         .replace(/\n{3,}/g, '\n\n') 
                         .trim();
                 };
@@ -108,28 +105,65 @@ async function startUpdater() {
                 if (isTicketOrDisney) {
                     const descGeral = document.querySelector('.description-brochure');
                     itinerarioText = descGeral ? descGeral.textContent.trim() : 'Atividade / Ingresso de Parque Temático.';
-                    includedText = "Ingresso / Atividade confirmada. Os detalhes, acessos e regras específicas estão descritos na aba 'Dia a Dia' (Descrição Principal).";
+                    includedText = "Ingresso / Atividade confirmada. Os detalhes, acessos e regras específicas estão descritos na aba 'Dia a Dia'.";
                     excludedText = "Despesas pessoais, transporte até o parque/atração e alimentação não estão inclusos, salvo quando expressamente especificado na descrição.";
                 
                 } else {
                     const roteiroEl = document.querySelector('.dev-daytoday-closedtour');
+                    const timelineHeaders = document.querySelectorAll('.c-service-heading');
                     const descResortEl = document.querySelector('.destination-brochure .js-readmore-element') || document.querySelector('.destination-brochure');
 
+                    // LÓGICA DE CAPTURA INTELIGENTE (DIA A DIA)
                     if (roteiroEl) {
                         itinerarioText = roteiroEl.textContent.trim();
+                    } else if (timelineHeaders.length > 0) {
+                        // 🔥 LEITOR DE LINHA DO TEMPO (Para Natal & Pipa, etc.) 🔥
+                        let timelineText = '';
+                        
+                        timelineHeaders.forEach(header => {
+                            // Pega a Data (Ex: 25 set.)
+                            const dataEl = header.querySelector('.c-route-date');
+                            const dataTxt = dataEl ? dataEl.textContent.replace(/\s+/g, ' ').trim() : '';
+
+                            // Pega o Título (Ex: 1. Natal, Hotel, Traslado)
+                            const tituloEl = header.querySelector('.c-title--main');
+                            const tituloTxt = tituloEl ? tituloEl.textContent.trim() : '';
+
+                            // Sobe até o bloco pai para extrair as caixinhas de informação
+                            const blocoPai = header.closest('.o-block__item.destination-block, .o-block.o-block--small, .destino.o-block');
+                            let detalhesTxt = '';
+                            
+                            if (blocoPai) {
+                                const desc = blocoPai.querySelector('.destination-description');
+                                const hotel = blocoPai.querySelector('.dev-hotelName');
+                                const ticket = blocoPai.querySelector('.dev-ticket-details-title');
+                                const transferFrom = blocoPai.querySelector('.dev-from');
+                                const transferTo = blocoPai.querySelector('.dev-to');
+                                const transport = blocoPai.querySelector('.c-transport-journey__name-company');
+
+                                if (desc) detalhesTxt = desc.textContent.replace('Sobre o destino:', '').trim();
+                                else if (hotel) detalhesTxt = `🏨 Hospedagem: ${hotel.textContent.trim()}`;
+                                else if (ticket) detalhesTxt = `🎟️ Atividade: ${ticket.textContent.trim()}`;
+                                else if (transferFrom && transferTo) detalhesTxt = `🚗 De: ${transferFrom.textContent.trim()} \n📍 Para: ${transferTo.textContent.trim()}`;
+                                else if (transport) detalhesTxt = `🚌 Transporte: ${transport.textContent.trim()}`;
+                            }
+
+                            if (tituloTxt) {
+                                timelineText += `[${dataTxt}] ${tituloTxt}\n`;
+                                if (detalhesTxt) timelineText += `${detalhesTxt}\n`;
+                                timelineText += '\n';
+                            }
+                        });
+                        itinerarioText = timelineText.trim();
                     } else if (descResortEl) {
                         itinerarioText = descResortEl.textContent.trim();
                     }
 
+                    // CAPTURA DO INCLUÍDO E NÃO INCLUÍDO
                     const blocosDeTexto = Array.from(document.querySelectorAll('.o-block__item, .dev-included, .dev-excluded, .js-readmore-element'));
-                    
                     for (let bloco of blocosDeTexto) {
                         const txt = bloco.textContent.trim();
                         const txtUpper = txt.toUpperCase();
-
-                        if (!itinerarioText && (txtUpper.includes('1º DIA') || txtUpper.includes('DAY BY DAY'))) {
-                            itinerarioText = txt;
-                        }
                         
                         if (txtUpper.includes('SERVIÇOS INCLUÍDOS') || txtUpper.includes('O QUE ESTÁ INCLUÍDO') || bloco.classList.contains('dev-included')) {
                             if (txt.length > includedText.length && txt.length > 30) includedText = txt;
@@ -139,24 +173,18 @@ async function startUpdater() {
                         }
                     }
 
-                    // 🔥 INÍCIO DO NOVO ESCUDO E GUILHOTINA PARA INCLUSOS/NÃO INCLUSOS 🔥
-                    // Expressão regular "pega-tudo" para variações de exclusão
+                    // GUILHOTINA PARA CORTAR REPETIÇÕES (Ex: Caso Croácia)
                     const regexNaoIncluido = /NÃO INCLUÍDO|NÃO INCLUSOS|NÃO INCLUSO|NÃO ESTÁ INCLUÍDO|SERVIÇOS NÃO INCLUÍDOS/i;
-
-                    // 1. Limpa o INCLUÍDO (Joga fora tudo que vier do "Não Incluído" para frente)
+                    
                     if (includedText.match(regexNaoIncluido)) {
                         includedText = includedText.split(regexNaoIncluido)[0].trim();
                     }
-
-                    // 2. Limpa o NÃO INCLUÍDO (Joga fora a primeira metade que era o "Incluído")
                     if (excludedText.match(regexNaoIncluido)) {
                         const partes = excludedText.split(regexNaoIncluido);
                         if (partes.length > 1) {
-                            // Pega apenas a última parte, que é o "Não Incluído" verdadeiro
                             excludedText = partes[partes.length - 1].trim(); 
                         }
                     }
-                    // 🔥 FIM DA NOVA LÓGICA 🔥
                 }
 
                 return { 
@@ -168,7 +196,7 @@ async function startUpdater() {
             });
 
             console.log(`   💰 Novo Preço (+5%): R$ ${scrapedData.finalPrice.toFixed(2)}`);
-            console.log(`   🧹 Lixos como "Mais imagens", "Acomodações" e códigos vazados removidos!`);
+            console.log(`   🧹 Dia a dia formatado! Lixos e códigos residuais removidos.`);
 
             // 3. Atualiza (PATCH) o documento existente no Sanity
             await client.patch(tour._id)
