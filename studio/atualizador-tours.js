@@ -1,6 +1,6 @@
 // atualizador-tours.js
 // FUNÇÃO: Varre o banco de dados atual, visita a URL original de cada roteiro,
-// captura os textos limpos (burlando o "Ver Mais"), aplica +5% no preço e ATUALIZA o Sanity.
+// DELETA SCRIPTS, captura os textos limpos, LIMPA "MAIS IMAGENS", CORTA "ACOMODAÇÕES", e aplica +5%.
 
 const { createClient } = require('@sanity/client');
 const puppeteer = require('puppeteer-extra');
@@ -21,7 +21,6 @@ const client = createClient({
 
 const generateKey = () => Math.random().toString(36).substring(2, 15);
 
-// Converte texto limpo para o formato de Bloco do Sanity
 const toCleanSanityBlock = (textString) => {
     if (!textString) return [];
     return [{
@@ -33,7 +32,7 @@ const toCleanSanityBlock = (textString) => {
 };
 
 async function startUpdater() {
-    console.log('🚀 Iniciando Atualizador Inteligente de Tours...');
+    console.log('🚀 Iniciando Atualizador Inteligente de Tours (Com Faxineiro Nível Máximo + Escudo de Acomodações)...');
     
     let tours;
     try {
@@ -61,6 +60,32 @@ async function startUpdater() {
             await new Promise(r => setTimeout(r, 2500)); 
 
             const scrapedData = await page.evaluate(() => {
+                // 🔥 Remove todo o lixo de código Javascript e CSS da página antes de ler
+                document.querySelectorAll('script, style, noscript').forEach(el => el.remove());
+
+                // FAXINEIRO SUPREMO: Limpa textos residuais, botões com números dinâmicos, blocos de código e espaços vazios
+                const cleanLixo = (str) => {
+                    if (!str) return '';
+                    
+                    // CORTA O TEXTO: Joga fora tudo que vier depois de "Acomodações possíveis..."
+                    let cleanedStr = str;
+                    const stopIndex = cleanedStr.toUpperCase().indexOf('ACOMODAÇÕES POSSÍVEIS');
+                    if (stopIndex !== -1) {
+                        cleanedStr = cleanedStr.substring(0, stopIndex);
+                    }
+
+                    return cleanedStr
+                        .replace(/Saiba maisLeia menos/gi, '')
+                        .replace(/Saiba mais/gi, '')
+                        .replace(/Leia menos/gi, '')
+                        .replace(/Mais imagens \(\d+\)/gi, '') 
+                        .replace(/^Circuitos/gi, '') 
+                        .replace(/Serviços adicionais:[\s\S]*?Incluido/gi, '') 
+                        .replace(/openHotelMap = function\(\) \{.*?\}/gis, '') // 👈 MATA O CÓDIGO JAVASCRIPT SOLTO
+                        .replace(/\n{3,}/g, '\n\n') 
+                        .trim();
+                };
+
                 // 1. Atualizar Preço (+5%)
                 const priceEl = document.querySelector('.dev-price-per-person');
                 let finalPrice = 0;
@@ -71,52 +96,79 @@ async function startUpdater() {
                     finalPrice = basePrice * 1.05; 
                 }
 
-                // 2. Extrair Textos (VARREDURA TOTAL DE TELA)
+                // 2. Extrair Textos
                 let itinerarioText = '';
                 let includedText = '';
                 let excludedText = '';
 
-                // A. Tenta as classes padrões primeiro
-                const roteiroEl = document.querySelector('.dev-daytoday-closedtour');
-                const descResortEl = document.querySelector('.destination-brochure .js-readmore-element') || document.querySelector('.destination-brochure');
+                // FLAG DE FERRO: É Disney ou Ingresso?
+                const tagsSite = Array.from(document.querySelectorAll('.dev-active-themes-item span')).map(s => s.textContent.toUpperCase());
+                const isTicketOrDisney = tagsSite.some(t => t.includes('DISNEY') || t.includes('INGRESSO') || t.includes('TICKET')) || document.querySelector('.dev-ticket') !== null;
+
+                if (isTicketOrDisney) {
+                    const descGeral = document.querySelector('.description-brochure');
+                    itinerarioText = descGeral ? descGeral.textContent.trim() : 'Atividade / Ingresso de Parque Temático.';
+                    includedText = "Ingresso / Atividade confirmada. Os detalhes, acessos e regras específicas estão descritos na aba 'Dia a Dia' (Descrição Principal).";
+                    excludedText = "Despesas pessoais, transporte até o parque/atração e alimentação não estão inclusos, salvo quando expressamente especificado na descrição.";
                 
-                if (roteiroEl) {
-                    itinerarioText = roteiroEl.textContent.trim();
-                } else if (descResortEl) {
-                    itinerarioText = descResortEl.textContent.trim();
+                } else {
+                    const roteiroEl = document.querySelector('.dev-daytoday-closedtour');
+                    const descResortEl = document.querySelector('.destination-brochure .js-readmore-element') || document.querySelector('.destination-brochure');
+
+                    if (roteiroEl) {
+                        itinerarioText = roteiroEl.textContent.trim();
+                    } else if (descResortEl) {
+                        itinerarioText = descResortEl.textContent.trim();
+                    }
+
+                    const blocosDeTexto = Array.from(document.querySelectorAll('.o-block__item, .dev-included, .dev-excluded, .js-readmore-element'));
+                    
+                    for (let bloco of blocosDeTexto) {
+                        const txt = bloco.textContent.trim();
+                        const txtUpper = txt.toUpperCase();
+
+                        if (!itinerarioText && (txtUpper.includes('1º DIA') || txtUpper.includes('DAY BY DAY'))) {
+                            itinerarioText = txt;
+                        }
+                        
+                        if (txtUpper.includes('SERVIÇOS INCLUÍDOS') || txtUpper.includes('O QUE ESTÁ INCLUÍDO') || bloco.classList.contains('dev-included')) {
+                            if (txt.length > includedText.length && txt.length > 30) includedText = txt;
+                        }
+                        if (txtUpper.includes('NÃO INCLUÍDOS') || txtUpper.includes('NÃO ESTÁ INCLUÍDO') || bloco.classList.contains('dev-excluded')) {
+                            if (txt.length > excludedText.length && txt.length > 30) excludedText = txt;
+                        }
+                    }
+
+                    // 🔥 INÍCIO DO NOVO ESCUDO E GUILHOTINA PARA INCLUSOS/NÃO INCLUSOS 🔥
+                    // Expressão regular "pega-tudo" para variações de exclusão
+                    const regexNaoIncluido = /NÃO INCLUÍDO|NÃO INCLUSOS|NÃO INCLUSO|NÃO ESTÁ INCLUÍDO|SERVIÇOS NÃO INCLUÍDOS/i;
+
+                    // 1. Limpa o INCLUÍDO (Joga fora tudo que vier do "Não Incluído" para frente)
+                    if (includedText.match(regexNaoIncluido)) {
+                        includedText = includedText.split(regexNaoIncluido)[0].trim();
+                    }
+
+                    // 2. Limpa o NÃO INCLUÍDO (Joga fora a primeira metade que era o "Incluído")
+                    if (excludedText.match(regexNaoIncluido)) {
+                        const partes = excludedText.split(regexNaoIncluido);
+                        if (partes.length > 1) {
+                            // Pega apenas a última parte, que é o "Não Incluído" verdadeiro
+                            excludedText = partes[partes.length - 1].trim(); 
+                        }
+                    }
+                    // 🔥 FIM DA NOVA LÓGICA 🔥
                 }
 
-                // B. Caça de Inclusos e Não Inclusos (Procura em TODOS os lugares da tela)
-                const blocosDeTexto = Array.from(document.querySelectorAll('.o-block__item, .dev-included, .dev-excluded, .js-readmore-element'));
-                
-                for (let bloco of blocosDeTexto) {
-                    const txt = bloco.textContent.trim();
-                    const txtUpper = txt.toUpperCase();
-
-                    // Se não tiver Dia a Dia (caso de cruzeiros velhos), varre o texto todo procurando os Dias
-                    if (!itinerarioText && (txtUpper.includes('1º DIA') || txtUpper.includes('DAY BY DAY'))) {
-                        itinerarioText = txt;
-                    }
-                    if (txtUpper.includes('SERVIÇOS INCLUÍDOS') || txtUpper.includes('O QUE ESTÁ INCLUÍDO') || bloco.classList.contains('dev-included')) {
-                        // Evita pegar pedaços quebrados, pega o bloco pai maior
-                        if (txt.length > includedText.length) includedText = txt;
-                    }
-                    if (txtUpper.includes('NÃO INCLUÍDOS') || txtUpper.includes('NÃO ESTÁ INCLUÍDO') || bloco.classList.contains('dev-excluded')) {
-                        if (txt.length > excludedText.length) excludedText = txt;
-                    }
-                }
-
-                // C. Limpeza Extra: Se o "Inclusos" acabar pegando o título "Não Incluídos" junto, corta a string.
-                if (includedText.toUpperCase().includes('NÃO INCLUÍDO')) {
-                    includedText = includedText.split(/NÃO INCLUÍDO/i)[0].trim();
-                }
-
-                return { finalPrice, itinerarioText, includedText, excludedText };
+                return { 
+                    finalPrice, 
+                    itinerarioText: cleanLixo(itinerarioText), 
+                    includedText: cleanLixo(includedText), 
+                    excludedText: cleanLixo(excludedText) 
+                };
             });
 
             console.log(`   💰 Novo Preço (+5%): R$ ${scrapedData.finalPrice.toFixed(2)}`);
-            if (!scrapedData.includedText) console.log(`   ⚠️ ALERTA: Texto de "Inclusos" veio vazio!`);
-            else console.log(`   📝 Textos extraídos com sucesso!`);
+            console.log(`   🧹 Lixos como "Mais imagens", "Acomodações" e códigos vazados removidos!`);
 
             // 3. Atualiza (PATCH) o documento existente no Sanity
             await client.patch(tour._id)
@@ -128,7 +180,7 @@ async function startUpdater() {
                 })
                 .commit();
 
-            console.log(`   ✅ Roteiro atualizado no Sanity!`);
+            console.log(`   ✅ Roteiro/Ingresso atualizado no Sanity!`);
 
         } catch (err) {
             console.error(`   ❌ ERRO ao atualizar ${tour.title}:`, err.message);

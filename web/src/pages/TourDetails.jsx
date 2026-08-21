@@ -4,7 +4,7 @@ import { createClient } from "@sanity/client";
 import { PortableText } from '@portabletext/react';
 import { 
   MapPin, Calendar, ShieldCheck, ArrowRight, Plane, 
-  CheckCircle, XCircle, ChevronDown, ChevronUp
+  CheckCircle, XCircle, ChevronDown, ChevronUp, MessageCircle
 } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
@@ -306,12 +306,26 @@ export default function TourDetails() {
                      </div>
                   </div>
 
-                  <button 
-                     onClick={handleBookNow} 
-                     className="w-full py-4 bg-gray-900 hover:bg-orange-600 text-white rounded-xl font-black uppercase tracking-widest flex justify-center items-center gap-2 transition-all shadow-lg transform active:scale-95"
-                  >
-                     Reservar Agora <ArrowRight size={18} />
-                  </button>
+                  {/* BOTÕES DE AÇÃO */}
+                  <div className="space-y-3">
+                     <button 
+                        onClick={handleBookNow} 
+                        className="w-full py-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-black uppercase tracking-widest flex justify-center items-center gap-2 transition-all shadow-lg transform active:scale-95"
+                     >
+                        Reservar Agora <ArrowRight size={18} />
+                     </button>
+
+                     <button 
+                        onClick={() => {
+                           const msg = encodeURIComponent(`Olá! Gostaria de tirar dúvidas e obter mais informações sobre o roteiro: ${tour.title}`);
+                           window.open(`https://wa.me/5571983810420?text=${msg}`, '_blank');
+                        }} 
+                        className="w-full py-4 bg-[#25D366] hover:bg-[#1ebd5a] text-white rounded-xl font-black uppercase tracking-widest flex justify-center items-center gap-2 transition-all shadow-lg transform active:scale-95"
+                     >
+                        Tirar Dúvidas <MessageCircle size={18} />
+                     </button>
+                  </div>
+
                </div>
             </div>
 
