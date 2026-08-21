@@ -320,9 +320,11 @@ const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
 };
 
 // ==========================================
-// 4.5. SUBCOMPONENTE EXCLUSIVO WIDGET VIATOR (COM TELA CHEIA)
+// 4.5. SUBCOMPONENTE EXCLUSIVO WIDGET VIATOR (COM BUSCADOR)
 // ==========================================
 const PartnerWidgetViator = ({ title, url, noticeText, themeColor }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+
   useEffect(() => {
     // Carrega o script da Viator dinamicamente
     const script = document.createElement('script');
@@ -337,14 +339,48 @@ const PartnerWidgetViator = ({ title, url, noticeText, themeColor }) => {
     };
   }, []);
 
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchTerm.trim()) {
+      // Cria a URL de busca oficial da Viator e anexa seu código de parceiro!
+      const searchUrl = `https://www.viator.com/pt-BR/searchResults/all?text=${encodeURIComponent(searchTerm)}&pid=P00314757&mcid=42383&campaign=Palastore`;
+      window.open(searchUrl, '_blank');
+    }
+  };
+
   const themeClasses = { orange: "bg-orange-50 border-orange-100 text-orange-800" };
   const currentTheme = themeClasses[themeColor] || "bg-orange-50 border-orange-100 text-orange-800";
 
   return (
-    <div className="animate-in fade-in zoom-in-95 duration-500 w-full h-full flex-grow flex flex-col">
-       <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-4 text-center uppercase italic tracking-tight">{title}</h2>
+    <div className="animate-in fade-in zoom-in-95 duration-500 w-full h-full flex-grow flex flex-col mt-4">
+       <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-6 text-center uppercase italic tracking-tight">{title}</h2>
        
-       {/* Barra superior de aviso com o botão Expandir mantido! */}
+       {/* NOVO CARD DE BUSCADOR CUSTOMIZADO */}
+       <div className="w-full bg-white p-6 md:p-8 rounded-2xl shadow-md border border-orange-200 mb-8">
+          <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2">Para onde você vai viajar?</h3>
+          <p className="text-sm text-gray-500 mb-6">Busque por cidades, monumentos ou atrações turísticas no mundo todo.</p>
+          
+          <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
+             <div className="relative flex-grow">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <input 
+                  type="text" 
+                  placeholder="Ex: Paris, Cristo Redentor, Coliseu..." 
+                  className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:border-orange-500 focus:bg-white outline-none transition-colors text-gray-700"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+             </div>
+             <button 
+                type="submit" 
+                className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-4 rounded-xl font-black uppercase tracking-wider transition-all shadow-lg transform active:scale-95 whitespace-nowrap"
+             >
+                Buscar Passeios
+             </button>
+          </form>
+       </div>
+
+       {/* Barra superior de aviso com o botão Expandir */}
        <div className={`p-4 rounded-xl mb-4 flex justify-between items-center border ${currentTheme}`}>
          <p className="text-sm font-medium">{noticeText}</p>
          <a href={url} target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 font-bold hover:underline opacity-80 hover:opacity-100 whitespace-nowrap">
@@ -363,7 +399,6 @@ const PartnerWidgetViator = ({ title, url, noticeText, themeColor }) => {
     </div>
   );
 };
-
 // ==========================================
 // 5. SUBCOMPONENTE EXCLUSIVO RENTCARS
 // ==========================================
