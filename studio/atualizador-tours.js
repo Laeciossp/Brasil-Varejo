@@ -32,7 +32,7 @@ const toCleanSanityBlock = (textString) => {
 };
 
 async function startUpdater() {
-    console.log('🚀 Iniciando Atualizador Inteligente de Tours (Com Leitor de Linha do Tempo)...');
+    console.log('🚀 Iniciando Atualizador Inteligente de Tours (Com Leitor de Linha do Tempo Corrigido)...');
     
     let tours;
     try {
@@ -98,9 +98,20 @@ async function startUpdater() {
                 let includedText = '';
                 let excludedText = '';
 
-                // FLAG DE FERRO: É Disney ou Ingresso?
+                // Elementos da página
+                const roteiroEl = document.querySelector('.dev-daytoday-closedtour');
+                const timelineHeaders = document.querySelectorAll('.c-service-heading');
+                const descResortEl = document.querySelector('.destination-brochure .js-readmore-element') || document.querySelector('.destination-brochure');
+                
+                // Se tiver qualquer uma dessas estruturas, É UM PACOTE (mesmo que tenha ingresso dentro)
+                const isPackage = roteiroEl || timelineHeaders.length > 0 || descResortEl;
+
+                // FLAG DE FERRO CORRIGIDA: É Disney ou Ingresso solto?
                 const tagsSite = Array.from(document.querySelectorAll('.dev-active-themes-item span')).map(s => s.textContent.toUpperCase());
-                const isTicketOrDisney = tagsSite.some(t => t.includes('DISNEY') || t.includes('INGRESSO') || t.includes('TICKET')) || document.querySelector('.dev-ticket') !== null;
+                const hasTicketTheme = tagsSite.some(t => t.includes('DISNEY') || t.includes('INGRESSO') || t.includes('TICKET'));
+                
+                // Só assume que é ingresso genérico se tiver a tag OU (se tiver a classe ticket MAS NÃO for um pacote)
+                const isTicketOrDisney = hasTicketTheme || (document.querySelector('.dev-ticket') !== null && !isPackage);
 
                 if (isTicketOrDisney) {
                     const descGeral = document.querySelector('.description-brochure');
@@ -109,27 +120,20 @@ async function startUpdater() {
                     excludedText = "Despesas pessoais, transporte até o parque/atração e alimentação não estão inclusos, salvo quando expressamente especificado na descrição.";
                 
                 } else {
-                    const roteiroEl = document.querySelector('.dev-daytoday-closedtour');
-                    const timelineHeaders = document.querySelectorAll('.c-service-heading');
-                    const descResortEl = document.querySelector('.destination-brochure .js-readmore-element') || document.querySelector('.destination-brochure');
-
                     // LÓGICA DE CAPTURA INTELIGENTE (DIA A DIA)
                     if (roteiroEl) {
                         itinerarioText = roteiroEl.textContent.trim();
                     } else if (timelineHeaders.length > 0) {
-                        // 🔥 LEITOR DE LINHA DO TEMPO (Para Natal & Pipa, etc.) 🔥
+                        // 🔥 LEITOR DE LINHA DO TEMPO 🔥
                         let timelineText = '';
                         
                         timelineHeaders.forEach(header => {
-                            // Pega a Data (Ex: 25 set.)
                             const dataEl = header.querySelector('.c-route-date');
                             const dataTxt = dataEl ? dataEl.textContent.replace(/\s+/g, ' ').trim() : '';
 
-                            // Pega o Título (Ex: 1. Natal, Hotel, Traslado)
                             const tituloEl = header.querySelector('.c-title--main');
                             const tituloTxt = tituloEl ? tituloEl.textContent.trim() : '';
 
-                            // Sobe até o bloco pai para extrair as caixinhas de informação
                             const blocoPai = header.closest('.o-block__item.destination-block, .o-block.o-block--small, .destino.o-block');
                             let detalhesTxt = '';
                             
@@ -173,7 +177,7 @@ async function startUpdater() {
                         }
                     }
 
-                    // GUILHOTINA PARA CORTAR REPETIÇÕES (Ex: Caso Croácia)
+                    // GUILHOTINA PARA CORTAR REPETIÇÕES
                     const regexNaoIncluido = /NÃO INCLUÍDO|NÃO INCLUSOS|NÃO INCLUSO|NÃO ESTÁ INCLUÍDO|SERVIÇOS NÃO INCLUÍDOS/i;
                     
                     if (includedText.match(regexNaoIncluido)) {
