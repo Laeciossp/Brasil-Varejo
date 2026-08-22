@@ -28,7 +28,7 @@ const HeroBlock = ({ data }) => {
     if (slides.length <= 1 || !isPlaying) return;
     const timer = setInterval(() => {
       setCurrent(c => (c === slides.length - 1 ? 0 : c + 1));
-    }, 6000);
+    }, 6000); // Passa o slide a cada 6 segundos
     return () => clearInterval(timer);
   }, [slides.length, isPlaying]);
 
@@ -67,7 +67,20 @@ const HeroBlock = ({ data }) => {
           const MediaContent = (
             <>
               {slide.mediaType === 'video' && slide.videoUrl ? (
-                <video src={slide.videoUrl} className="w-full h-full object-cover" autoPlay muted loop playsInline />
+                /* ESTRUTURA DE VÍDEO BLINDADA PARA AUTOPLAY EM QUALQUER NAVEGADOR E CELULAR */
+                <video 
+                  key={slide.videoUrl} /* Força o React a recarregar se a URL mudar */
+                  className="w-full h-full object-cover" 
+                  autoPlay={true} 
+                  muted={true} 
+                  loop={true} 
+                  playsInline={true}
+                  webkit-playsinline="true"
+                  disablePictureInPicture
+                >
+                  <source src={slide.videoUrl} type="video/mp4" />
+                  Seu navegador não suporta a tag de vídeo.
+                </video>
               ) : (
                 <img 
                   src={urlFor(slide.image)} 
