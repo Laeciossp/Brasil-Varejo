@@ -1,8 +1,12 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createClient } from "@sanity/client";
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
+
+// 1. IMPORTAÇÃO DO SEU NOVO MOTOR DE VOOS
+import FlightSearch from './FlightSearch'; 
+
 import { 
   Plane, Bus, ShieldCheck, ArrowRight, ExternalLink, Briefcase, 
   Building, Car, MapPin, Compass, Train, Star, Search,
@@ -18,14 +22,13 @@ const client = createClient({
 });
 
 // ==========================================
-// 1. SUBCOMPONENTE: ROTEIROS QUEENSBERRY 
+// SUBCOMPONENTE: ROTEIROS QUEENSBERRY 
 // ==========================================
 const RoteirosExclusivos = () => {
   const [tours, setTours] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Estados dos Filtros
   const [activeTheme, setActiveTheme] = useState('Todos');
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
   const [selectedCountries, setSelectedCountries] = useState([]);
@@ -34,7 +37,6 @@ const RoteirosExclusivos = () => {
   const { addItem, setShipping } = useCartStore();
   const navigate = useNavigate();
 
-  // Menu de Temáticas (Dados reais da Queensberry)
   const themes = [
     { id: 'Todos', label: 'Todos os Roteiros', icon: Globe },
     { id: 'Disney', label: 'Disney', icon: Wand2 },
@@ -61,21 +63,13 @@ const RoteirosExclusivos = () => {
         const query = `*[_type == "tour" && (!defined(isActive) || isActive == true) && !(_id in path("drafts.**"))][0...2000] | order(_createdAt desc) {
           _id, title, price, "slug": slug.current, "imageUrl": images[0].asset->url, "tags": coalesce(tags, tematicas, []) 
         }`;
-        
         const data = await client.fetch(query);
-        
         const normalizedData = data.map(tour => {
            let rawTags = tour.tags || [];
            if (typeof rawTags === 'string') rawTags = [rawTags]; 
-           
-           let cleanTags = rawTags
-              .flatMap(tag => tag.split(','))
-              .map(t => t.trim().toUpperCase())
-              .filter(t => t.length > 0);
-              
+           let cleanTags = rawTags.flatMap(tag => tag.split(',')).map(t => t.trim().toUpperCase()).filter(t => t.length > 0);
            return { ...tour, normalizedTags: cleanTags };
         });
-
         setTours(normalizedData);
       } catch (err) {
         console.error("Erro ao buscar roteiros:", err);
@@ -121,19 +115,12 @@ const RoteirosExclusivos = () => {
 
   const filteredTours = tours.filter(tour => {
     const searchLower = searchTerm.toLowerCase();
-    const matchSearch = tour.title.toLowerCase().includes(searchLower) || 
-                        (tour.normalizedTags && tour.normalizedTags.some(tag => tag.toLowerCase().includes(searchLower)));
-                        
-    const matchTheme = activeTheme === 'Todos' || 
-                       (tour.normalizedTags && tour.normalizedTags.includes(activeTheme.toUpperCase()));
-                       
+    const matchSearch = tour.title.toLowerCase().includes(searchLower) || (tour.normalizedTags && tour.normalizedTags.some(tag => tag.toLowerCase().includes(searchLower)));
+    const matchTheme = activeTheme === 'Todos' || (tour.normalizedTags && tour.normalizedTags.includes(activeTheme.toUpperCase()));
     const tourPrice = tour.price || 0;
     const matchMin = priceRange.min ? tourPrice >= parseFloat(priceRange.min) : true;
     const matchMax = priceRange.max ? tourPrice <= parseFloat(priceRange.max) : true;
-    
-    const matchCountry = selectedCountries.length === 0 || 
-                         (tour.normalizedTags && selectedCountries.some(c => tour.normalizedTags.includes(c.toUpperCase())));
-
+    const matchCountry = selectedCountries.length === 0 || (tour.normalizedTags && selectedCountries.some(c => tour.normalizedTags.includes(c.toUpperCase())));
     return matchSearch && matchTheme && matchMin && matchMax && matchCountry;
   });
 
@@ -166,7 +153,6 @@ const RoteirosExclusivos = () => {
        </div>
 
        <div className="flex flex-col lg:flex-row gap-8 items-start relative">
-          
           <aside className={`lg:w-64 flex-shrink-0 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm ${showMobileFilters ? 'fixed inset-0 z-50 overflow-y-auto m-0 rounded-none' : 'hidden lg:block sticky top-24'}`}>
              <div className="flex justify-between items-center mb-6 lg:hidden"><h3 className="font-black text-xl">Filtros</h3><button onClick={() => setShowMobileFilters(false)} className="p-2 bg-gray-100 rounded-full"><X size={20}/></button></div>
 
@@ -188,7 +174,6 @@ const RoteirosExclusivos = () => {
                 <div className="mb-6">
                    <h3 className="font-bold text-gray-900 mb-3 text-sm uppercase tracking-wide">País / Região</h3>
                    <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
-                      
                       <label className="flex items-center gap-3 cursor-pointer group select-none hover:bg-gray-50 p-2 rounded-lg transition-colors border-b border-gray-100 mb-2">
                          <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${selectedCountries.length === 0 ? 'bg-orange-600 border-orange-600' : 'border-gray-300 bg-white group-hover:border-orange-400'}`}>
                             {selectedCountries.length === 0 && <span className="text-white text-[10px] font-bold">✓</span>}
@@ -196,7 +181,6 @@ const RoteirosExclusivos = () => {
                          <span className={`text-sm transition-colors line-clamp-1 ${selectedCountries.length === 0 ? 'text-orange-600 font-bold' : 'text-gray-600 group-hover:text-orange-600'}`}>Todos os Países</span>
                          <input type="checkbox" className="hidden" onChange={() => { setSelectedCountries([]); setActiveTheme('Todos'); }} checked={selectedCountries.length === 0} />
                       </label>
-
                       {availableCountries.map(country => (
                          <label key={country} className="flex items-center gap-3 cursor-pointer group select-none hover:bg-gray-50 p-2 rounded-lg transition-colors">
                             <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${selectedCountries.includes(country) ? 'bg-orange-600 border-orange-600' : 'border-gray-300 bg-white group-hover:border-orange-400'}`}>
@@ -233,7 +217,6 @@ const RoteirosExclusivos = () => {
                                <div className="w-full h-full flex items-center justify-center text-gray-400"><Compass size={40}/></div>
                             )}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                            
                             <div className="absolute bottom-4 left-4 right-4">
                                {tour.normalizedTags && tour.normalizedTags.length > 0 && (
                                   <span className="text-[10px] font-black uppercase text-white bg-orange-600/90 backdrop-blur-sm px-2 py-1 rounded tracking-wider line-clamp-1 w-fit mb-2 block">
@@ -243,7 +226,6 @@ const RoteirosExclusivos = () => {
                                <h3 className="font-bold text-white text-lg leading-tight line-clamp-2 drop-shadow-md">{tour.title}</h3>
                             </div>
                          </div>
-
                          <div className="p-5 flex flex-col flex-1 bg-white">
                             <div className="mt-auto flex justify-between items-end">
                                <div>
@@ -273,28 +255,7 @@ const RoteirosExclusivos = () => {
 };
 
 // ==========================================
-// 2. SUBCOMPONENTE: WIDGET DA KIWI (PESQUISA PRINCIPAL)
-// ==========================================
-const KiwiWidget = () => {
-  const widgetContainerRef = useRef(null);
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = "https://widgets.kiwi.com/scripts/widget-search-iframe.js";
-    script.async = true;
-    script.setAttribute("data-affilid", "lptbenspalastorewidget");
-    script.setAttribute("data-from", "sao-paulo_sp_br");
-    script.setAttribute("data-return", "anytime");
-    script.setAttribute("data-transport-types", "FLIGHT");
-    if (widgetContainerRef.current) widgetContainerRef.current.appendChild(script);
-    return () => {
-      if (widgetContainerRef.current && widgetContainerRef.current.contains(script)) widgetContainerRef.current.removeChild(script);
-    };
-  }, []);
-  return <div id="widget-holder" ref={widgetContainerRef} className="w-full h-full min-h-[600px]"></div>;
-};
-
-// ==========================================
-// 3. SUBCOMPONENTE: WIDGET DA KIWI (VITRINE DE OFERTAS)
+// SUBCOMPONENTE: WIDGET DA KIWI (VITRINE DE OFERTAS INFERIOR)
 // ==========================================
 const KiwiSuggestionsWidget = () => {
   const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; background-color: transparent; }</style></head><body><div id="widget-holder"></div><script data-width="100%" data-affilid="lptbenspacotes" data-from="sao-paulo_sp_br,rio-de-janeiro_rj_br,belo-horizonte_mg_br,brasilia_df_br,recife_pe_br" data-return="anytime" data-transport-types="FLIGHT" data-results-only="true" src="https://widgets.kiwi.com/scripts/widget-search-iframe.js"></script></body></html>`;
@@ -302,7 +263,7 @@ const KiwiSuggestionsWidget = () => {
 };
 
 // ==========================================
-// 4. COMPONENTE AUXILIAR PARA RENDERIZAR OS PARCEIROS (IFRAMES)
+// COMPONENTE AUXILIAR PARA RENDERIZAR OS PARCEIROS (IFRAMES)
 // ==========================================
 const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
   const themeClasses = { green: "bg-green-50 border-green-100 text-green-800", blue: "bg-blue-50 border-blue-100 text-blue-800", indigo: "bg-indigo-50 border-indigo-100 text-indigo-800", orange: "bg-orange-50 border-orange-100 text-orange-800" };
@@ -320,29 +281,22 @@ const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
 };
 
 // ==========================================
-// 4.5. SUBCOMPONENTE EXCLUSIVO WIDGET VIATOR (COM BUSCADOR)
+// SUBCOMPONENTE EXCLUSIVO WIDGET VIATOR (COM BUSCADOR)
 // ==========================================
 const PartnerWidgetViator = ({ title, url, noticeText, themeColor }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    // Carrega o script da Viator dinamicamente
     const script = document.createElement('script');
     script.src = "https://www.viator.com/orion/partner/widget.js";
     script.async = true;
     document.body.appendChild(script);
-
-    return () => {
-      if (document.body.contains(script)) {
-        document.body.removeChild(script);
-      }
-    };
+    return () => { if (document.body.contains(script)) { document.body.removeChild(script); } };
   }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
-      // Cria a URL de busca oficial da Viator e anexa seu código de parceiro!
       const searchUrl = `https://www.viator.com/pt-BR/searchResults/all?text=${encodeURIComponent(searchTerm)}&pid=P00314757&mcid=42383&campaign=Palastore`;
       window.open(searchUrl, '_blank');
     }
@@ -354,53 +308,38 @@ const PartnerWidgetViator = ({ title, url, noticeText, themeColor }) => {
   return (
     <div className="animate-in fade-in zoom-in-95 duration-500 w-full h-full flex-grow flex flex-col mt-4">
        <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-6 text-center uppercase italic tracking-tight">{title}</h2>
-       
-       {/* NOVO CARD DE BUSCADOR CUSTOMIZADO */}
        <div className="w-full bg-white p-6 md:p-8 rounded-2xl shadow-md border border-orange-200 mb-8">
           <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2">Para onde você vai viajar?</h3>
           <p className="text-sm text-gray-500 mb-6">Busque por cidades, monumentos ou atrações turísticas no mundo todo.</p>
-          
           <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
              <div className="relative flex-grow">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 <input 
-                  type="text" 
-                  placeholder="Ex: Paris, Cristo Redentor, Coliseu..." 
+                  type="text" placeholder="Ex: Paris, Cristo Redentor, Coliseu..." 
                   className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:border-orange-500 focus:bg-white outline-none transition-colors text-gray-700"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                 />
              </div>
-             <button 
-                type="submit" 
-                className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-4 rounded-xl font-black uppercase tracking-wider transition-all shadow-lg transform active:scale-95 whitespace-nowrap"
-             >
+             <button type="submit" className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-4 rounded-xl font-black uppercase tracking-wider transition-all shadow-lg transform active:scale-95 whitespace-nowrap">
                 Buscar Passeios
              </button>
           </form>
        </div>
-
-       {/* Barra superior de aviso com o botão Expandir */}
        <div className={`p-4 rounded-xl mb-4 flex justify-between items-center border ${currentTheme}`}>
          <p className="text-sm font-medium">{noticeText}</p>
          <a href={url} target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 font-bold hover:underline opacity-80 hover:opacity-100 whitespace-nowrap">
            Abrir em tela cheia <ExternalLink size={16}/>
          </a>
        </div>
-       
        <div className="w-full flex-grow min-h-[700px] bg-white border border-gray-100 rounded-2xl shadow-inner p-4 md:p-8 flex justify-center overflow-hidden">
-          {/* DIV OFICIAL DO WIDGET VIATOR */}
-          <div 
-              data-vi-partner-id="P00314757" 
-              data-vi-widget-ref="W-1dd6037e-f3a5-4569-a33c-b9716be9acfd"
-              className="w-full"
-          ></div>
+          <div data-vi-partner-id="P00314757" data-vi-widget-ref="W-1dd6037e-f3a5-4569-a33c-b9716be9acfd" className="w-full"></div>
        </div>
     </div>
   );
 };
+
 // ==========================================
-// 5. SUBCOMPONENTE EXCLUSIVO RENTCARS
+// SUBCOMPONENTE EXCLUSIVO RENTCARS
 // ==========================================
 const RentcarsWidget = () => {
   return (
@@ -413,14 +352,16 @@ const RentcarsWidget = () => {
 };
 
 // ==========================================
-// 7. PÁGINA PRINCIPAL: PALASTORE VIAGENS (WEB)
+// PÁGINA PRINCIPAL: PALASTORE VIAGENS (WEB)
 // ==========================================
 export default function ViagensPage() {
-  const [activeTab, setActiveTab] = useState('roteiros');
+  // 1. VOOS COMO ABA PADRÃO INICIAL
+  const [activeTab, setActiveTab] = useState('voos');
   
+  // 2. ABA VOOS COMO PRIMEIRO DA LISTA PARA DESTAQUE
   const menuItems = [
+    { id: 'voos', label: 'Passagens Aéreas', icon: Plane },
     { id: 'roteiros', label: 'Roteiros Exclusivos', icon: Compass },
-    { id: 'voos', label: 'Voos', icon: Plane },
     { id: 'hoteis', label: 'Hotéis', icon: Building },
     { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Star },
     { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
@@ -436,6 +377,8 @@ export default function ViagensPage() {
 
   return (
     <div className="w-full min-h-screen bg-gray-50 pb-20">
+      
+      {/* 3. BANNER SUPERIOR MANTIDO AQUI (Pode substituir pelo componente Slider futuramente) */}
       <div className="w-full bg-white shadow-sm mb-8 border-b border-gray-200">
         <img src="/image_0335bf.png" alt="Palastore Viagens" className="w-full h-auto object-cover md:object-contain max-h-[250px] md:max-h-[350px]" />
       </div>
@@ -446,6 +389,7 @@ export default function ViagensPage() {
             <p className="text-gray-500 font-medium">Sua próxima aventura começa aqui. Escolha o serviço desejado.</p>
         </div>
 
+        {/* 4. MENU DE SELEÇÃO LOGO ABAIXO DO BANNER */}
         <div className="flex flex-wrap justify-center gap-3 md:gap-4 mb-10">
             {menuItems.map((tab) => {
             const Icon = tab.icon;
@@ -462,9 +406,18 @@ export default function ViagensPage() {
             })}
         </div>
 
+        {/* ÁREA DE RENDERIZAÇÃO DO CONTEÚDO */}
         <div className="bg-white rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100 min-h-[700px] flex flex-col overflow-hidden mb-12">
+          
+          {/* 5. SEU NOVO MOTOR DE VOOS EM DESTAQUE (SUBSTITUINDO A KIWI) */}
+          {activeTab === 'voos' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow">
+               <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-6 text-center uppercase italic tracking-tight">Pesquise Passagens Aéreas</h2>
+               <FlightSearch />
+            </div>
+          )}
+
           {activeTab === 'roteiros' && <RoteirosExclusivos />}
-          {activeTab === 'voos' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow"><h2 className="text-xl md:text-2xl font-black text-gray-800 mb-4 text-center uppercase italic tracking-tight">Passagens Aéreas</h2><KiwiWidget /></div>}
           {activeTab === 'onibus' && <PartnerIframe title="Passagens de Ônibus" url="https://www.awin1.com/cread.php?awinmid=65292&awinaffid=910543" noticeText="Compare e reserve passagens de ônibus para milhares de destinos em todo o Brasil. Processamento seguro via parceiro oficial." themeColor="green" />}
           {activeTab === 'seguros' && <PartnerIframe title="Seguro Viagem" url="https://seguroviagem.app/palastore" noticeText="Viaje protegido com cobertura completa e suporte 24h." themeColor="blue" />}
           {activeTab === 'voo_hotel' && <PartnerIframe title="Pacotes Voo + Hotel" url="https://br.trip.com/packages/?sourceFrom=IBUBundle_home&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Economize reservando Voo e Hotel juntos através do nosso parceiro Trip.com." themeColor="indigo" />}
@@ -474,8 +427,6 @@ export default function ViagensPage() {
           {activeTab === 'carros' && <PartnerIframe title="Aluguel de Carros" url="https://br.trip.com/carhire/?channelid=14409&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Alugue veículos com as melhores locadoras globais. Processado via Trip.com." themeColor="indigo" />}
           {activeTab === 'translado' && <PartnerIframe title="Translado Aeroporto" url="https://br.trip.com/airport-transfers/?Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19413340&locale=pt_br" noticeText="Chegue ao seu destino sem preocupações. Veículos exclusivos Trip.com." themeColor="indigo" />}
           {activeTab === 'passeios' && <PartnerIframe title="Passeios e Ingressos (Trip.com)" url="https://br.trip.com/things-to-do/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Compre ingressos para atrações turísticas pelo mundo com nosso parceiro Trip.com." themeColor="indigo" />}
-          
-          {/* NOVA ABA EXCLUSIVA VIATOR COM O WIDGET E LINK EXTERNO */}
           {activeTab === 'viator' && (
             <PartnerWidgetViator 
                title="Experiências e Passeios (Viator)" 
@@ -484,15 +435,17 @@ export default function ViagensPage() {
                themeColor="orange" 
             />
           )}
-          
           {activeTab === 'trens' && <PartnerIframe title="Trens Internacionais" url="https://br.trip.com/trains/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Viaje pela Europa e Ásia com os melhores Trens Internacionais. Processado via Trip.com." themeColor="indigo" />}
         </div>
 
+        {/* OFERTAS INFERIORES MANTIDAS */}
         <div className="w-full mt-12 mb-8">
             <div className="flex items-center gap-4 justify-center mb-8">
                <div className="h-[2px] w-12 bg-orange-500"></div><h2 className="text-2xl md:text-3xl font-black text-gray-800 uppercase tracking-tight italic text-center">Ofertas Imperdíveis</h2><div className="h-[2px] w-12 bg-orange-500"></div>
             </div>
-            <div className="bg-white rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100"><KiwiSuggestionsWidget /></div>
+            <div className="bg-white rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100">
+               <KiwiSuggestionsWidget />
+            </div>
         </div>
 
       </div>
