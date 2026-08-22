@@ -14,12 +14,11 @@ import Success from './pages/Success';
 import Favorites from './pages/Favorites';
 import SearchPage from './pages/SearchPage';
 import ViagensPage from './pages/ViagensPage';
-import TourDetails from './pages/TourDetails'; // 👈 1. IMPORTAMOS A TELA DO ROTEIRO AQUI
+import TourDetails from './pages/TourDetails';
+import FlightSearch from './pages/FlightSearch';
 
-// Importar a página de Marcas
 import BrandPage from './pages/BrandPage';
 
-// Páginas Institucionais
 import About from './pages/About';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
@@ -28,7 +27,6 @@ import Policies from './pages/Policies';
 function App() {
   const { pathname } = useLocation();
 
-  // Faz o scroll voltar ao topo sempre que mudar de página
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
@@ -42,35 +40,29 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           
-          {/* Rotas de Produto (Inglês e Português) */}
           <Route path="/product/:slug" element={<ProductDetails />} />
           <Route path="/produto/:slug" element={<ProductDetails />} />
           
-          {/* 👇 2. ADICIONAMOS A ROTA DO ROTEIRO INDIVIDUAL DE VIAGEM */}
           <Route path="/roteiro/:slug" element={<TourDetails />} />
           
-          {/* Rotas de Categoria */}
           <Route path="/category/:slug" element={<CategoryPage />} />
           <Route path="/categoria/:slug" element={<CategoryPage />} />
           
-          {/* Rota de Marcas */}
           <Route path="/marca/:brandName" element={<BrandPage />} />
 
-          {/* Funcionalidades */}
           <Route path="/busca" element={<SearchPage />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/favoritos" element={<Favorites />} />
 
-          {/* Rota de Viagens (Central de Viagens) */}
           <Route path="/viagens" element={<ViagensPage />} />
                
-          {/* Páginas Institucionais */}
+          <Route path="/voos" element={<FlightSearch />} />
+
           <Route path="/sobre" element={<About />} />
           <Route path="/termos-de-uso" element={<Terms />} />
           <Route path="/politica-de-privacidade" element={<Privacy />} />
           <Route path="/politicas" element={<Policies />} />
 
-          {/* Perfil do Usuário (Protegido pelo Clerk) */}
           <Route 
             path="/profile" 
             element={
@@ -87,14 +79,13 @@ function App() {
 
           <Route path="/sucesso" element={<Success />} />
           
-          {/* Redireciona qualquer página não encontrada para a Home */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
 
       <Footer />
       
-  </div>
+    </div>
   );
 }
 

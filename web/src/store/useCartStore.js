@@ -13,7 +13,8 @@ const useCartStore = create(
       customer: {
         document: '', 
         addresses: [],
-        activeAddressId: null
+        activeAddressId: null,
+        passengers: [], // <--- ADICIONADO AQUI
       },
       
       // --- SETTERS GLOBAIS ---
@@ -93,7 +94,29 @@ const useCartStore = create(
         }
       })),
 
+      removeAddress: (id) => set((state) => ({
+        customer: {
+          ...state.customer,
+          addresses: state.customer.addresses.filter(addr => addr.id !== id),
+          activeAddressId: state.customer.activeAddressId === id ? null : state.customer.activeAddressId
+        }
+      })),
+
       setActiveAddress: (id) => set((state) => ({ customer: { ...state.customer, activeAddressId: id } })),
+
+      // --- PASSAGEIROS SALVOS (NOVO RECURSO ADICIONADO) ---
+      addSavedPassenger: (pax) => set((state) => ({
+        customer: { ...state.customer, passengers: [...(state.customer.passengers || []), pax] }
+      })),
+
+      removeSavedPassenger: (id) => set((state) => ({
+        customer: { ...state.customer, passengers: state.customer.passengers.filter(p => p.id !== id) }
+      })),
+
+      updateSavedPassenger: (id, updatedPax) => set((state) => ({
+        customer: { ...state.customer, passengers: state.customer.passengers.map(p => p.id === id ? updatedPax : p) }
+      })),
+      // ---------------------------------------------------
 
       // --- CÁLCULO TOTAL (CORREÇÃO DO NAN) ---
       getTotalPrice: () => {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
-  Trash2, ShoppingCart, ArrowRight, ShieldCheck, MapPin, Lock, Truck, CreditCard, QrCode, Ticket, Users
+  Trash2, ShoppingCart, ArrowRight, ShieldCheck, MapPin, Lock, Truck, CreditCard, QrCode, Ticket, Users, PlaneTakeoff, PlaneLanding, Luggage
 } from 'lucide-react';
 import { useUser } from "@clerk/clerk-react";
 import { createClient } from "@sanity/client"; 
@@ -27,6 +27,7 @@ const MercadoPagoTrust = () => (
 );
 
 export default function Cart() {
+  const navigate = useNavigate();
   const { user, isLoaded } = useUser();
   const [loading, setLoading] = useState(false);
   const [recalculatingShipping, setRecalculatingShipping] = useState(false);
@@ -35,7 +36,6 @@ export default function Cart() {
   const [newAddr, setNewAddr] = useState({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', complement: '' });
   const [customerName, setCustomerName] = useState('');
   
-  // --- STATE PARA OS PASSAGEIROS ---
   const [passengers, setPassengers] = useState([]);
 
   const { 
@@ -44,11 +44,9 @@ export default function Cart() {
     tipoPagamento, setTipoPagamento, globalCep, clearCart
   } = useCartStore();
   
-  // --- DETECÇÃO DO CARRINHO HÍBRIDO (IS_TRAVEL) ---
   const isDigitalCart = items.length > 0 && items.every(item => item.isTravel === true);
   const totalTickets = items.filter(i => i.isTravel).reduce((acc, item) => acc + item.quantity, 0);
 
-  // --- LÓGICA FINANCEIRA ---
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
   const isPix = tipoPagamento === 'pix';
@@ -58,7 +56,7 @@ export default function Cart() {
 
   useEffect(() => { if (user && !customerName) setCustomerName(user.fullName || ''); }, [user]);
 
-  // --- GERENCIADOR DE FORMULÁRIOS DE PASSAGEIROS ---
+  // INJEÇÃO DA PREFERÊNCIA DE ASSENTO NO PASSAGEIRO
   useEffect(() => {
     if (isDigitalCart) {
       setPassengers(prev => {
@@ -69,7 +67,8 @@ export default function Cart() {
             newArr.push({ 
                 name: '', dob: '', relationship: '', gender: '', 
                 cpf: '', rg: '', rgIssuer: '', nationality: 'Brasileira', 
-                passport: '', passportExpiry: '', email: '', phone: '' 
+                passport: '', passportExpiry: '', email: '', phone: '',
+                seatPreference: '' // NOVO CAMPO
             });
           }
         } else {
@@ -88,7 +87,6 @@ export default function Cart() {
      });
   };
 
-  // --- RECALCULAR FRETE (COM MÓDULO TRAVEL) ---
   useEffect(() => {
     const recalculate = async () => {
       if (isDigitalCart) {
@@ -255,7 +253,6 @@ export default function Cart() {
     if (!isLoaded || !user) return alert("Faça login para continuar.");
     if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione a forma de entrega e preencha seu endereço de faturamento.");
     
-    // Validação específica para Carrinho Híbrido/Roteiros
     if (isDigitalCart) {
         const invalidPax = passengers.some(p => !p.name || !p.cpf || !p.dob || !p.relationship || !p.gender || !p.rg);
         if (invalidPax) return alert("Por favor, preencha todos os campos obrigatórios dos passageiros (Nome, Data Nasc., Parentesco, Gênero, CPF e RG).");
@@ -272,10 +269,10 @@ export default function Cart() {
 
       let internalNotes = `Venda Site. Is Digital: ${isDigitalCart}`;
       if (isDigitalCart) {
-          internalNotes += `\nPassageiros:\n${passengers.map((p, i) => `Pax ${i+1}: ${p.name} - CPF: ${p.cpf} - RG: ${p.rg} - Nasc: ${p.dob} - Passaporte: ${p.passport || 'N/A'}`).join('\n')}`;
+          // SALVANDO A PREFERÊNCIA DE ASSENTO NO SANITY
+          internalNotes += `\nPassageiros:\n${passengers.map((p, i) => `Pax ${i+1}: ${p.name} - CPF: ${p.cpf} - RG: ${p.rg} - Nasc: ${p.dob} - Assento: ${p.seatPreference || 'Sem Preferência'}`).join('\n')}`;
       }
       
-      // 1. SALVAR NO SANITY
       const orderDoc = {
         _type: 'order', orderNumber, status: 'pending',
         customer: { name: finalCustomerName, email: user.primaryEmailAddress?.emailAddress, cpf: finalCustomerDoc, phone: "" },
@@ -290,7 +287,6 @@ export default function Cart() {
       const createdOrder = await client.create(orderDoc);
       const sanityId = createdOrder._id;
       
-      // 2. ENVIAR PARA WORKER/MERCADO PAGO
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -332,7 +328,7 @@ export default function Cart() {
         <ShoppingCart size={40} className="text-gray-300" />
       </div>
       <h2 className="text-2xl font-bold text-gray-900 mb-2">Carrinho Vazio</h2>
-      <Link to="/" className="bg-gray-900 text-white px-8 py-3 rounded-lg font-bold">Comprar</Link>
+      <button onClick={() => navigate(-1)} className="bg-gray-900 text-white px-8 py-3 rounded-lg font-bold">Voltar às compras</button>
     </div>
   );
 
@@ -342,37 +338,106 @@ export default function Cart() {
         <h1 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-2">Carrinho ({items.length})</h1>
         <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
           <div className="flex-1 space-y-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-0 overflow-hidden space-y-0">
                 {items.map((item) => (
-                    <div key={item.sku || item._id} className="flex gap-4">
-                      <div className="w-20 h-20 bg-white border rounded-lg p-2 relative">
-                          <img src={item.image} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
-                          {item.freeShipping && !item.isTravel && (
-                               <div className="absolute bottom-0 left-0 right-0 bg-green-600 text-white text-[8px] font-bold text-center py-0.5">
-                                   FRETE GRÁTIS
-                               </div>
-                           )}
-                           {item.isTravel && (
-                               <div className="absolute bottom-0 left-0 right-0 bg-blue-600 text-white text-[8px] font-bold text-center py-0.5">
-                                   E-TICKET
-                               </div>
-                           )}
-                      </div>
-                      <div className="flex-1 flex flex-col justify-between">
-                        <div className="flex justify-between">
-                            <div><span className="font-medium text-gray-900 line-clamp-2">{item.title}</span>{item.variantName && <p className="text-xs text-gray-500 mt-1">{item.variantName}</p>}</div>
-                            <button onClick={() => removeItem(item._id, item.sku)} className="text-red-500"><Trash2 size={18}/></button>
-                        </div>
-                        <div className="flex justify-between items-end">
-                            <div className="flex items-center border rounded-lg">
-                              <button onClick={() => updateQuantity(item._id, item.quantity - 1, item.sku)} disabled={item.quantity <= 1} className="px-3 py-1 disabled:opacity-50">-</button>
-                              <span className="px-2 text-sm font-bold">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item._id, item.quantity + 1, item.sku)} className="px-3 py-1 hover:bg-gray-100 transition-colors">+</button>
+                    item.isTravel && item.flightDetails ? (
+                        // CARD DE PASSAGEM AÉREA CUSTOMIZADO E PROFISSIONAL
+                        <div key={item.sku || item._id} className="bg-white border border-purple-100 p-0 flex flex-col relative shadow-sm">
+                            {/* Header da Passagem */}
+                            <div className="bg-purple-600 text-white p-4 flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-white p-1.5 rounded-lg shadow-sm">
+                                         <img src={item.image} className="w-8 h-8 object-contain" alt="Cia" />
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] font-bold uppercase tracking-widest text-purple-200">
+                                          Passagem Aérea • {item.variantName}
+                                        </div>
+                                        <h3 className="font-bold text-lg">{item.title}</h3>
+                                    </div>
+                                </div>
+                                <button onClick={() => removeItem(item._id, item.sku)} className="bg-purple-700 hover:bg-red-500 text-white p-2 rounded-lg transition-colors">
+                                    <Trash2 size={18}/>
+                                </button>
                             </div>
-                            <p className="text-lg font-bold text-gray-900">{formatCurrency(item.price * item.quantity)}</p>
+
+                            {/* Detalhes de Voo */}
+                            <div className="p-6 flex flex-col md:flex-row gap-8">
+                                {/* Coluna Esquerda: Itinerário */}
+                                <div className="flex-1 space-y-6">
+                                    <div className="flex gap-4">
+                                        <div className="flex flex-col items-center justify-start pt-1">
+                                            <PlaneTakeoff size={24} className="text-purple-500"/>
+                                            {item.flightDetails.volta && <div className="w-px h-full bg-purple-100 my-2"></div>}
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 mb-1 inline-block">Voo de Ida</span>
+                                            <p className="font-bold text-gray-900 text-sm">{item.flightDetails.ida.origem} ➔ {item.flightDetails.ida.destino}</p>
+                                            <p className="text-xs text-gray-500">{item.flightDetails.ida.partida} • Duração: {item.flightDetails.ida.duracao}</p>
+                                        </div>
+                                    </div>
+
+                                    {item.flightDetails.volta && (
+                                        <div className="flex gap-4">
+                                            <div className="flex flex-col items-center justify-start pt-1">
+                                                <PlaneLanding size={24} className="text-orange-500"/>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-black uppercase text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100 mb-1 inline-block">Voo de Volta</span>
+                                                <p className="font-bold text-gray-900 text-sm">{item.flightDetails.volta.origem} ➔ {item.flightDetails.volta.destino}</p>
+                                                <p className="text-xs text-gray-500">{item.flightDetails.volta.partida} • Duração: {item.flightDetails.volta.duracao}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Coluna Direita: Extrato e Bagagem */}
+                                <div className="w-full md:w-64 bg-purple-50 rounded-xl p-5 border border-purple-100 flex flex-col justify-between shadow-inner">
+                                    <div>
+                                        <h4 className="font-bold text-sm text-purple-900 mb-3 border-b border-purple-200 pb-2">Extrato do Carrinho</h4>
+                                        <div className="space-y-2 text-xs text-purple-800">
+                                            <div className="flex justify-between"><span>Passageiros:</span> <span className="font-bold">{item.quantity}</span></div>
+                                            <div className="flex justify-between"><span>Tarifa Escolhida:</span> <span className="font-bold">{item.flightDetails.tier}</span></div>
+                                            <div className="flex justify-between items-center pt-1 border-t border-purple-200 mt-2">
+                                                <span className="flex items-center gap-1"><Luggage size={12}/> Malas Inclusas:</span>
+                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsIda + item.flightDetails.holdBagsVolta}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 pt-3 border-t border-purple-200 flex justify-between items-end">
+                                        <span className="text-[10px] font-bold text-purple-600 uppercase tracking-widest">Subtotal</span>
+                                        <span className="text-xl font-black text-purple-900">{formatCurrency(item.price * item.quantity)}</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                      </div>
-                    </div>
+                    ) : (
+                        // PRODUTO PADRÃO DO VAREJO
+                        <div key={item.sku || item._id} className="flex gap-4 p-6 border-b border-gray-100 last:border-0">
+                          <div className="w-20 h-20 bg-white border rounded-lg p-2 relative">
+                              <img src={item.image} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
+                              {item.freeShipping && !item.isTravel && (
+                                   <div className="absolute bottom-0 left-0 right-0 bg-green-600 text-white text-[8px] font-bold text-center py-0.5">
+                                       FRETE GRÁTIS
+                                   </div>
+                               )}
+                          </div>
+                          <div className="flex-1 flex flex-col justify-between">
+                            <div className="flex justify-between">
+                                <div><span className="font-medium text-gray-900 line-clamp-2">{item.title}</span>{item.variantName && <p className="text-xs text-gray-500 mt-1">{item.variantName}</p>}</div>
+                                <button onClick={() => removeItem(item._id, item.sku)} className="text-red-500"><Trash2 size={18}/></button>
+                            </div>
+                            <div className="flex justify-between items-end">
+                                <div className="flex items-center border rounded-lg">
+                                  <button onClick={() => updateQuantity(item._id, item.quantity - 1, item.sku)} disabled={item.quantity <= 1} className="px-3 py-1 disabled:opacity-50">-</button>
+                                  <span className="px-2 text-sm font-bold">{item.quantity}</span>
+                                  <button onClick={() => updateQuantity(item._id, item.quantity + 1, item.sku)} className="px-3 py-1 hover:bg-gray-100 transition-colors">+</button>
+                                </div>
+                                <p className="text-lg font-bold text-gray-900">{formatCurrency(item.price * item.quantity)}</p>
+                            </div>
+                          </div>
+                        </div>
+                    )
                 ))}
             </div>
             
@@ -386,7 +451,7 @@ export default function Cart() {
                 
                 {isDigitalCart && (
                    <div className="bg-blue-50 border border-blue-100 text-blue-800 p-3 rounded-lg text-sm mb-4">
-                      Como este é um produto digital, não haverá entrega física. O endereço abaixo será usado apenas para a emissão da Nota Fiscal.
+                      Como este é um produto de viagem digital, não haverá entrega física. O endereço abaixo será usado apenas para a emissão da Nota Fiscal.
                    </div>
                 )}
 
@@ -414,29 +479,29 @@ export default function Cart() {
                     ))}
                 </div>
 
-                {/* --- RENDERIZAÇÃO CONDICIONAL: PASSAGEIROS OU DADOS PADRÃO --- */}
                 {isDigitalCart ? (
                     <div className="pt-6 border-t border-gray-100 space-y-4">
                         <h2 className="text-lg font-bold flex items-center gap-2 text-gray-900">
                            <Users className="text-orange-500"/> Dados dos Passageiros
                         </h2>
+                        
                         <div className="bg-orange-50 border border-orange-100 p-3 rounded-lg text-sm text-orange-800 font-medium">
-                           *Os roteiros são personalizados, por isso, as datas serão agendadas após o pagamento, de acordo com a preferência do cliente.
+                           A emissão do e-ticket depende da exatidão destes dados. Preencha conforme o seu documento oficial (RG ou Passaporte).
                         </div>
 
                         <div className="space-y-4">
                            {passengers.map((pax, index) => (
-                              <div key={index} className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
-                                 <h3 className="font-bold text-sm text-gray-800 flex items-center gap-2">
+                              <div key={index} className="bg-gray-50 p-5 rounded-xl border border-gray-200 space-y-4 shadow-sm">
+                                 <h3 className="font-bold text-sm text-gray-800 flex items-center gap-2 border-b border-gray-200 pb-2">
                                     <span className="bg-gray-900 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs">{index + 1}</span> Passageiro
                                  </h3>
-                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <input placeholder="Nome Completo" value={pax.name} onChange={e => handlePaxChange(index, 'name', e.target.value)} className="w-full p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <input placeholder="Nome Completo" value={pax.name} onChange={e => handlePaxChange(index, 'name', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
                                     <div className="relative">
-                                      <label className="text-[10px] absolute -top-2 left-2 bg-white px-1 text-gray-500">Data de Nasc.</label>
-                                      <input type="date" value={pax.dob} onChange={e => handlePaxChange(index, 'dob', e.target.value)} className="w-full p-2 border rounded-md text-sm text-gray-600 outline-none focus:border-blue-500"/>
+                                      <label className="text-[10px] absolute -top-2 left-2 bg-white px-1 text-gray-500 font-bold">Data de Nasc.</label>
+                                      <input type="date" value={pax.dob} onChange={e => handlePaxChange(index, 'dob', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm text-gray-600 outline-none focus:border-blue-500 bg-white"/>
                                     </div>
-                                    <select value={pax.relationship} onChange={e => handlePaxChange(index, 'relationship', e.target.value)} className="w-full p-2 border rounded-md text-sm text-gray-600 outline-none focus:border-blue-500">
+                                    <select value={pax.relationship} onChange={e => handlePaxChange(index, 'relationship', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm text-gray-600 outline-none focus:border-blue-500 bg-white">
                                        <option value="">Parentesco...</option>
                                        <option value="Titular">Titular</option>
                                        <option value="Cônjuge">Cônjuge</option>
@@ -444,27 +509,39 @@ export default function Cart() {
                                        <option value="Parente">Outro Parente</option>
                                        <option value="Amigo(a)">Amigo(a)</option>
                                     </select>
-                                    <select value={pax.gender} onChange={e => handlePaxChange(index, 'gender', e.target.value)} className="w-full p-2 border rounded-md text-sm text-gray-600 outline-none focus:border-blue-500">
+                                    <select value={pax.gender} onChange={e => handlePaxChange(index, 'gender', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm text-gray-600 outline-none focus:border-blue-500 bg-white">
                                        <option value="">Gênero...</option>
                                        <option value="Masculino">Masculino</option>
                                        <option value="Feminino">Feminino</option>
                                        <option value="Outro">Outro</option>
                                     </select>
-                                    <input placeholder="CPF" value={pax.cpf} onChange={e => handlePaxChange(index, 'cpf', e.target.value)} className="w-full p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
-                                    <div className="flex gap-2">
-                                       <input placeholder="RG" value={pax.rg} onChange={e => handlePaxChange(index, 'rg', e.target.value)} className="w-2/3 p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
-                                       <input placeholder="Órgão Exp." value={pax.rgIssuer} onChange={e => handlePaxChange(index, 'rgIssuer', e.target.value)} className="w-1/3 p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+                                    
+                                    {/* CAMPO DE SELEÇÃO DE ASSENTO INJETADO */}
+                                    <div className="md:col-span-2 bg-purple-50 p-3 rounded-lg border border-purple-100 flex flex-col md:flex-row items-center gap-3">
+                                       <span className="text-xs font-bold text-purple-800 w-full md:w-auto">Preferência de Assento:</span>
+                                       <select value={pax.seatPreference} onChange={e => handlePaxChange(index, 'seatPreference', e.target.value)} className="w-full flex-1 p-2 border border-purple-200 rounded-md text-sm text-purple-900 outline-none focus:border-purple-500 bg-white">
+                                          <option value="">Escolha seu assento...</option>
+                                          <option value="Janela">Janela</option>
+                                          <option value="Corredor">Corredor</option>
+                                          <option value="Qualquer">Qualquer (Sem preferência)</option>
+                                       </select>
                                     </div>
-                                    <input placeholder="Nacionalidade" value={pax.nationality} onChange={e => handlePaxChange(index, 'nationality', e.target.value)} className="w-full p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+
+                                    <input placeholder="CPF" value={pax.cpf} onChange={e => handlePaxChange(index, 'cpf', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
                                     <div className="flex gap-2">
-                                       <input placeholder="Passaporte (Opcional)" value={pax.passport} onChange={e => handlePaxChange(index, 'passport', e.target.value)} className="w-1/2 p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+                                       <input placeholder="RG" value={pax.rg} onChange={e => handlePaxChange(index, 'rg', e.target.value)} className="w-2/3 p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
+                                       <input placeholder="Órgão Exp." value={pax.rgIssuer} onChange={e => handlePaxChange(index, 'rgIssuer', e.target.value)} className="w-1/3 p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
+                                    </div>
+                                    <input placeholder="Nacionalidade" value={pax.nationality} onChange={e => handlePaxChange(index, 'nationality', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
+                                    <div className="flex gap-2">
+                                       <input placeholder="Passaporte (Opc. voo nac.)" value={pax.passport} onChange={e => handlePaxChange(index, 'passport', e.target.value)} className="w-1/2 p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
                                        <div className="relative w-1/2">
-                                          <label className="text-[10px] absolute -top-2 left-2 bg-white px-1 text-gray-500">Validade</label>
-                                          <input type="date" value={pax.passportExpiry} onChange={e => handlePaxChange(index, 'passportExpiry', e.target.value)} className="w-full p-2 border rounded-md text-sm text-gray-600 outline-none focus:border-blue-500"/>
+                                          <label className="text-[10px] absolute -top-2 left-2 bg-white px-1 text-gray-500 font-bold">Validade</label>
+                                          <input type="date" value={pax.passportExpiry} onChange={e => handlePaxChange(index, 'passportExpiry', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm text-gray-600 outline-none focus:border-blue-500 bg-white"/>
                                        </div>
                                     </div>
-                                    <input placeholder="E-mail" value={pax.email} onChange={e => handlePaxChange(index, 'email', e.target.value)} className="w-full p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
-                                    <input placeholder="Telefone" value={pax.phone} onChange={e => handlePaxChange(index, 'phone', e.target.value)} className="w-full p-2 border rounded-md text-sm outline-none focus:border-blue-500"/>
+                                    <input placeholder="E-mail" value={pax.email} onChange={e => handlePaxChange(index, 'email', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
+                                    <input placeholder="Telefone" value={pax.phone} onChange={e => handlePaxChange(index, 'phone', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
                                  </div>
                               </div>
                            ))}
@@ -482,15 +559,15 @@ export default function Cart() {
 
           <div className="lg:w-[380px] h-fit sticky top-6">
             <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                <h3 className="text-lg font-bold mb-6">Resumo</h3>
+                <h3 className="text-lg font-bold mb-6">Resumo Final</h3>
                 <div className="space-y-3 text-sm mb-6">
-                    <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                    <div className="flex justify-between"><span>Subtotal da Compra</span><span className="font-bold text-gray-800">{formatCurrency(subtotal)}</span></div>
                     {isPix && discount > 0 && (<div className="flex justify-between text-green-600 font-bold bg-green-50 p-1 rounded"><span>Desconto PIX (5%)</span><span>-{formatCurrency(discount)}</span></div>)}
                     <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-center">
-                           <span className="flex gap-1">
+                           <span className="flex gap-1 text-gray-600 font-medium">
                               {isDigitalCart ? <Ticket size={14}/> : <Truck size={14}/>} 
-                              {isDigitalCart ? "Entrega" : "Frete"}
+                              {isDigitalCart ? "Taxa de Emissão" : "Frete"}
                            </span>
                            {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? (selectedShipping.price === 0 ? 'Grátis' : formatCurrency(selectedShipping.price)) : '--'}</span>}
                         </div>
