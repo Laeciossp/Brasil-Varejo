@@ -119,7 +119,6 @@ export default function Cart() {
      });
   };
 
-  // IMPORTAÇÃO COMPLETA DE TODOS OS CAMPOS SALVOS
   const handleImportSavedPax = (index, value) => {
     if (!value) return;
 
@@ -296,7 +295,6 @@ export default function Cart() {
         const invalidPax = passengers.some(p => !p.name || !p.cpf || !p.dob || !p.relationship || !p.gender || !p.rg);
         if (invalidPax) return alert("Por favor, preencha todos os campos obrigatórios dos passageiros (Nome, Data Nasc., Parentesco, Gênero, CPF e RG).");
         
-        // SALVA AUTOMATICAMENTE NO PERFIL OS PASSAGEIROS QUE TIVEREM O CHECKBOX MARCADO
         passengers.forEach(pax => {
             if (pax.saveToProfile && addSavedPassenger) {
                 const alreadyExists = customer?.passengers?.some(sp => sp.cpf === pax.cpf);
@@ -327,7 +325,8 @@ export default function Cart() {
         items: items.map(item => ({
             _key: Math.random().toString(36).substring(7),
             productName: item.title || item.name, variantName: item.variantName || "Padrão", quantity: item.quantity, price: item.price, imageUrl: item.image,
-            product: { _type: 'reference', _ref: item._id } 
+            // CORREÇÃO: Limpando caracteres que o Sanity rejeita no ID
+            product: { _type: 'reference', _ref: String(item._id || item.id || `item-${Date.now()}`).replace(/[^a-zA-Z0-9_.-]/g, "_") } 
         })),
         shippingAddress: activeAddress, billingAddress: activeAddress, carrier: selectedShipping.name, shippingCost: parseFloat(selectedShipping.price), totalAmount: totalFinal, paymentMethod: tipoPagamento, internalNotes
       };
@@ -339,7 +338,15 @@ export default function Cart() {
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            items: items.map(i => ({ id: i._id, title: i.title || i.name, quantity: i.quantity, price: i.price, picture_url: i.image })), 
+            // CORREÇÃO: Injetando a description e higienizando IDs
+            items: items.map(i => ({ 
+                id: String(i._id || i.id).replace(/[^a-zA-Z0-9_.-]/g, "_"), 
+                title: i.title || i.name, 
+                description: i.isTravel && i.flightDetails ? `Tarifa ${i.flightDetails.tier} • ${i.quantity} Passageiro(s) • ${i.flightDetails.holdBagsIda + i.flightDetails.holdBagsVolta} Malas` : (i.title || i.name),
+                quantity: i.quantity, 
+                price: i.price, 
+                picture_url: i.image 
+            })), 
             shipping: parseFloat(selectedShipping.price), email: user.primaryEmailAddress.emailAddress, tipoPagamento, shippingAddress: activeAddress, 
             customerDocument: finalCustomerDoc, totalAmount: totalFinal, orderId: sanityId, customerName: finalCustomerName
         })
