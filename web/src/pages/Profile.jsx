@@ -25,7 +25,6 @@ export default function Profile() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Pegando as funções do CartStore (Certifique-se de ter adicionado as funções de passageiros na sua store)
   const { customer, addAddress, removeAddress, setActiveAddress, setDocument, addSavedPassenger, removeSavedPassenger, updateSavedPassenger } = useCartStore();
   
   const [messageInput, setMessageInput] = useState('');
@@ -40,7 +39,7 @@ export default function Profile() {
     neighborhood: '', city: '', state: '', document: ''
   });
 
-  // Estados Passageiros
+  // Estados Passageiros (Com E-mail e Telefone adicionados)
   const [showPaxForm, setShowPaxForm] = useState(false);
   const [editingPaxId, setEditingPaxId] = useState(null);
   const [newPax, setNewPax] = useState({
@@ -126,8 +125,8 @@ export default function Profile() {
   const handleSaveAddress = () => {
     if (!newAddr.zip) return alert("CEP é obrigatório");
     const addrToSave = { ...newAddr, id: editingId || Math.random().toString(36).substr(2, 9), name: user.firstName + ' ' + user.lastName };
-    editingId ? updateSavedAddress(editingId, addrToSave) : addAddress(addrToSave); // Assumindo updateAddress se houver, senao remove e readiciona
-    if(editingId) { removeAddress(editingId); addAddress(addrToSave); }
+    if(editingId) { removeAddress(editingId); }
+    addAddress(addrToSave);
     handleCancelEdit();
   };
   const handleCancelEdit = () => {
@@ -146,8 +145,6 @@ export default function Profile() {
        updateSavedPassenger(editingPaxId, paxToSave);
     } else if(addSavedPassenger) {
        addSavedPassenger(paxToSave);
-    } else {
-       alert("Funções de passageiro não implementadas na store ainda.");
     }
     handleCancelPaxEdit();
   };
@@ -155,7 +152,6 @@ export default function Profile() {
     setShowPaxForm(false); setEditingPaxId(null);
     setNewPax({ name: '', dob: '', relationship: '', gender: '', cpf: '', rg: '', rgIssuer: '', nationality: 'Brasileira', passport: '', passportExpiry: '', email: '', phone: '', seatPreference: '' });
   };
-
 
   const getStatusColor = (status) => {
     const map = { pending: 'bg-yellow-100 text-yellow-700', paid: 'bg-blue-100 text-blue-700', invoiced: 'bg-purple-100 text-purple-700', shipped: 'bg-indigo-100 text-indigo-700', delivered: 'bg-green-100 text-green-700', cancelled: 'bg-red-100 text-red-700' };
@@ -171,7 +167,6 @@ export default function Profile() {
 
   return (
     <div className="bg-gray-50 min-h-screen font-sans">
-      {/* HEADER */}
       <div className="bg-white border-b border-gray-200 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-orange-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50 pointer-events-none"></div>
         <div className="container mx-auto px-4 py-8 max-w-6xl flex items-center justify-between relative z-10">
@@ -202,7 +197,6 @@ export default function Profile() {
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             
-            {/* SIDEBAR */}
             <div className="lg:col-span-1">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden sticky top-8">
                     <nav className="flex flex-col p-2 gap-1">
@@ -226,10 +220,8 @@ export default function Profile() {
                 </div>
             </div>
 
-            {/* CONTEÚDO */}
             <div className="lg:col-span-3">
                 
-                {/* --- ABA DE PEDIDOS (MANTIDA INTACTA DO CÓDIGO FORNECIDO) --- */}
                 {activeTab === 'orders' && (
                     <div className="space-y-6">
                         <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -374,7 +366,6 @@ export default function Profile() {
                     </div>
                 )}
 
-                {/* --- ABA ENDEREÇOS (MANTIDA INTACTA) --- */}
                 {activeTab === 'address' && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                          <div className="flex justify-between items-center mb-6">
@@ -435,7 +426,7 @@ export default function Profile() {
                     </div>
                 )}
 
-                {/* --- NOVA ABA DE PASSAGEIROS --- */}
+                {/* --- ABA DE PASSAGEIROS COM E-MAIL E TELEFONE --- */}
                 {activeTab === 'passengers' && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                          <div className="flex justify-between items-center mb-6">
@@ -448,12 +439,15 @@ export default function Profile() {
                             <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xl mb-8 relative border-l-4 border-l-orange-500">
                                 <button onClick={handleCancelPaxEdit} className="absolute top-4 right-4 text-gray-300 hover:text-red-500"><Trash2 size={18}/></button>
                                 <h3 className="font-bold mb-4 text-gray-800 text-sm uppercase tracking-wide">{editingPaxId ? 'Editar Viajante' : 'Novo Viajante'}</h3>
+                                
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                                     <input placeholder="Nome Completo" value={newPax.name} onChange={e => setNewPax({...newPax, name: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-full"/>
+                                    
                                     <div className="relative">
                                       <label className="text-[10px] absolute -top-2 left-3 bg-white px-1 text-gray-500 font-bold">Data de Nasc.</label>
                                       <input type="date" value={newPax.dob} onChange={e => setNewPax({...newPax, dob: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-full text-gray-600"/>
                                     </div>
+                                    
                                     <select value={newPax.relationship} onChange={e => setNewPax({...newPax, relationship: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-full text-gray-600">
                                        <option value="">Parentesco...</option>
                                        <option value="Titular">Titular</option>
@@ -462,22 +456,32 @@ export default function Profile() {
                                        <option value="Parente">Outro Parente</option>
                                        <option value="Amigo(a)">Amigo(a)</option>
                                     </select>
+                                    
                                     <select value={newPax.gender} onChange={e => setNewPax({...newPax, gender: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-full text-gray-600">
                                        <option value="">Gênero...</option>
                                        <option value="Masculino">Masculino</option>
                                        <option value="Feminino">Feminino</option>
                                        <option value="Outro">Outro</option>
                                     </select>
+
                                     <input placeholder="CPF" value={newPax.cpf} onChange={e => setNewPax({...newPax, cpf: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-full"/>
+                                    
                                     <div className="flex gap-2">
                                        <input placeholder="RG" value={newPax.rg} onChange={e => setNewPax({...newPax, rg: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-2/3"/>
                                        <input placeholder="Órgão" value={newPax.rgIssuer} onChange={e => setNewPax({...newPax, rgIssuer: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-1/3"/>
                                     </div>
+
+                                    {/* CAMPOS DE E-MAIL E TELEFONE ADICIONADOS */}
+                                    <input placeholder="E-mail do Passageiro" type="email" value={newPax.email} onChange={e => setNewPax({...newPax, email: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-full"/>
+                                    <input placeholder="Telefone / WhatsApp" value={newPax.phone} onChange={e => setNewPax({...newPax, phone: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-full"/>
+
                                     <input placeholder="Passaporte (Opcional)" value={newPax.passport} onChange={e => setNewPax({...newPax, passport: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-full"/>
+                                    
                                     <div className="relative">
                                       <label className="text-[10px] absolute -top-2 left-3 bg-white px-1 text-gray-500 font-bold">Validade Passaporte</label>
                                       <input type="date" value={newPax.passportExpiry} onChange={e => setNewPax({...newPax, passportExpiry: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-full text-gray-600"/>
                                     </div>
+                                    
                                     <select value={newPax.seatPreference} onChange={e => setNewPax({...newPax, seatPreference: e.target.value})} className="border-2 border-purple-100 bg-purple-50 p-3 rounded-xl focus:border-purple-500 outline-none w-full text-purple-900 md:col-span-2">
                                        <option value="">Assento Preferido na Viagem...</option>
                                        <option value="Janela">Janela</option>
@@ -491,6 +495,7 @@ export default function Profile() {
                                 </div>
                             </div>
                         )}
+                        
                         <div className="space-y-4">
                              {customer.passengers && customer.passengers.length > 0 ? customer.passengers.map(pax => (
                                 <div key={pax.id} className="p-6 rounded-2xl border-2 border-gray-100 bg-white hover:border-orange-200 transition-all relative group">
@@ -502,9 +507,13 @@ export default function Profile() {
                                         <h4 className="font-black text-gray-800 text-lg uppercase tracking-tight">{pax.name}</h4>
                                         <span className="text-[10px] font-black text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full uppercase tracking-wide">{pax.relationship || 'Não informado'}</span>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 border-t border-gray-50 pt-4 mt-2">
+                                    
+                                    {/* EXIBIÇÃO DE E-MAIL E TELEFONE NO CARD */}
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm text-gray-600 border-t border-gray-50 pt-4 mt-2">
                                         <div><span className="block text-[10px] text-gray-400 font-bold uppercase">CPF</span> <span className="font-mono text-gray-800">{pax.cpf}</span></div>
                                         <div><span className="block text-[10px] text-gray-400 font-bold uppercase">Nascimento</span> <span className="text-gray-800">{pax.dob ? new Date(pax.dob).toLocaleDateString('pt-BR') : '-'}</span></div>
+                                        <div><span className="block text-[10px] text-gray-400 font-bold uppercase">E-mail</span> <span className="text-gray-800 truncate block">{pax.email || 'Não informado'}</span></div>
+                                        <div><span className="block text-[10px] text-gray-400 font-bold uppercase">Telefone</span> <span className="text-gray-800">{pax.phone || 'Não informado'}</span></div>
                                         <div><span className="block text-[10px] text-gray-400 font-bold uppercase">Passaporte</span> <span className="font-mono text-gray-800">{pax.passport || 'N/A'}</span></div>
                                         <div><span className="block text-[10px] text-gray-400 font-bold uppercase">Assento Preferido</span> <span className="text-purple-700 font-bold">{pax.seatPreference || 'Padrão'}</span></div>
                                     </div>
