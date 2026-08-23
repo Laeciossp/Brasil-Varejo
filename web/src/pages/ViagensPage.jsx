@@ -4,7 +4,7 @@ import { createClient } from "@sanity/client";
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
 
-// 1. Importação do motor de voos e do NOVO motor de ofertas dinâmicas
+// IMPORTAÇÕES
 import FlightSearch from './FlightSearch'; 
 import DestinosPopulares from '../components/DestinosPopulares';
 
@@ -23,7 +23,7 @@ const client = createClient({
 });
 
 // ==========================================
-// SUBCOMPONENTE: ROTEIROS QUEENSBERRY 
+// ROTEIROS QUEENSBERRY
 // ==========================================
 const RoteirosExclusivos = () => {
   const [tours, setTours] = useState([]);
@@ -256,7 +256,7 @@ const RoteirosExclusivos = () => {
 };
 
 // ==========================================
-// COMPONENTE AUXILIAR PARA RENDERIZAR OS PARCEIROS (IFRAMES)
+// IFRAMES E PARCEIROS
 // ==========================================
 const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
   const themeClasses = { green: "bg-green-50 border-green-100 text-green-800", blue: "bg-blue-50 border-blue-100 text-blue-800", indigo: "bg-indigo-50 border-indigo-100 text-indigo-800", orange: "bg-orange-50 border-orange-100 text-orange-800" };
@@ -273,9 +273,6 @@ const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
   );
 };
 
-// ==========================================
-// SUBCOMPONENTE EXCLUSIVO WIDGET VIATOR (COM BUSCADOR)
-// ==========================================
 const PartnerWidgetViator = ({ title, url, noticeText, themeColor }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -331,9 +328,6 @@ const PartnerWidgetViator = ({ title, url, noticeText, themeColor }) => {
   );
 };
 
-// ==========================================
-// SUBCOMPONENTE EXCLUSIVO RENTCARS
-// ==========================================
 const RentcarsWidget = () => {
   return (
     <div className="animate-in fade-in zoom-in-95 duration-500 w-full h-full flex-grow flex flex-col items-center">
@@ -350,13 +344,13 @@ const RentcarsWidget = () => {
 export default function ViagensPage() {
   const [activeTab, setActiveTab] = useState('voos'); 
   
-  // Estado para capturar os dados do card clicado (destino e datas)
+  // Estado para capturar os dados do card clicado
   const [dadosPreenchidos, setDadosPreenchidos] = useState(null);
   
+  // REMOVIDO: A aba separada "Ofertas de Voos", pois agora ela mora dentro da aba "Passagens Aéreas"
   const menuItems = [
     { id: 'voos', label: 'Passagens Aéreas', icon: Plane },
     { id: 'roteiros', label: 'Roteiros Exclusivos', icon: Compass },
-    { id: 'ofertas_voos', label: 'Ofertas de Voos', icon: TrendingUp }, 
     { id: 'hoteis', label: 'Hotéis', icon: Building },
     { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Star },
     { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
@@ -370,7 +364,6 @@ export default function ViagensPage() {
     { id: 'trens', label: 'Trens Internacionais', icon: Train },
   ];
 
-  // Função que recebe o clique no card de ofertas e preenche o buscador
   const handleDestinoClick = (dadosDestino) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     
@@ -409,23 +402,24 @@ export default function ViagensPage() {
             })}
         </div>
 
-        {/* ÁREA DE RENDERIZAÇÃO DO CONTEÚDO */}
         <div className="bg-white rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100 min-h-[700px] flex flex-col overflow-hidden mb-12">
           
+          {/* A INTEGRAÇÃO ACONTECE AQUI: BUSCADOR EM CIMA E VITRINE EMBAIXO */}
           {activeTab === 'voos' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow">
-               <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-6 text-center uppercase italic tracking-tight">Pesquise Passagens Aéreas</h2>
-               {/* Passando os dados capturados do card para o buscador */}
+               
+               {/* 1. O Buscador (Hero) */}
                <FlightSearch prefilledData={dadosPreenchidos} />
+               
+               {/* 2. A Vitrine Dinâmica Acoplada */}
+               <div className="mt-8 pt-8 border-t border-gray-200">
+                  <DestinosPopulares onSelectDestination={handleDestinoClick} />
+               </div>
+
             </div>
           )}
 
           {activeTab === 'roteiros' && <RoteirosExclusivos />}
-          
-          {/* Conectando o clique do card com a função que muda a aba e injeta os dados */}
-          {activeTab === 'ofertas_voos' && <DestinosPopulares onSelectDestination={handleDestinoClick} />}
-          {activeTab === 'roteiros' && <RoteirosExclusivos />}
-          {activeTab === 'ofertas_voos' && <DestinosPopulares onSelectDestination={handleDestinoClick} />}
           {activeTab === 'onibus' && <PartnerIframe title="Passagens de Ônibus" url="https://www.awin1.com/cread.php?awinmid=65292&awinaffid=910543" noticeText="Compare e reserve passagens de ônibus para milhares de destinos em todo o Brasil. Processamento seguro via parceiro oficial." themeColor="green" />}
           {activeTab === 'seguros' && <PartnerIframe title="Seguro Viagem" url="https://seguroviagem.app/palastore" noticeText="Viaje protegido com cobertura completa e suporte 24h." themeColor="blue" />}
           {activeTab === 'voo_hotel' && <PartnerIframe title="Pacotes Voo + Hotel" url="https://br.trip.com/packages/?sourceFrom=IBUBundle_home&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Economize reservando Voo e Hotel juntos através do nosso parceiro Trip.com." themeColor="indigo" />}

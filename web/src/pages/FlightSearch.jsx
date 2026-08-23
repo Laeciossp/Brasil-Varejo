@@ -135,7 +135,6 @@ export default function FlightSearch({ prefilledData }) {
   useEffect(() => {
     if (prefilledData && prefilledData.destino) {
       const destId = prefilledData.destino;
-      
       setDestinations([{ id: destId, name: destId }]);
 
       if (prefilledData.dataIda) {
@@ -148,9 +147,7 @@ export default function FlightSearch({ prefilledData }) {
           setTripType('oneway');
         }
       }
-
       window.scrollTo({ top: 250, behavior: 'smooth' });
-
       setTimeout(() => {
         executeSearch(null, sortConfig, stopsConfig, destId, prefilledData.dataIda, prefilledData.dataVolta);
       }, 200);
@@ -240,7 +237,6 @@ export default function FlightSearch({ prefilledData }) {
 
     try {
       let url = `${WORKER_URL}/search-flights?origin=${origin.id}&destination=${destIds}&dateFrom=${effectiveDateFrom}&dateToRange=${searchDateToRange}&adults=${a}&children=${c}&infants=${i}&cabin=${cabin}&sort=${overrideSort}&max_stopovers=${overrideStops}`;
-      
       const isReturn = customVolta ? true : (tripType === 'return');
       
       if (isReturn) {
@@ -273,15 +269,9 @@ export default function FlightSearch({ prefilledData }) {
     const unitPrice = Math.ceil(tierTotal / lastSearchedPax);
 
     const flightDetails = {
-      ida: voo.ida,
-      volta: voo.volta,
-      pax: lastSearchedPax,
-      adults: lastAdultsCount,
-      children: lastChildrenCount,
-      infants: lastInfantsCount,
-      holdBagsIda: lastHoldIdaCount,
-      holdBagsVolta: lastHoldVoltaCount,
-      tier: tierName
+      ida: voo.ida, volta: voo.volta, pax: lastSearchedPax, adults: lastAdultsCount,
+      children: lastChildrenCount, infants: lastInfantsCount, holdBagsIda: lastHoldIdaCount,
+      holdBagsVolta: lastHoldVoltaCount, tier: tierName
     };
 
     const flightToCart = {
@@ -295,7 +285,7 @@ export default function FlightSearch({ prefilledData }) {
         isTravel: true,
         handlingTime: 0,
         freeShipping: true,
-        addedAt: Date.now(), // <-- INJEÇÃO DO TIMESTAMP PARA O CRONÔMETRO
+        addedAt: Date.now(), 
         flightDetails
     };
 
@@ -307,168 +297,178 @@ export default function FlightSearch({ prefilledData }) {
   const totalPaxPreview = parseInt(adults, 10) + parseInt(children, 10) + parseInt(infants, 10);
   const eligiblePaxPreview = parseInt(adults, 10) + parseInt(children, 10);
   const maxHoldBagsAllowed = eligiblePaxPreview * 2;
-
   const tripNames = { 'return': 'Ida e volta', 'oneway': 'Só ida' };
   const cabinNames = { 'M': 'Economia', 'W': 'Premium', 'C': 'Negócios', 'F': 'Primeira' };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 font-sans pb-20">
+    <div className="max-w-6xl mx-auto font-sans pb-10">
       
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-5 mb-4 relative z-20">
-        <div className="flex flex-wrap items-center gap-4 mb-5">
-          
-          <div className="relative" ref={tripRef}>
-            <button onClick={() => setShowTripMenu(!showTripMenu)} className="flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-purple-50 text-sm font-bold text-gray-700 transition">
-              {tripNames[tripType]} <span className="text-[10px] text-purple-600">▼</span>
-            </button>
-            {showTripMenu && (
-              <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50">
-                <label className="flex items-center gap-3 mb-3 cursor-pointer group">
-                  <input type="radio" checked={tripType === 'return'} onChange={() => {setTripType('return'); executeSearch();}} className="w-4 h-4 text-purple-600" />
-                  <span className="text-sm font-bold text-gray-800">Ida e volta</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input type="radio" checked={tripType === 'oneway'} onChange={() => {setTripType('oneway'); setDateTo(''); executeSearch();}} className="w-4 h-4 text-purple-600" />
-                  <span className="text-sm font-bold text-gray-800">Só ida</span>
-                </label>
-              </div>
-            )}
-          </div>
-
-          <div className="relative" ref={paxRef}>
-            <button onClick={() => setShowPaxMenu(!showPaxMenu)} className="flex items-center gap-3 px-3 py-1.5 rounded-md hover:bg-purple-50 text-sm font-bold text-gray-700 transition">
-              <div className="flex items-center gap-1"><span className="text-purple-600">👤</span> {totalPaxPreview} Passageiro(s) <span className="text-[10px] ml-1 text-purple-600">▼</span></div>
-              <div className="flex items-center gap-2 border-l pl-3 border-gray-300">
-                <span className="flex items-center gap-1 text-pink-600">🎒 {totalPaxPreview}</span>
-                {(holdBagsIda > 0 || holdBagsVolta > 0) && <span className="flex items-center gap-1 text-blue-600">🧳 {holdBagsIda + holdBagsVolta}</span>}
-              </div>
-            </button>
-            {showPaxMenu && (
-              <div className="absolute top-full left-0 mt-2 w-[280px] bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50">
-                <h4 className="font-black text-[10px] uppercase tracking-wider text-purple-900 mb-1 border-b border-gray-100 pb-1.5">Passageiros</h4>
-                <div className="mb-3">
-                  <Counter label="Adultos" subLabel="Mais de 11" value={adults} onChange={setAdults} min={1} icon="👤" />
-                  <Counter label="Crianças" subLabel="2 - 11 anos" value={children} onChange={setChildren} icon="👦" />
-                  <Counter label="Bebês" subLabel="Abaixo de 2 anos" value={infants} onChange={setInfants} icon="👶" />
-                </div>
-                <h4 className="font-black text-[10px] uppercase tracking-wider text-purple-900 mb-1 border-b border-gray-100 pb-1.5">Bagagens</h4>
-                <div className="mb-4">
-                  <div className="flex justify-between items-center py-1.5 border-b border-gray-50">
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-400 text-sm">🎒</span>
-                      <span className="text-xs font-bold text-gray-800">Mala de Cabine (Ida/Volta)</span>
-                    </div>
-                    <span className="font-bold text-gray-800 text-[10px]">{totalPaxPreview} Fixa</span>
-                  </div>
-                  <Counter label="Mala Porão - Ida" subLabel={`Máx ${maxHoldBagsAllowed}`} value={holdBagsIda} onChange={setHoldBagsIda} min={0} max={maxHoldBagsAllowed} icon="🛫" />
-                  <Counter label="Mala Porão - Volta" subLabel={`Máx ${maxHoldBagsAllowed}`} value={holdBagsVolta} onChange={setHoldBagsVolta} min={0} max={maxHoldBagsAllowed} icon="🛬" />
-                </div>
-                <button onClick={(e) => executeSearch(e)} className="w-full py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 cursor-pointer transition">Aplicar</button>
-              </div>
-            )}
-          </div>
-
-          <div className="relative" ref={cabinRef}>
-            <button onClick={() => setShowCabinMenu(!showCabinMenu)} className="flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-purple-50 text-sm font-bold text-gray-700 transition">
-              {cabinNames[cabin]} <span className="text-[10px] text-purple-600">▼</span>
-            </button>
-            {showCabinMenu && (
-              <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50">
-                {Object.keys(cabinNames).map(k => (
-                  <label key={k} className="flex items-center gap-3 mb-3 cursor-pointer group">
-                    <input type="radio" checked={cabin === k} onChange={() => {setCabin(k); setShowCabinMenu(false); executeSearch();}} className="w-4 h-4 text-purple-600" />
-                    <span className="text-sm font-bold text-gray-800">{cabinNames[k]}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
+      {/* O NOVO HERO BANNER INSPIRACIONAL DO BUSCADOR */}
+      <div className="relative rounded-3xl overflow-hidden mb-8 shadow-xl">
+        <div className="absolute inset-0">
+          <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2000&auto=format&fit=crop" alt="Voos" className="w-full h-full object-cover brightness-[0.55]" />
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-auto md:h-[50px] relative z-30">
-          <div className="relative col-span-1 md:col-span-3 flex items-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white z-[60] h-12 md:h-full" ref={originRef}>
-            <span className="text-gray-400 font-medium mr-2 text-sm">De</span>
-            {origin ? (
-              <div className="bg-purple-600 text-white text-xs font-bold px-2 py-1.5 rounded flex items-center gap-1 shadow-sm overflow-hidden">
-                <span className="truncate">{origin.name}</span>
-                <button onMouseDown={(e) => { e.preventDefault(); setOrigin(null); setOriginQuery(''); }} className="hover:text-gray-200 text-sm leading-none ml-1">×</button>
+        
+        <div className="relative z-10 p-6 md:p-10 lg:p-14">
+          <h2 className="text-3xl md:text-5xl font-black text-white mb-2 drop-shadow-lg">Para onde vamos hoje?</h2>
+          <p className="text-white/90 font-medium text-sm md:text-lg mb-8 drop-shadow">Encontre as melhores passagens com segurança, rapidez e flexibilidade.</p>
+          
+          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 p-5 relative z-20">
+            <div className="flex flex-wrap items-center gap-4 mb-5">
+              <div className="relative" ref={tripRef}>
+                <button onClick={() => setShowTripMenu(!showTripMenu)} className="flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-purple-50 text-sm font-bold text-gray-700 transition">
+                  {tripNames[tripType]} <span className="text-[10px] text-purple-600">▼</span>
+                </button>
+                {showTripMenu && (
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50">
+                    <label className="flex items-center gap-3 mb-3 cursor-pointer group">
+                      <input type="radio" checked={tripType === 'return'} onChange={() => {setTripType('return'); executeSearch();}} className="w-4 h-4 text-purple-600" />
+                      <span className="text-sm font-bold text-gray-800">Ida e volta</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <input type="radio" checked={tripType === 'oneway'} onChange={() => {setTripType('oneway'); setDateTo(''); executeSearch();}} className="w-4 h-4 text-purple-600" />
+                      <span className="text-sm font-bold text-gray-800">Só ida</span>
+                    </label>
+                  </div>
+                )}
               </div>
-            ) : (
-              <input type="text" value={originQuery} onChange={(e) => setOriginQuery(e.target.value)} onFocus={() => { if(originResults.length > 0) setShowOrigin(true); }} className="flex-1 outline-none text-sm font-bold text-gray-800 bg-transparent w-full" placeholder="São Paulo" />
-            )}
-            {showOrigin && !origin && originResults.length > 0 && (
-              <ul className="absolute left-0 right-0 top-[110%] bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                {originResults.map(loc => (
-                  <li key={loc.id} onMouseDown={(e) => { e.preventDefault(); setOrigin({ id: loc.id, name: loc.name }); setShowOrigin(false); }} className="p-3 hover:bg-purple-50 cursor-pointer text-sm border-b border-gray-50 flex flex-col">
-                    <span className="font-bold text-gray-800">{loc.name} ({loc.code})</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
 
-          <div className="relative col-span-1 md:col-span-3 flex items-center flex-wrap gap-1 border border-gray-300 rounded-md p-1.5 hover:border-purple-600 bg-white z-[50] min-h-[48px] md:h-full" ref={destRef}>
-            <span className="text-gray-400 font-medium mr-1 text-sm pl-1">Para</span>
-            {destinations.map(d => (
-              <div key={d.id} className="bg-purple-600 text-white text-xs font-bold px-2 py-1.5 rounded flex items-center gap-1 shadow-sm">
-                <span className="truncate max-w-[80px]">{d.name}</span>
-                <button onMouseDown={(e) => { e.preventDefault(); setDestinations(destinations.filter(x => x.id !== d.id)); }} className="hover:text-gray-200 text-sm leading-none ml-1">×</button>
+              <div className="relative" ref={paxRef}>
+                <button onClick={() => setShowPaxMenu(!showPaxMenu)} className="flex items-center gap-3 px-3 py-1.5 rounded-md hover:bg-purple-50 text-sm font-bold text-gray-700 transition">
+                  <div className="flex items-center gap-1"><span className="text-purple-600">👤</span> {totalPaxPreview} Passageiro(s) <span className="text-[10px] ml-1 text-purple-600">▼</span></div>
+                  <div className="flex items-center gap-2 border-l pl-3 border-gray-300">
+                    <span className="flex items-center gap-1 text-pink-600">🎒 {totalPaxPreview}</span>
+                    {(holdBagsIda > 0 || holdBagsVolta > 0) && <span className="flex items-center gap-1 text-blue-600">🧳 {holdBagsIda + holdBagsVolta}</span>}
+                  </div>
+                </button>
+                {showPaxMenu && (
+                  <div className="absolute top-full left-0 mt-2 w-[280px] bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50">
+                    <h4 className="font-black text-[10px] uppercase tracking-wider text-purple-900 mb-1 border-b border-gray-100 pb-1.5">Passageiros</h4>
+                    <div className="mb-3">
+                      <Counter label="Adultos" subLabel="Mais de 11" value={adults} onChange={setAdults} min={1} icon="👤" />
+                      <Counter label="Crianças" subLabel="2 - 11 anos" value={children} onChange={setChildren} icon="👦" />
+                      <Counter label="Bebês" subLabel="Abaixo de 2 anos" value={infants} onChange={setInfants} icon="👶" />
+                    </div>
+                    <h4 className="font-black text-[10px] uppercase tracking-wider text-purple-900 mb-1 border-b border-gray-100 pb-1.5">Bagagens</h4>
+                    <div className="mb-4">
+                      <div className="flex justify-between items-center py-1.5 border-b border-gray-50">
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-400 text-sm">🎒</span>
+                          <span className="text-xs font-bold text-gray-800">Mala de Cabine (Ida/Volta)</span>
+                        </div>
+                        <span className="font-bold text-gray-800 text-[10px]">{totalPaxPreview} Fixa</span>
+                      </div>
+                      <Counter label="Mala Porão - Ida" subLabel={`Máx ${maxHoldBagsAllowed}`} value={holdBagsIda} onChange={setHoldBagsIda} min={0} max={maxHoldBagsAllowed} icon="🛫" />
+                      <Counter label="Mala Porão - Volta" subLabel={`Máx ${maxHoldBagsAllowed}`} value={holdBagsVolta} onChange={setHoldBagsVolta} min={0} max={maxHoldBagsAllowed} icon="🛬" />
+                    </div>
+                    <button onClick={(e) => executeSearch(e)} className="w-full py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 cursor-pointer transition">Aplicar</button>
+                  </div>
+                )}
               </div>
-            ))}
-            <input type="text" value={destQuery} onChange={(e) => setDestQuery(e.target.value)} onFocus={() => { if(destResults.length > 0) setShowDest(true); }} className="flex-1 min-w-[80px] outline-none text-sm font-bold text-gray-800 bg-transparent py-1 px-1" placeholder={destinations.length === 0 ? "Ex: Salvador" : "Adicionar..."} />
-            {showDest && destResults.length > 0 && (
-              <ul className="absolute left-0 right-0 top-[110%] bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                {destResults.map(loc => (
-                  <li key={loc.id} onMouseDown={(e) => { e.preventDefault(); if(!destinations.find(x=>x.id===loc.id)) setDestinations([...destinations, {id:loc.id, name:loc.name}]); setDestQuery(''); setShowDest(false); }} className="p-3 hover:bg-purple-50 cursor-pointer text-sm border-b border-gray-50 flex flex-col">
-                    <span className="font-bold text-gray-800">{loc.name} ({loc.code})</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
 
-          <div className="col-span-1 md:col-span-4 z-20 h-12 md:h-full relative" ref={dateRef}>
-            <div onClick={() => setShowDateMenu(!showDateMenu)} className="flex items-center justify-between border border-gray-300 rounded-md px-4 h-full cursor-pointer hover:border-purple-600 bg-white">
-              <div className="flex flex-col justify-center">
-                <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Partida</span>
-                <span className="text-sm font-bold text-gray-900 leading-tight">{dateType==='specific' && dateFrom ? new Date(dateFrom).toLocaleDateString('pt-BR') : 'A qualquer momento'}</span>
-              </div>
-              <div className="w-px h-6 bg-gray-200 mx-2"></div>
-              <div className={`flex flex-col justify-center ${tripType==='oneway'?'opacity-30':''}`}>
-                <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Regresso</span>
-                <span className="text-sm font-bold text-gray-900 leading-tight">{tripType==='return' && dateType==='specific' && dateTo ? new Date(dateTo).toLocaleDateString('pt-BR') : 'A qualquer momento'}</span>
+              <div className="relative" ref={cabinRef}>
+                <button onClick={() => setShowCabinMenu(!showCabinMenu)} className="flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-purple-50 text-sm font-bold text-gray-700 transition">
+                  {cabinNames[cabin]} <span className="text-[10px] text-purple-600">▼</span>
+                </button>
+                {showCabinMenu && (
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50">
+                    {Object.keys(cabinNames).map(k => (
+                      <label key={k} className="flex items-center gap-3 mb-3 cursor-pointer group">
+                        <input type="radio" checked={cabin === k} onChange={() => {setCabin(k); setShowCabinMenu(false); executeSearch();}} className="w-4 h-4 text-purple-600" />
+                        <span className="text-sm font-bold text-gray-800">{cabinNames[k]}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            {showDateMenu && (
-              <div className="absolute top-full right-0 left-0 md:left-auto md:w-[450px] mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl p-5 flex flex-col z-50">
-                <div className="flex gap-4 border-b border-gray-200 pb-3 mb-4">
-                  <button onClick={()=>setDateType('anytime')} className={`flex-1 py-2 rounded font-bold text-sm transition ${dateType==='anytime'?'bg-purple-100 text-purple-700':'text-gray-500 hover:bg-gray-100'}`}>A qualquer momento</button>
-                  <button onClick={()=>setDateType('specific')} className={`flex-1 py-2 rounded font-bold text-sm transition ${dateType==='specific'?'bg-purple-100 text-purple-700':'text-gray-500 hover:bg-gray-100'}`}>Datas Específicas</button>
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-auto md:h-[50px] relative z-30">
+              <div className="relative col-span-1 md:col-span-3 flex items-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white z-[60] h-12 md:h-full" ref={originRef}>
+                <span className="text-gray-400 font-medium mr-2 text-sm">De</span>
+                {origin ? (
+                  <div className="bg-purple-600 text-white text-xs font-bold px-2 py-1.5 rounded flex items-center gap-1 shadow-sm overflow-hidden">
+                    <span className="truncate">{origin.name}</span>
+                    <button onMouseDown={(e) => { e.preventDefault(); setOrigin(null); setOriginQuery(''); }} className="hover:text-gray-200 text-sm leading-none ml-1">×</button>
+                  </div>
+                ) : (
+                  <input type="text" value={originQuery} onChange={(e) => setOriginQuery(e.target.value)} onFocus={() => { if(originResults.length > 0) setShowOrigin(true); }} className="flex-1 outline-none text-sm font-bold text-gray-800 bg-transparent w-full" placeholder="São Paulo" />
+                )}
+                {showOrigin && !origin && originResults.length > 0 && (
+                  <ul className="absolute left-0 right-0 top-[110%] bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                    {originResults.map(loc => (
+                      <li key={loc.id} onMouseDown={(e) => { e.preventDefault(); setOrigin({ id: loc.id, name: loc.name }); setShowOrigin(false); }} className="p-3 hover:bg-purple-50 cursor-pointer text-sm border-b border-gray-50 flex flex-col">
+                        <span className="font-bold text-gray-800">{loc.name} ({loc.code})</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="relative col-span-1 md:col-span-3 flex items-center flex-wrap gap-1 border border-gray-300 rounded-md p-1.5 hover:border-purple-600 bg-white z-[50] min-h-[48px] md:h-full" ref={destRef}>
+                <span className="text-gray-400 font-medium mr-1 text-sm pl-1">Para</span>
+                {destinations.map(d => (
+                  <div key={d.id} className="bg-purple-600 text-white text-xs font-bold px-2 py-1.5 rounded flex items-center gap-1 shadow-sm">
+                    <span className="truncate max-w-[80px]">{d.name}</span>
+                    <button onMouseDown={(e) => { e.preventDefault(); setDestinations(destinations.filter(x => x.id !== d.id)); }} className="hover:text-gray-200 text-sm leading-none ml-1">×</button>
+                  </div>
+                ))}
+                <input type="text" value={destQuery} onChange={(e) => setDestQuery(e.target.value)} onFocus={() => { if(destResults.length > 0) setShowDest(true); }} className="flex-1 min-w-[80px] outline-none text-sm font-bold text-gray-800 bg-transparent py-1 px-1" placeholder={destinations.length === 0 ? "Ex: Salvador" : "Adicionar..."} />
+                {showDest && destResults.length > 0 && (
+                  <ul className="absolute left-0 right-0 top-[110%] bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                    {destResults.map(loc => (
+                      <li key={loc.id} onMouseDown={(e) => { e.preventDefault(); if(!destinations.find(x=>x.id===loc.id)) setDestinations([...destinations, {id:loc.id, name:loc.name}]); setDestQuery(''); setShowDest(false); }} className="p-3 hover:bg-purple-50 cursor-pointer text-sm border-b border-gray-50 flex flex-col">
+                        <span className="font-bold text-gray-800">{loc.name} ({loc.code})</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="col-span-1 md:col-span-4 z-20 h-12 md:h-full relative" ref={dateRef}>
+                <div onClick={() => setShowDateMenu(!showDateMenu)} className="flex items-center justify-between border border-gray-300 rounded-md px-4 h-full cursor-pointer hover:border-purple-600 bg-white">
+                  <div className="flex flex-col justify-center">
+                    <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Partida</span>
+                    <span className="text-sm font-bold text-gray-900 leading-tight">{dateType==='specific' && dateFrom ? new Date(dateFrom).toLocaleDateString('pt-BR') : 'A qualquer momento'}</span>
+                  </div>
+                  <div className="w-px h-6 bg-gray-200 mx-2"></div>
+                  <div className={`flex flex-col justify-center ${tripType==='oneway'?'opacity-30':''}`}>
+                    <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Regresso</span>
+                    <span className="text-sm font-bold text-gray-900 leading-tight">{tripType==='return' && dateType==='specific' && dateTo ? new Date(dateTo).toLocaleDateString('pt-BR') : 'A qualquer momento'}</span>
+                  </div>
                 </div>
-                {dateType === 'specific' && (
-                  <div className="flex gap-4 mb-4">
-                    <div className="flex-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Partida</label>
-                      <input type="date" min={getTodayStr()} value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600"/>
+
+                {showDateMenu && (
+                  <div className="absolute top-full right-0 left-0 md:left-auto md:w-[450px] mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl p-5 flex flex-col z-50">
+                    <div className="flex gap-4 border-b border-gray-200 pb-3 mb-4">
+                      <button onClick={()=>setDateType('anytime')} className={`flex-1 py-2 rounded font-bold text-sm transition ${dateType==='anytime'?'bg-purple-100 text-purple-700':'text-gray-500 hover:bg-gray-100'}`}>A qualquer momento</button>
+                      <button onClick={()=>setDateType('specific')} className={`flex-1 py-2 rounded font-bold text-sm transition ${dateType==='specific'?'bg-purple-100 text-purple-700':'text-gray-500 hover:bg-gray-100'}`}>Datas Específicas</button>
                     </div>
-                    <div className={`flex-1 ${tripType==='oneway'?'opacity-30 pointer-events-none':''}`}>
-                      <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Regresso</label>
-                      <input type="date" min={dateFrom || getTodayStr()} value={dateTo} onChange={e=>setDateTo(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600"/>
+                    {dateType === 'specific' && (
+                      <div className="flex gap-4 mb-4">
+                        <div className="flex-1">
+                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Partida</label>
+                          <input type="date" min={getTodayStr()} value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600"/>
+                        </div>
+                        <div className={`flex-1 ${tripType==='oneway'?'opacity-30 pointer-events-none':''}`}>
+                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Regresso</label>
+                          <input type="date" min={dateFrom || getTodayStr()} value={dateTo} onChange={e=>setDateTo(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600"/>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex justify-end pt-2">
+                      <button onClick={(e) => { setShowDateMenu(false); executeSearch(e); }} className="px-6 py-2 bg-[#00a698] text-white font-bold rounded hover:bg-[#008f82]">Definir Datas</button>
                     </div>
                   </div>
                 )}
-                <div className="flex justify-end pt-2">
-                  <button onClick={(e) => { setShowDateMenu(false); executeSearch(e); }} className="px-6 py-2 bg-[#00a698] text-white font-bold rounded hover:bg-[#008f82]">Definir Datas</button>
-                </div>
               </div>
-            )}
-          </div>
 
-          <div className="col-span-1 md:col-span-2 h-12 md:h-full z-[20]">
-            <button onClick={(e) => executeSearch(e)} disabled={loading} className="w-full h-full bg-[#00a698] hover:bg-[#008f82] text-white font-extrabold rounded-md shadow-md text-base uppercase tracking-wide transition">
-              {loading ? 'Buscando...' : 'Pesquisar'}
-            </button>
+              <div className="col-span-1 md:col-span-2 h-12 md:h-full z-[20]">
+                <button onClick={(e) => executeSearch(e)} disabled={loading} className="w-full h-full bg-[#00a698] hover:bg-[#008f82] text-white font-extrabold rounded-md shadow-md text-base uppercase tracking-wide transition">
+                  {loading ? 'Buscando...' : 'Pesquisar'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -504,12 +504,9 @@ export default function FlightSearch({ prefilledData }) {
       <div className="space-y-6 relative z-0">
         {renderedFlights.map((voo) => {
           const isExpanded = expandedFlight === voo.id;
-          
           const baseFare = parseInt(voo.precoFinal || voo.price, 10) || 0;
-          
           const unitBagPriceIda = voo.bags_price?.['1'] ? Math.ceil(voo.bags_price['1']) : 120;
           const unitBagPriceVolta = voo.bags_price?.['1'] ? Math.ceil(voo.bags_price['1']) : 120;
-          
           const bagIdaSubtotal = lastHoldIdaCount > 0 ? (lastHoldIdaCount * unitBagPriceIda) : 0;
           const bagVoltaSubtotal = lastHoldVoltaCount > 0 ? (lastHoldVoltaCount * unitBagPriceVolta) : 0;
           const totalBagsCost = bagIdaSubtotal + bagVoltaSubtotal;
@@ -517,21 +514,16 @@ export default function FlightSearch({ prefilledData }) {
           const passengerTotal = baseFare;
           const adultSubtotal = lastAdultsCount > 0 ? Math.ceil(passengerTotal * (lastAdultsCount / (lastAdultsCount + lastChildrenCount || 1))) : 0;
           const childSubtotal = lastChildrenCount > 0 ? (passengerTotal - adultSubtotal) : 0;
-
           const safeTotal = baseFare + totalBagsCost;
 
           return (
             <div key={voo.id} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all overflow-hidden flex flex-col md:flex-row">
-              
               <div className="flex-1 p-5 md:pr-8 cursor-pointer" onClick={() => setExpandedFlight(isExpanded ? null : voo.id)}>
-                
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
                   <div className="flex items-center gap-4">
                     <img src={`https://images.kiwi.com/airlines/64x64/${voo.ida.companhiaPrincipal}.png`} alt="Cia" className="w-10 h-10 object-contain rounded-lg border border-gray-100 p-0.5" />
                     <div>
-                      <span className="text-[10px] font-extrabold uppercase text-purple-600 block mb-0.5">
-                        Voo de Ida <span className="text-gray-500 ml-1 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">{voo.ida.trechos.map(t => t.vooNumero).join(' ➔ ')}</span>
-                      </span>
+                      <span className="text-[10px] font-extrabold uppercase text-purple-600 block mb-0.5">Voo de Ida <span className="text-gray-500 ml-1 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">{voo.ida.trechos.map(t => t.vooNumero).join(' ➔ ')}</span></span>
                       <h3 className="font-bold text-gray-900 text-base">{voo.ida.origem} ➔ {voo.ida.destino}</h3>
                       <p className="text-xs text-gray-500 mt-0.5 font-medium">Partida: {formatDateBr(voo.ida.partida)} às {formatTime(voo.ida.partida)} • <span className="text-green-600 font-bold">{voo.ida.escalas === 0 ? 'Voo Direto' : `${voo.ida.escalas} Parada(s)`}</span></p>
                     </div>
@@ -547,9 +539,7 @@ export default function FlightSearch({ prefilledData }) {
                     <div className="flex items-center gap-4">
                       <img src={`https://images.kiwi.com/airlines/64x64/${voo.volta.companhiaPrincipal}.png`} alt="Cia" className="w-10 h-10 object-contain rounded-lg border border-gray-100 p-0.5" />
                       <div>
-                        <span className="text-[10px] font-extrabold uppercase text-orange-600 block mb-0.5">
-                          Voo de Volta <span className="text-gray-500 ml-1 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">{voo.volta.trechos.map(t => t.vooNumero).join(' ➔ ')}</span>
-                        </span>
+                        <span className="text-[10px] font-extrabold uppercase text-orange-600 block mb-0.5">Voo de Volta <span className="text-gray-500 ml-1 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">{voo.volta.trechos.map(t => t.vooNumero).join(' ➔ ')}</span></span>
                         <h3 className="font-bold text-gray-900 text-base">{voo.volta.origem} ➔ {voo.volta.destino}</h3>
                         <p className="text-xs text-gray-500 mt-0.5 font-medium">Partida: {formatDateBr(voo.volta.partida)} às {formatTime(voo.volta.partida)} • <span className="text-green-600 font-bold">{voo.volta.escalas === 0 ? 'Voo Direto' : `${voo.volta.escalas} Parada(s)`}</span></p>
                       </div>
@@ -568,16 +558,8 @@ export default function FlightSearch({ prefilledData }) {
                 {isExpanded && (
                   <div className="mt-6 border-t border-gray-200 pt-6 cursor-default" onClick={e=>e.stopPropagation()}>
                     <h3 className="text-xl font-black text-gray-900 mb-4">Detalhes da viagem</h3>
-                    <div className="mb-6">
-                      <h4 className="font-bold text-purple-700 bg-purple-50 p-2.5 rounded-lg mb-4 uppercase text-xs tracking-wider flex justify-between"><span>Voo de Ida</span> <span>{voo.ida.duracao}</span></h4>
-                      {voo.ida.trechos.map((t, idx) => <FlightLegDetails key={idx} trecho={t} />)}
-                    </div>
-                    {voo.volta && (
-                      <div>
-                        <h4 className="font-bold text-orange-700 bg-orange-50 p-2.5 rounded-lg mb-4 uppercase text-xs tracking-wider flex justify-between"><span>Voo de Volta</span> <span>{voo.volta.duracao}</span></h4>
-                        {voo.volta.trechos.map((t, idx) => <FlightLegDetails key={idx} trecho={t} />)}
-                      </div>
-                    )}
+                    <div className="mb-6"><h4 className="font-bold text-purple-700 bg-purple-50 p-2.5 rounded-lg mb-4 uppercase text-xs tracking-wider flex justify-between"><span>Voo de Ida</span> <span>{voo.ida.duracao}</span></h4>{voo.ida.trechos.map((t, idx) => <FlightLegDetails key={idx} trecho={t} />)}</div>
+                    {voo.volta && <div><h4 className="font-bold text-orange-700 bg-orange-50 p-2.5 rounded-lg mb-4 uppercase text-xs tracking-wider flex justify-between"><span>Voo de Volta</span> <span>{voo.volta.duracao}</span></h4>{voo.volta.trechos.map((t, idx) => <FlightLegDetails key={idx} trecho={t} />)}</div>}
                   </div>
                 )}
               </div>
@@ -585,22 +567,13 @@ export default function FlightSearch({ prefilledData }) {
               <div className="w-full md:w-[320px] bg-gray-50 p-6 border-t md:border-t-0 md:border-l border-gray-200 flex flex-col justify-between">
                 <div className="mb-6">
                   <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
-                    <div>
-                      <p className="text-xs font-bold text-gray-800">{lastSearchedPax}x Item pessoal</p>
-                    </div>
-                    <span className="text-[10px] font-black uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded">Incluído</span>
+                    <div><p className="text-xs font-bold text-gray-800">{lastSearchedPax}x Item pessoal</p></div><span className="text-[10px] font-black uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded">Incluído</span>
                   </div>
                   <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
-                    <div>
-                      <p className="text-xs font-bold text-gray-800">{lastSearchedPax}x Mala de cabine</p>
-                    </div>
-                    <span className="text-[10px] font-black uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded">Incluído</span>
+                    <div><p className="text-xs font-bold text-gray-800">{lastSearchedPax}x Mala de cabine</p></div><span className="text-[10px] font-black uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded">Incluído</span>
                   </div>
                   <div className="flex justify-between items-center mb-2 pb-3 border-b border-gray-100">
-                    <div>
-                      <p className="text-xs font-bold text-gray-800">{(lastHoldIdaCount + lastHoldVoltaCount)}x Mala(s) porão (Ida/Volta)</p>
-                    </div>
-                    <span className="text-xs font-extrabold text-gray-700">{(lastHoldIdaCount + lastHoldVoltaCount) > 0 ? 'Selecionada' : '0 Adicionada'}</span>
+                    <div><p className="text-xs font-bold text-gray-800">{(lastHoldIdaCount + lastHoldVoltaCount)}x Mala(s) porão (Ida/Volta)</p></div><span className="text-xs font-extrabold text-gray-700">{(lastHoldIdaCount + lastHoldVoltaCount) > 0 ? 'Selecionada' : '0 Adicionada'}</span>
                   </div>
                 </div>
 
@@ -621,19 +594,15 @@ export default function FlightSearch({ prefilledData }) {
                   </button>
                 </div>
               </div>
-              
             </div>
           );
         })}
       </div>
 
-      {/* MODAL DE TARIFAS VIP E CONFIANÇA */}
       {checkoutModal && (
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl p-6 md:p-8 relative overflow-y-auto max-h-[95vh]">
             <button onClick={() => setCheckoutModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 font-bold text-2xl z-50">&times;</button>
-            
-            {/* O NOVO BANNER DE CONFIANÇA AQUI */}
             <div className="bg-gradient-to-br from-purple-900 to-orange-600 rounded-2xl p-6 mb-8 text-center shadow-lg relative overflow-hidden">
               <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-xl"></div>
               <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-20 h-20 bg-white opacity-10 rounded-full blur-xl"></div>
@@ -681,13 +650,11 @@ export default function FlightSearch({ prefilledData }) {
               </div>
             </div>
             
-            {/* BOTÃO DE VOLTAR INJETADO AQUI */}
             <div className="mt-8 text-center">
               <button onClick={() => setCheckoutModal(null)} className="text-gray-500 font-bold hover:text-gray-800 transition-colors underline">
                 Voltar para os resultados da busca
               </button>
             </div>
-            
           </div>
         </div>
       )}

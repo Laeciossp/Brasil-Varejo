@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
-  Trash2, ShoppingCart, ArrowRight, ShieldCheck, MapPin, Lock, Truck, CreditCard, QrCode, Ticket, Users, PlaneTakeoff, PlaneLanding, Luggage, Clock
+  Trash2, ShoppingCart, ArrowRight, ShieldCheck, MapPin, Lock, Truck, CreditCard, QrCode, Ticket, Users, PlaneTakeoff, PlaneLanding, Luggage, Clock, UserCheck
 } from 'lucide-react';
 import { useUser } from "@clerk/clerk-react";
 import { createClient } from "@sanity/client"; 
@@ -54,7 +54,6 @@ export default function Cart() {
   const totalFinal = subtotal - discount + shippingCost;
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  // LÓGICA DO CRONÔMETRO DE URGÊNCIA (10 MINUTOS)
   const flightItem = items.find(i => i.isTravel && i.flightDetails);
   const [timeLeft, setTimeLeft] = useState(null);
 
@@ -63,7 +62,7 @@ export default function Cart() {
     
     const interval = setInterval(() => {
         const now = Date.now();
-        const expiresAt = flightItem.addedAt + 10 * 60 * 1000; // 10 minutos
+        const expiresAt = flightItem.addedAt + 10 * 60 * 1000;
         const diff = expiresAt - now;
 
         if (diff <= 0) {
@@ -119,26 +118,31 @@ export default function Cart() {
      });
   };
 
+  // FUNÇÃO MÁGICA PARA IMPORTAR OS DADOS DO CLIENTE
+  const handleImportMyData = (index) => {
+    const nome = user?.fullName || customerName || '';
+    const email = user?.primaryEmailAddress?.emailAddress || '';
+    const cpf = customer?.document || '';
+    
+    handlePaxChange(index, 'name', nome);
+    handlePaxChange(index, 'email', email);
+    handlePaxChange(index, 'cpf', cpf);
+    handlePaxChange(index, 'relationship', 'Titular');
+  };
+
   useEffect(() => {
     const recalculate = async () => {
       if (isDigitalCart) {
-         const digitalShipping = {
-             name: "Emissão Digital (E-Ticket / Voucher)",
-             price: 0,
-             delivery_time: 1,
-             company: "Operadora"
-         };
+         const digitalShipping = { name: "Emissão Digital (E-Ticket / Voucher)", price: 0, delivery_time: 1, company: "Operadora" };
          setShippingOptions([digitalShipping]);
          setShipping(digitalShipping);
          return; 
       }
-
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
       if (!targetZip || items.length === 0) {
           if (!targetZip) setShipping(null);
           return;
       }
-
       setRecalculatingShipping(true);
       const cleanZip = targetZip.replace(/\D/g, '');
       const isLocal = cleanZip === '43850000';
@@ -147,12 +151,10 @@ export default function Cart() {
       const extraDays = isNearby ? 4 : maxHandlingTime; 
       const postingDays = 1;
       let finalOptions = [];
-
       const physicalItems = items.filter(i => !i.isTravel);
       const paidItems = physicalItems.filter(i => !i.freeShipping);
       const hasPaidItems = paidItems.length > 0;
       const allFree = physicalItems.length > 0 && !hasPaidItems;
-
       const payloadItems = hasPaidItems ? paidItems : physicalItems;
 
       if(payloadItems.length === 0) {
@@ -169,13 +171,8 @@ export default function Cart() {
             from: { postal_code: "43805000" }, 
             to: { postal_code: targetZip },
             products: payloadItems.map(p => ({
-              id: p._id,
-              width: Number(p.width) || 15,
-              height: Number(p.height) || 15,
-              length: Number(p.length) || 15,
-              weight: Number(p.weight) || 0.5,
-              insurance_value: Number(p.price),
-              quantity: Number(p.quantity)
+              id: p._id, width: Number(p.width) || 15, height: Number(p.height) || 15, length: Number(p.length) || 15,
+              weight: Number(p.weight) || 0.5, insurance_value: Number(p.price), quantity: Number(p.quantity)
             }))
           })
         });
@@ -193,9 +190,7 @@ export default function Cart() {
                   if (nameLower.includes('sedex') || nameLower.includes('expresso')) finalPrice = 19.90;
               }
               return { ...opt, price: finalPrice, days: parseInt(opt.delivery_time || opt.prazo) || 1, cleanName: nameLower };
-          })
-          .filter(c => c.price > 0 || allFree) 
-          .sort((a, b) => a.price - b.price);
+          }).filter(c => c.price > 0 || allFree).sort((a, b) => a.price - b.price);
 
           if (isLocal) {
              const localPrice = allFree ? 0 : (candidates[0]?.price > 0 ? candidates[0].price : 15.00);
@@ -223,10 +218,8 @@ export default function Cart() {
              
              if (finalOptions.length === 0 && candidates.length > 0) {
                  finalOptions.push({
-                    name: candidates[0].name || "Entrega Padrão",
-                    price: candidates[0].price,
-                    delivery_time: candidates[0].days + extraDays + postingDays + pacBuffer,
-                    company: candidates[0].company || "Transportadora"
+                    name: candidates[0].name || "Entrega Padrão", price: candidates[0].price,
+                    delivery_time: candidates[0].days + extraDays + postingDays + pacBuffer, company: candidates[0].company || "Transportadora"
                  });
              }
           }
@@ -241,17 +234,11 @@ export default function Cart() {
               const maisBarato = finalOptions.reduce((min, p) => parseFloat(p.price) < parseFloat(min.price) ? p : min, finalOptions[0]);
               precoBase = parseFloat(maisBarato.price);
           }
-          finalOptions = [{
-              name: 'Envio Econômico Padrão',
-              price: allFree ? 0 : (precoBase > 0 ? precoBase : 15.00),
-              delivery_time: 12,
-              company: 'Transportadora'
-          }];
+          finalOptions = [{ name: 'Envio Econômico Padrão', price: allFree ? 0 : (precoBase > 0 ? precoBase : 15.00), delivery_time: 12, company: 'Transportadora' }];
       } else {
           if (finalOptions.length === 0) {
-               if (isLocal) {
-                   finalOptions.push({ name: "Palastore Expresso ⚡", price: allFree ? 0 : 15.00, delivery_time: 5, company: "Própria" });
-               } else if (isNearby) {
+               if (isLocal) finalOptions.push({ name: "Palastore Expresso ⚡", price: allFree ? 0 : 15.00, delivery_time: 5, company: "Própria" });
+               else if (isNearby) {
                    finalOptions.push({ name: "PAC (Econômico)", price: allFree ? 0 : 16.90, delivery_time: 12, company: "Correios" });
                    finalOptions.push({ name: "SEDEX (Expresso)", price: allFree ? 0 : 19.90, delivery_time: 7, company: "Correios" });
                }
@@ -264,9 +251,7 @@ export default function Cart() {
       if (finalOptions.length > 0) {
           const currentName = selectedShipping?.name;
           const sameOption = finalOptions.find(o => o.name === currentName);
-          if (typeof setShipping === 'function') {
-              setShipping(sameOption || finalOptions[0]);
-          }
+          if (typeof setShipping === 'function') setShipping(sameOption || finalOptions[0]);
       } else { 
           if (typeof setShipping === 'function') setShipping(null);
       }
@@ -322,21 +307,9 @@ export default function Cart() {
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            items: items.map(i => ({ 
-                id: i._id,
-                title: i.title || i.name, 
-                quantity: i.quantity, 
-                price: i.price,
-                picture_url: i.image 
-            })), 
-            shipping: parseFloat(selectedShipping.price), 
-            email: user.primaryEmailAddress.emailAddress, 
-            tipoPagamento, 
-            shippingAddress: activeAddress, 
-            customerDocument: finalCustomerDoc, 
-            totalAmount: totalFinal, 
-            orderId: sanityId,
-            customerName: finalCustomerName
+            items: items.map(i => ({ id: i._id, title: i.title || i.name, quantity: i.quantity, price: i.price, picture_url: i.image })), 
+            shipping: parseFloat(selectedShipping.price), email: user.primaryEmailAddress.emailAddress, tipoPagamento, shippingAddress: activeAddress, 
+            customerDocument: finalCustomerDoc, totalAmount: totalFinal, orderId: sanityId, customerName: finalCustomerName
         })
       });
       const data = await response.json();
@@ -386,7 +359,6 @@ export default function Cart() {
                 {items.map((item) => (
                     item.isTravel && item.flightDetails ? (
                         <div key={item.sku || item._id} className="bg-white border border-purple-100 p-0 flex flex-col relative shadow-sm">
-                            {/* Header da Passagem COM BOTÃO DE ALTERAR */}
                             <div className="bg-purple-600 text-white p-4 flex justify-between items-center">
                                 <div className="flex items-center gap-3">
                                     <div className="bg-white p-1.5 rounded-lg shadow-sm">
@@ -409,7 +381,6 @@ export default function Cart() {
                                 </div>
                             </div>
 
-                            {/* Detalhes de Voo */}
                             <div className="p-6 flex flex-col md:flex-row gap-8">
                                 <div className="flex-1 space-y-6">
                                     <div className="flex gap-4">
@@ -462,9 +433,7 @@ export default function Cart() {
                           <div className="w-20 h-20 bg-white border rounded-lg p-2 relative">
                               <img src={item.image} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
                               {item.freeShipping && !item.isTravel && (
-                                   <div className="absolute bottom-0 left-0 right-0 bg-green-600 text-white text-[8px] font-bold text-center py-0.5">
-                                       FRETE GRÁTIS
-                                   </div>
+                                   <div className="absolute bottom-0 left-0 right-0 bg-green-600 text-white text-[8px] font-bold text-center py-0.5">FRETE GRÁTIS</div>
                                )}
                           </div>
                           <div className="flex-1 flex flex-col justify-between">
@@ -537,9 +506,19 @@ export default function Cart() {
                         <div className="space-y-4">
                            {passengers.map((pax, index) => (
                               <div key={index} className="bg-gray-50 p-5 rounded-xl border border-gray-200 space-y-4 shadow-sm">
-                                 <h3 className="font-bold text-sm text-gray-800 flex items-center gap-2 border-b border-gray-200 pb-2">
-                                    <span className="bg-gray-900 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs">{index + 1}</span> Passageiro
+                                 
+                                 {/* HEADER DO PASSAGEIRO COM O BOTÃO MÁGICO */}
+                                 <h3 className="font-bold text-sm text-gray-800 flex items-center justify-between border-b border-gray-200 pb-2">
+                                    <span className="flex items-center gap-2">
+                                        <span className="bg-gray-900 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs">{index + 1}</span> Passageiro
+                                    </span>
+                                    {index === 0 && (
+                                        <button onClick={() => handleImportMyData(index)} className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 transition-colors">
+                                            <UserCheck size={14}/> Puxar meus dados
+                                        </button>
+                                    )}
                                  </h3>
+
                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <input placeholder="Nome Completo" value={pax.name} onChange={e => handlePaxChange(index, 'name', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
                                     <div className="relative">
