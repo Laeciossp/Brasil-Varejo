@@ -350,10 +350,13 @@ const RentcarsWidget = () => {
 export default function ViagensPage() {
   const [activeTab, setActiveTab] = useState('voos'); 
   
+  // Estado para capturar os dados do card clicado (destino e datas)
+  const [dadosPreenchidos, setDadosPreenchidos] = useState(null);
+  
   const menuItems = [
     { id: 'voos', label: 'Passagens Aéreas', icon: Plane },
     { id: 'roteiros', label: 'Roteiros Exclusivos', icon: Compass },
-    { id: 'ofertas_voos', label: 'Ofertas de Voos', icon: TrendingUp }, // NOVO NOME AQUI
+    { id: 'ofertas_voos', label: 'Ofertas de Voos', icon: TrendingUp }, 
     { id: 'hoteis', label: 'Hotéis', icon: Building },
     { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Star },
     { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
@@ -367,10 +370,17 @@ export default function ViagensPage() {
     { id: 'trens', label: 'Trens Internacionais', icon: Train },
   ];
 
-  const handleDestinoClick = (iataOuCidade) => {
-    // Rola para o topo quando o usuário clica na oferta
+  // Função que recebe o clique no card de ofertas e preenche o buscador
+  const handleDestinoClick = (dadosDestino) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    // Define a aba para Voos para que o cliente possa efetuar a busca (futuramente podemos passar o parâmetro)
+    
+    setDadosPreenchidos({
+      origem: 'SAO',
+      destino: dadosDestino.iata,
+      dataIda: dadosDestino.ida || '',
+      dataVolta: dadosDestino.volta || ''
+    });
+
     setActiveTab('voos');
   };
 
@@ -405,10 +415,15 @@ export default function ViagensPage() {
           {activeTab === 'voos' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow">
                <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-6 text-center uppercase italic tracking-tight">Pesquise Passagens Aéreas</h2>
-               <FlightSearch />
+               {/* Passando os dados capturados do card para o buscador */}
+               <FlightSearch prefilledData={dadosPreenchidos} />
             </div>
           )}
 
+          {activeTab === 'roteiros' && <RoteirosExclusivos />}
+          
+          {/* Conectando o clique do card com a função que muda a aba e injeta os dados */}
+          {activeTab === 'ofertas_voos' && <DestinosPopulares onSelectDestination={handleDestinoClick} />}
           {activeTab === 'roteiros' && <RoteirosExclusivos />}
           {activeTab === 'ofertas_voos' && <DestinosPopulares onSelectDestination={handleDestinoClick} />}
           {activeTab === 'onibus' && <PartnerIframe title="Passagens de Ônibus" url="https://www.awin1.com/cread.php?awinmid=65292&awinaffid=910543" noticeText="Compare e reserve passagens de ônibus para milhares de destinos em todo o Brasil. Processamento seguro via parceiro oficial." themeColor="green" />}
