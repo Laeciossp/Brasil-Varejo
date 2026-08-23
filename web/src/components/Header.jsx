@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Search, MapPin, ShoppingCart, Heart, User, Menu, 
-  Phone, X, ArrowRight, LogIn, ChevronRight, ShieldCheck
+  Phone, X, ArrowRight, LogIn, ChevronRight, ShieldCheck, Compass // Adicionei Compass para dar um ar de viagem
 } from 'lucide-react';
 import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/clerk-react";
 import { motion, AnimatePresence } from 'framer-motion';
@@ -60,7 +60,7 @@ export default function Header() {
       <div className="hidden lg:flex justify-end items-center container mx-auto px-4 py-2 text-xs font-medium border-b border-white/20">
         <div className="flex gap-4 items-center">
           <a href="https://wa.me/5571983774301" target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:underline opacity-90 transition-opacity">
-             <Phone size={12}/> Vendas: Whatsapp (71) 983810420 ou (71) 98377-4301 
+             <Phone size={12}/> Atendimento: Whatsapp (71) 98381-0420 ou (71) 98377-4301 
           </a>
         </div>
       </div>
@@ -90,7 +90,7 @@ export default function Header() {
                     
                     <div className="leading-none drop-shadow-md">
                         <span className="block font-black text-xl md:text-2xl tracking-tight text-white uppercase italic">Palastore</span>
-                        <span className="block font-medium text-[8px] md:text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Oficial</span>
+                        <span className="block font-medium text-[8px] md:text-[10px] tracking-[0.2em] opacity-80 text-white uppercase">Viagens</span>
                     </div>
                 </Link>
             </div>
@@ -104,27 +104,26 @@ export default function Header() {
             </div>
         </div>
 
-        {/* BUSCA DESKTOP (Oculta no Mobile) */}
+        {/* BUSCA DESKTOP (Focada em Viagens) */}
         <form onSubmit={handleSearch} className="flex-1 w-full max-w-3xl relative mx-0 lg:mx-4 hidden md:block">
           <input 
             type="text" 
-            placeholder="O que você procura hoje?" 
+            placeholder="Para onde você quer viajar hoje?" 
             className="w-full h-12 pl-4 pr-12 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-inner bg-white placeholder-gray-400 font-medium"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
           <button type="submit" className="absolute right-3 top-3 text-crocus-deep cursor-pointer hover:text-orange-500 transition-colors bg-transparent border-none">
-            <Search />
+            <Compass />
           </button>
         </form>
 
-        {/* --- NOVA ÁREA MOBILE: BUSCA + BOTÃO INSTALAR (Linha de Baixo) --- */}
+        {/* --- NOVA ÁREA MOBILE: BUSCA + BOTÃO INSTALAR (Focada em Viagens) --- */}
         <div className="w-full flex gap-2 items-center md:hidden">
-            {/* Campo de Busca (flex-1 faz ele ocupar o espaço que sobrar) */}
             <form onSubmit={handleSearch} className="flex-1 relative">
               <input 
                 type="text" 
-                placeholder="Buscar produtos..." 
+                placeholder="Buscar destinos, pacotes..." 
                 className="w-full h-10 pl-3 pr-9 rounded-lg text-gray-900 focus:outline-none shadow-inner bg-white/95 text-sm font-medium"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -132,21 +131,19 @@ export default function Header() {
               <button type="submit" className="absolute right-2 top-2 text-crocus-deep"><Search size={20}/></button>
             </form>
 
-            {/* Botão Instalar (Ao lado da busca) */}
             <InstallApp className="h-10 bg-white/10 text-white px-3 rounded-lg border border-white/20 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap hover:bg-white/20 flex items-center justify-center shadow-sm" showLabel={true} />
         </div>
 
         {/* ÍCONES DESKTOP (Mantidos iguais) */}
         <div className="hidden lg:flex items-center gap-6 text-sm font-medium justify-end">
-           {/* APP INSTALL BUTTON (DESKTOP) */}
            <InstallApp className="bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl border border-white/10" />
 
            <div onClick={() => setIsCepModalOpen(true)} className="hidden lg:flex items-center gap-2 cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors border border-transparent hover:border-white/20">
               <MapPin size={24} className="text-white animate-pulse"/>
               <div className="leading-tight text-white text-left">
-                <span className="block text-[10px] opacity-70">Enviar para</span>
+                <span className="block text-[10px] opacity-70">Origem Principal</span>
                 <span className="font-black block truncate max-w-[100px] text-xs uppercase tracking-tighter">
-                  {globalCep || 'Informe seu CEP'}
+                  {globalCep || 'Informe CEP'}
                 </span>
               </div>
            </div>
@@ -156,7 +153,7 @@ export default function Header() {
                 <Heart size={24}/>
                 {favCount > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-black animate-in zoom-in">{favCount}</span>}
               </div>
-              <span className="text-[10px] hidden lg:block uppercase font-bold tracking-tighter">Favoritos</span>
+              <span className="text-[10px] hidden lg:block uppercase font-bold tracking-tighter">Desejos</span>
            </Link>
 
            <div className="flex items-center gap-2 min-w-[150px]">
@@ -165,7 +162,7 @@ export default function Header() {
                   <button className="flex items-center gap-2 hover:bg-white/10 p-2 rounded-xl transition-colors text-white text-left w-full group">
                     <User size={24} className="group-hover:scale-110 transition-transform"/>
                     <div className="hidden lg:block leading-tight">
-                      <span className="block text-[10px] opacity-70">Minha Conta</span>
+                      <span className="block text-[10px] opacity-70">Viajante</span>
                       <span className="block font-black text-xs uppercase tracking-tighter italic">Entrar / Criar</span>
                     </div>
                   </button>
@@ -201,9 +198,6 @@ export default function Header() {
           <ul className="flex flex-col lg:flex-row lg:items-center justify-between text-[11px] font-black uppercase tracking-tight py-2 lg:py-0 gap-4 lg:gap-0">
             
             <li className="lg:hidden flex flex-col gap-2 border-b border-gray-100 pb-4 mb-2">
-                
-                {/* Removi o botão de instalar daqui também para não duplicar */}
-
                 <div 
                     onClick={() => { setIsMenuOpen(false); setIsCepModalOpen(true); }}
                     className="flex items-center gap-3 bg-orange-50 p-3 rounded-xl border border-orange-100 active:scale-95 transition-transform cursor-pointer"
@@ -212,7 +206,7 @@ export default function Header() {
                         <MapPin size={20} />
                     </div>
                     <div className="flex flex-col">
-                        <span className="text-[10px] text-gray-500 font-normal uppercase">Localização de Entrega</span>
+                        <span className="text-[10px] text-gray-500 font-normal uppercase">Origem da Viagem</span>
                         <span className="text-sm font-black text-gray-800">
                             {globalCep ? `CEP: ${globalCep}` : 'Toque para informar CEP'}
                         </span>
@@ -256,7 +250,7 @@ export default function Header() {
                >
                  <Menu size={18} className="lg:hidden text-white" /> 
                  <span className="hidden lg:inline">{isMenuOpen ? <X size={18}/> : <Menu size={18}/>}</span>
-                 Todas as Categorias
+                 Explorar o Mundo
                </button>
 
                <AnimatePresence>
@@ -284,7 +278,7 @@ export default function Header() {
 
             <li className="ml-auto lg:block py-2 lg:py-0 text-center w-full lg:w-auto border-t lg:border-none border-gray-100 mt-2 lg:mt-0">
                 <span className="flex items-center justify-center lg:justify-start gap-1 py-3 px-2 text-gray-400 select-none">
-                    <ShieldCheck size={14} className="text-green-500"/> Site 100% Seguro
+                    <ShieldCheck size={14} className="text-green-500"/> Agência 100% Segura
                 </span>
             </li>
           </ul>
@@ -302,9 +296,9 @@ export default function Header() {
               <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} className="relative bg-white rounded-[32px] p-8 max-w-sm w-full shadow-2xl text-gray-900 border border-gray-100">
                <button onClick={() => setIsCepModalOpen(false)} className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"><X size={20}/></button>
                <div className="flex flex-col items-center text-center">
-                 <div className="bg-orange-100 p-4 rounded-full text-orange-600 mb-6"><MapPin size={32} /></div>
-                 <h3 className="text-2xl font-black uppercase tracking-tighter italic mb-2">Onde você está?</h3>
-                 <p className="text-gray-500 text-sm font-medium mb-8">Informe seu CEP para calcularmos frete e prazos de entrega exclusivos.</p>
+                 <div className="bg-orange-100 p-4 rounded-full text-orange-600 mb-6"><Compass size={32} /></div>
+                 <h3 className="text-2xl font-black uppercase tracking-tighter italic mb-2">De onde você sai?</h3>
+                 <p className="text-gray-500 text-sm font-medium mb-8">Informe o seu CEP base para oferecermos as melhores rotas e pacotes.</p>
                  <form onSubmit={handleSaveCep} className="w-full space-y-4">
                    <input 
                     autoFocus 

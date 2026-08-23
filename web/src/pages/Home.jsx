@@ -19,6 +19,9 @@ function urlFor(source) {
 // ==========================================
 // COMPONENTE: HERO BANNER (TOPO)
 // ==========================================
+// ==========================================
+// COMPONENTE: HERO BANNER (TOPO) - BLINDADO
+// ==========================================
 const HeroBlock = ({ data }) => {
   const [current, setCurrent] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true); 
@@ -47,15 +50,12 @@ const HeroBlock = ({ data }) => {
   if (!slides.length) return null;
 
   return (
-    <div className="relative w-full h-[350px] md:h-[650px] overflow-hidden group bg-gray-100">
+    <div className="relative w-full h-[350px] md:h-[650px] overflow-hidden group bg-gray-900">
       <div 
         className="flex transition-transform duration-700 ease-out h-full" 
         style={{ transform: `translateX(-${current * 100}%)` }}
       >
         {slides.map((slide, idx) => {
-          // DEBUG: Mostra no F12 o que o Sanity enviou. Se videoUrl estiver null, o campo no Sanity tá com nome diferente.
-          console.log("🎥 Dados do Slide:", slide);
-
           let positionClasses = "items-center justify-center text-center"; 
           if (slide.textPosition === 'left') positionClasses = "items-center justify-start text-left pl-10 md:pl-20";
           if (slide.textPosition === 'right') positionClasses = "items-center justify-end text-right pr-10 md:pr-20";
@@ -67,35 +67,38 @@ const HeroBlock = ({ data }) => {
             ? 'bg-gray-900 text-white hover:bg-gray-700' 
             : 'bg-white text-gray-900 hover:bg-gray-100';
 
-          // AUTO-DETECÇÃO: Força a ser vídeo se tiver .mp4 na URL, mesmo que o botão no Sanity esteja errado
-          const isVideo = slide.mediaType === 'video' || (slide.videoUrl && slide.videoUrl.includes('.mp4'));
+          // Verifica se existe uma URL de vídeo válida
+          const hasVideo = slide.videoUrl && typeof slide.videoUrl === 'string' && slide.videoUrl.trim() !== '';
 
           const MediaContent = (
             <>
-              {/* VÍDEO COM FORÇAMENTO DE AUTOPLAY DIRETO NO DOM (BURLANDO BLOQUEIO DO NAVEGADOR) */}
-              {(slide.mediaType === 'video' || (slide.videoUrl && slide.videoUrl.includes('.mp4'))) && slide.videoUrl ? (
+              {hasVideo ? (
                 <video 
                   key={slide.videoUrl}
-                  ref={(el) => { 
-                    if(el) { 
-                      el.defaultMuted = true; 
-                      el.muted = true; 
-                      el.play().catch(e => console.log("⏳ Aguardando interação do usuário para reproduzir vídeo...")); 
-                    } 
-                  }}
                   className="w-full h-full object-cover pointer-events-none" 
                   autoPlay 
                   loop 
+                  muted 
                   playsInline
+                  onError={(e) => {
+                    console.error("Erro ao carregar o vídeo do banner:", e);
+                    // Se o vídeo falhar por algum codec ou rede, esconde o elemento para não quebrar a UI
+                    e.target.style.display = 'none';
+                  }}
                 >
                   <source src={slide.videoUrl} type="video/mp4" />
+                  Seu navegador não suporta vídeos.
                 </video>
-              ) : (
+              ) : slide.image ? (
                 <img 
                   src={urlFor(slide.image)} 
                   alt={slide.headline || 'Banner'} 
                   className="w-full h-full object-cover object-top" 
                 />
+              ) : (
+                <div className="w-full h-full bg-purple-900 flex items-center justify-center text-white font-bold">
+                  Configure a imagem ou vídeo no Sanity
+                </div>
               )}
               {slide.layoutStyle === 'overlay' && slide.textColor === 'white' && (
                 <div className="absolute inset-0 bg-black/30"></div>
@@ -191,7 +194,6 @@ const HeroBlock = ({ data }) => {
     </div>
   );
 };
-
 // ==========================================
 // HOME: AGÊNCIA PURA DE VIAGENS
 // ==========================================

@@ -4,14 +4,15 @@ import { createClient } from "@sanity/client";
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
 
-// 1. IMPORTAÇÃO DO SEU NOVO MOTOR DE VOOS
+// 1. Importação do motor de voos e do NOVO motor de ofertas dinâmicas
 import FlightSearch from './FlightSearch'; 
+import DestinosPopulares from '../components/DestinosPopulares';
 
 import { 
   Plane, Bus, ShieldCheck, ArrowRight, ExternalLink, Briefcase, 
   Building, Car, MapPin, Compass, Train, Star, Search,
   Globe, Castle, Mountain, Sun, Waves, Palmtree, Filter, X,
-  Snowflake, Ship, Calendar, Tag, CheckCircle, TreePine, Gift, Coffee, Wand2
+  Snowflake, Ship, Calendar, Tag, CheckCircle, TreePine, Gift, Coffee, Wand2, TrendingUp
 } from 'lucide-react';
 
 const client = createClient({
@@ -255,14 +256,6 @@ const RoteirosExclusivos = () => {
 };
 
 // ==========================================
-// SUBCOMPONENTE: WIDGET DA KIWI (VITRINE DE OFERTAS INFERIOR)
-// ==========================================
-const KiwiSuggestionsWidget = () => {
-  const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; background-color: transparent; }</style></head><body><div id="widget-holder"></div><script data-width="100%" data-affilid="lptbenspacotes" data-from="sao-paulo_sp_br,rio-de-janeiro_rj_br,belo-horizonte_mg_br,brasilia_df_br,recife_pe_br" data-return="anytime" data-transport-types="FLIGHT" data-results-only="true" src="https://widgets.kiwi.com/scripts/widget-search-iframe.js"></script></body></html>`;
-  return <iframe srcDoc={htmlContent} className="w-full min-h-[600px] md:min-h-[800px] border-0 rounded-xl" title="Ofertas Imperdíveis de Passagens" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-top-navigation allow-popups-to-escape-sandbox"/>;
-};
-
-// ==========================================
 // COMPONENTE AUXILIAR PARA RENDERIZAR OS PARCEIROS (IFRAMES)
 // ==========================================
 const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
@@ -355,13 +348,12 @@ const RentcarsWidget = () => {
 // PÁGINA PRINCIPAL: PALASTORE VIAGENS (WEB)
 // ==========================================
 export default function ViagensPage() {
-  // 1. VOOS COMO ABA PADRÃO INICIAL
-  const [activeTab, setActiveTab] = useState('voos');
+  const [activeTab, setActiveTab] = useState('voos'); 
   
-  // 2. ABA VOOS COMO PRIMEIRO DA LISTA PARA DESTAQUE
   const menuItems = [
     { id: 'voos', label: 'Passagens Aéreas', icon: Plane },
     { id: 'roteiros', label: 'Roteiros Exclusivos', icon: Compass },
+    { id: 'ofertas_voos', label: 'Ofertas de Voos', icon: TrendingUp }, // NOVO NOME AQUI
     { id: 'hoteis', label: 'Hotéis', icon: Building },
     { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Star },
     { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
@@ -375,21 +367,22 @@ export default function ViagensPage() {
     { id: 'trens', label: 'Trens Internacionais', icon: Train },
   ];
 
+  const handleDestinoClick = (iataOuCidade) => {
+    // Rola para o topo quando o usuário clica na oferta
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Define a aba para Voos para que o cliente possa efetuar a busca (futuramente podemos passar o parâmetro)
+    setActiveTab('voos');
+  };
+
   return (
     <div className="w-full min-h-screen bg-gray-50 pb-20">
-      
-      {/* 3. BANNER SUPERIOR MANTIDO AQUI (Pode substituir pelo componente Slider futuramente) */}
-      <div className="w-full bg-white shadow-sm mb-8 border-b border-gray-200">
-        <img src="/image_0335bf.png" alt="Palastore Viagens" className="w-full h-auto object-cover md:object-contain max-h-[250px] md:max-h-[350px]" />
-      </div>
-
-      <div className="max-w-[1440px] mx-auto px-4">
+      <div className="max-w-[1440px] mx-auto px-4 mt-8">
+        
         <div className="text-center mb-8">
             <h1 className="text-3xl md:text-4xl font-black text-gray-800 uppercase tracking-tight italic mb-2">Central de Viagens</h1>
             <p className="text-gray-500 font-medium">Sua próxima aventura começa aqui. Escolha o serviço desejado.</p>
         </div>
 
-        {/* 4. MENU DE SELEÇÃO LOGO ABAIXO DO BANNER */}
         <div className="flex flex-wrap justify-center gap-3 md:gap-4 mb-10">
             {menuItems.map((tab) => {
             const Icon = tab.icon;
@@ -409,7 +402,6 @@ export default function ViagensPage() {
         {/* ÁREA DE RENDERIZAÇÃO DO CONTEÚDO */}
         <div className="bg-white rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100 min-h-[700px] flex flex-col overflow-hidden mb-12">
           
-          {/* 5. SEU NOVO MOTOR DE VOOS EM DESTAQUE (SUBSTITUINDO A KIWI) */}
           {activeTab === 'voos' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow">
                <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-6 text-center uppercase italic tracking-tight">Pesquise Passagens Aéreas</h2>
@@ -418,6 +410,7 @@ export default function ViagensPage() {
           )}
 
           {activeTab === 'roteiros' && <RoteirosExclusivos />}
+          {activeTab === 'ofertas_voos' && <DestinosPopulares onSelectDestination={handleDestinoClick} />}
           {activeTab === 'onibus' && <PartnerIframe title="Passagens de Ônibus" url="https://www.awin1.com/cread.php?awinmid=65292&awinaffid=910543" noticeText="Compare e reserve passagens de ônibus para milhares de destinos em todo o Brasil. Processamento seguro via parceiro oficial." themeColor="green" />}
           {activeTab === 'seguros' && <PartnerIframe title="Seguro Viagem" url="https://seguroviagem.app/palastore" noticeText="Viaje protegido com cobertura completa e suporte 24h." themeColor="blue" />}
           {activeTab === 'voo_hotel' && <PartnerIframe title="Pacotes Voo + Hotel" url="https://br.trip.com/packages/?sourceFrom=IBUBundle_home&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Economize reservando Voo e Hotel juntos através do nosso parceiro Trip.com." themeColor="indigo" />}
@@ -426,7 +419,7 @@ export default function ViagensPage() {
           {activeTab === 'rentcars' && <RentcarsWidget />}
           {activeTab === 'carros' && <PartnerIframe title="Aluguel de Carros" url="https://br.trip.com/carhire/?channelid=14409&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Alugue veículos com as melhores locadoras globais. Processado via Trip.com." themeColor="indigo" />}
           {activeTab === 'translado' && <PartnerIframe title="Translado Aeroporto" url="https://br.trip.com/airport-transfers/?Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19413340&locale=pt_br" noticeText="Chegue ao seu destino sem preocupações. Veículos exclusivos Trip.com." themeColor="indigo" />}
-          {activeTab === 'passeios' && <PartnerIframe title="Passeios e Ingressos (Trip.com)" url="https://br.trip.com/things-to-do/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Compre ingressos para atrações turísticas pelo mundo com nosso parceiro Trip.com." themeColor="indigo" />}
+          {activeTab === 'passeios' && <PartnerIframe title="Passeios e Ingressos (Trip.com)" url="https://br.temp.com/things-to-do/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Compre ingressos para atrações turísticas pelo mundo com nosso parceiro Trip.com." themeColor="indigo" />}
           {activeTab === 'viator' && (
             <PartnerWidgetViator 
                title="Experiências e Passeios (Viator)" 
@@ -436,16 +429,6 @@ export default function ViagensPage() {
             />
           )}
           {activeTab === 'trens' && <PartnerIframe title="Trens Internacionais" url="https://br.trip.com/trains/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Viaje pela Europa e Ásia com os melhores Trens Internacionais. Processado via Trip.com." themeColor="indigo" />}
-        </div>
-
-        {/* OFERTAS INFERIORES MANTIDAS */}
-        <div className="w-full mt-12 mb-8">
-            <div className="flex items-center gap-4 justify-center mb-8">
-               <div className="h-[2px] w-12 bg-orange-500"></div><h2 className="text-2xl md:text-3xl font-black text-gray-800 uppercase tracking-tight italic text-center">Ofertas Imperdíveis</h2><div className="h-[2px] w-12 bg-orange-500"></div>
-            </div>
-            <div className="bg-white rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100">
-               <KiwiSuggestionsWidget />
-            </div>
         </div>
 
       </div>
