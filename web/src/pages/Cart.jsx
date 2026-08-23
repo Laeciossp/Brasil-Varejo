@@ -319,15 +319,25 @@ export default function Cart() {
           internalNotes += `\nPassageiros:\n${passengers.map((p, i) => `Pax ${i+1}: ${p.name} - CPF: ${p.cpf} - RG: ${p.rg} - Nasc: ${p.dob} - Assento: ${p.seatPreference || 'Sem Preferência'}`).join('\n')}`;
       }
       
+      // MÁGICA 1: O Sanity não aceita o | no ID, então só criamos referência se for Produto Físico!
       const orderDoc = {
         _type: 'order', orderNumber, status: 'pending',
         customer: { name: finalCustomerName, email: user.primaryEmailAddress?.emailAddress, cpf: finalCustomerDoc, phone: "" },
-        items: items.map(item => ({
-            _key: Math.random().toString(36).substring(7),
-            productName: item.title || item.name, variantName: item.variantName || "Padrão", quantity: item.quantity, price: item.price, imageUrl: item.image,
-            // CORREÇÃO: Limpando caracteres que o Sanity rejeita no ID
-            product: { _type: 'reference', _ref: String(item._id || item.id || `item-${Date.now()}`).replace(/[^a-zA-Z0-9_.-]/g, "_") } 
-        })),
+        items: items.map(item => {
+            const baseItem = {
+                _key: Math.random().toString(36).substring(7),
+                productName: item.title || item.name, 
+                variantName: item.variantName || "Padrão", 
+                quantity: item.quantity, 
+                price: item.price, 
+                imageUrl: item.image
+            };
+            // Adiciona a referência APENAS se não for viagem (produtos físicos)
+            if (!item.isTravel && item._id) {
+                baseItem.product = { _type: 'reference', _ref: String(item._id).replace(/[^a-zA-Z0-9_.-]/g, "_") };
+            }
+            return baseItem;
+        }),
         shippingAddress: activeAddress, billingAddress: activeAddress, carrier: selectedShipping.name, shippingCost: parseFloat(selectedShipping.price), totalAmount: totalFinal, paymentMethod: tipoPagamento, internalNotes
       };
       
@@ -335,14 +345,15 @@ export default function Cart() {
       const sanityId = createdOrder._id;
       
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
+      
+      // MÁGICA 2: Injetando a description rica para o Mercado Pago exibir bonito!
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            // CORREÇÃO: Injetando a description e higienizando IDs
             items: items.map(i => ({ 
-                id: String(i._id || i.id).replace(/[^a-zA-Z0-9_.-]/g, "_"), 
+                id: String(i._id || i.id || `item-${Date.now()}`).replace(/[^a-zA-Z0-9_.-]/g, "_"), 
                 title: i.title || i.name, 
-                description: i.isTravel && i.flightDetails ? `Tarifa ${i.flightDetails.tier} • ${i.quantity} Passageiro(s) • ${i.flightDetails.holdBagsIda + i.flightDetails.holdBagsVolta} Malas` : (i.title || i.name),
+                description: i.isTravel && i.flightDetails ? `Tarifa ${i.flightDetails.tier} • ${i.quantity} Passageiro(s) • ${i.flightDetails.holdBagsIda + i.flightDetails.holdBagsVolta} Mala(s) Despachada(s)` : (i.title || i.name),
                 quantity: i.quantity, 
                 price: i.price, 
                 picture_url: i.image 
@@ -351,6 +362,7 @@ export default function Cart() {
             customerDocument: finalCustomerDoc, totalAmount: totalFinal, orderId: sanityId, customerName: finalCustomerName
         })
       });
+
       const data = await response.json();
       if (data.error || !data.url) throw new Error(JSON.stringify(data.details || data.error));
       clearCart();
