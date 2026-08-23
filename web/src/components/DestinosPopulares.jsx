@@ -61,22 +61,41 @@ export default function DestinosPopulares({ onSelectDestination }) {
   const formatarData = (dataString) => {
     if (!dataString) return '';
     const date = new Date(dataString);
+    // Adiciona o timezoneOffset para evitar que a data volte 1 dia por causa do fuso do Brasil
+    date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
   };
 
-  // FETCH DOS DADOS REAIS DO FIREBASE 
+  // FETCH DOS DADOS REAIS DO FIREBASE COM FALLBACK DE REGIÃO
   useEffect(() => {
     setCarregando(true);
-    // A SUA URL OFICIAL (Peguei dos logs do seu deploy)
-    fetch('https://ratehawkapi-pamd2cm4wa-uc.a.run.app/ofertas/vitrine')
-      .then(res => res.json())
+    
+    // Tenta primeiro a região us-central1 (padrão do Firebase)
+    const urlCentral = 'https://us-central1-palastore-turismo.cloudfunctions.net/ratehawkApi/ofertas/vitrine';
+    // Se falhar, tenta a região da américa do sul
+    const urlSouthAmerica = 'https://southamerica-east1-palastore-turismo.cloudfunctions.net/ratehawkApi/ofertas/vitrine';
+
+    fetch(urlCentral)
+      .then(res => {
+          if (!res.ok) throw new Error("Falha na rede central");
+          return res.json();
+      })
       .then(data => {
-          setOfertasAoVivo(data);
+          setOfertasAoVivo(data || {});
           setCarregando(false);
       })
       .catch(err => {
-          console.error("Erro ao buscar ofertas do Firebase:", err);
-          setCarregando(false);
+          console.log("Tentando região sul-americana...", err);
+          fetch(urlSouthAmerica)
+            .then(res => res.json())
+            .then(data => {
+                setOfertasAoVivo(data || {});
+                setCarregando(false);
+            })
+            .catch(err2 => {
+                console.error("Erro absoluto ao buscar ofertas do Firebase:", err2);
+                setCarregando(false);
+            });
       });
   }, []);
 
@@ -142,8 +161,6 @@ export default function DestinosPopulares({ onSelectDestination }) {
                 // Pega o código IATA correto do mapa
                 const codigoIata = IATA_MAP[destino] || 'RIO';
                 
-                // Se o Firebase já tiver a oferta real, envia com a data. 
-                // Se não tiver, envia pelo menos o destino para o buscador não falhar!
                 if(onSelectDestination) {
                    onSelectDestination({
                       iata: codigoIata,
@@ -171,11 +188,13 @@ export default function DestinosPopulares({ onSelectDestination }) {
                       Buscando no sistema...
                     </span>
                  ) : oferta ? (
-                    <span className="bg-orange-500/90 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1 border border-orange-400 shadow-sm uppercase tracking-wide">
-                      <Calendar size={10}/> {formatarData(oferta.dataIda)} - {formatarData(oferta.dataVolta)}
+                    <span className="bg-orange-500/90 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border border-orange-400 shadow-sm uppercase tracking-wide">
+                      <Calendar size={10}/> 
+                      {formatarData(oferta.dataIda)} 
+                      {oferta.dataVolta ? ` - ${formatarData(oferta.dataVolta)}` : ' (Só Ida)'}
                     </span>
                  ) : (
-                    <span className="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1 border border-white/10">
+                    <span className="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border border-white/10">
                       <PlaneTakeoff size={10}/> Partida de São Paulo
                     </span>
                  )}
@@ -189,7 +208,7 @@ export default function DestinosPopulares({ onSelectDestination }) {
                     <div className="mt-1 min-h-[20px]">
                         {!carregando && oferta ? (
                             <p className="text-[12px] font-bold text-gray-200 drop-shadow mt-1">
-                              {oferta.noites} noites de <span className="text-white text-base md:text-lg font-black tracking-tight ml-1">R$ {oferta.preco.toLocaleString('pt-BR')}</span>
+                              {oferta.noites} noites a partir de <span className="text-white text-base md:text-lg font-black tracking-tight ml-1">R$ {oferta.preco.toLocaleString('pt-BR')}</span>
                             </p>
                         ) : !carregando && !oferta ? (
                             <p className="text-[11px] font-bold text-gray-300 drop-shadow mt-1">
