@@ -32,7 +32,7 @@ export default function DestinosPopulares({ onSelectDestination }) {
   const [ofertasAoVivo, setOfertasAoVivo] = useState({});
   const [carregando, setCarregando] = useState(true);
 
-  // Listas Oficiais (Baseadas no seu PDF)
+  // Listas Oficiais
   const dadosDestinos = {
     nacional: {
       relevancia: [
@@ -57,27 +57,20 @@ export default function DestinosPopulares({ onSelectDestination }) {
 
   const slugify = (text) => text.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9 -]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
 
-  // FORMATADOR DE DATA PARA O CARD (Ex: 05 Ago)
+  // FORMATADOR DE DATA PARA O CARD
   const formatarData = (dataString) => {
     if (!dataString) return '';
     const date = new Date(dataString);
-    // Adiciona o timezoneOffset para evitar que a data volte 1 dia por causa do fuso do Brasil
     date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
   };
 
-  // FETCH DOS DADOS REAIS DO FIREBASE COM FALLBACK DE REGIÃO
+  // FETCH DIRETO NA SUA URL OFICIAL (Limpamos o fallback)
   useEffect(() => {
     setCarregando(true);
-    
-    // Tenta primeiro a região us-central1 (padrão do Firebase)
-    const urlCentral = 'https://us-central1-palastore-turismo.cloudfunctions.net/ratehawkApi/ofertas/vitrine';
-    // Se falhar, tenta a região da américa do sul
-    const urlSouthAmerica = 'https://southamerica-east1-palastore-turismo.cloudfunctions.net/ratehawkApi/ofertas/vitrine';
-
-    fetch(urlCentral)
+    fetch('https://ratehawkapi-pamd2cm4wa-uc.a.run.app/ofertas/vitrine')
       .then(res => {
-          if (!res.ok) throw new Error("Falha na rede central");
+          if (!res.ok) throw new Error("Erro na rede ao buscar ofertas");
           return res.json();
       })
       .then(data => {
@@ -85,17 +78,8 @@ export default function DestinosPopulares({ onSelectDestination }) {
           setCarregando(false);
       })
       .catch(err => {
-          console.log("Tentando região sul-americana...", err);
-          fetch(urlSouthAmerica)
-            .then(res => res.json())
-            .then(data => {
-                setOfertasAoVivo(data || {});
-                setCarregando(false);
-            })
-            .catch(err2 => {
-                console.error("Erro absoluto ao buscar ofertas do Firebase:", err2);
-                setCarregando(false);
-            });
+          console.error("Erro ao buscar ofertas:", err);
+          setCarregando(false);
       });
   }, []);
 
@@ -136,16 +120,14 @@ export default function DestinosPopulares({ onSelectDestination }) {
         </button>
       </div>
 
-      {/* GRID DOS DESTINOS (BENTO) */}
+      {/* GRID DOS DESTINOS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-[220px]">
         {listaAtual.map((destino, index) => {
-          // Ocultar a própria origem para não fazer sentido buscar SAO -> SAO
           if(IATA_MAP[destino] === "SAO" || IATA_MAP[destino] === "GRU") return null;
 
           const slug = slugify(destino);
           const imgUrl = `/images/destinos/${categoriaPasta}/${slug}.jpg`;
           
-          // Oferta do banco de dados para este card específico
           const oferta = ofertasAoVivo[destino];
 
           let spanClass = "col-span-1";
@@ -158,7 +140,6 @@ export default function DestinosPopulares({ onSelectDestination }) {
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 
-                // Pega o código IATA correto do mapa
                 const codigoIata = IATA_MAP[destino] || 'RIO';
                 
                 if(onSelectDestination) {
