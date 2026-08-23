@@ -23,7 +23,7 @@ const IATA_MAP = {
   "Reykjavik": "REK", "Viena": "VIE", "Munich": "MUC", "Marrakech": "RAK", "Palma de Mallorca": "PMI",
   "Kuala Lumpur": "KUL", "Seoul": "SEL", "Mecca": "JED", "Phuket": "HKT", "Shanghai": "SHA",
   "Hong Kong": "HKG", "Antalya": "AYT", "Osaka": "OSA", "Cancun": "CUN", "Las Vegas": "LAS",
-  "Miami": "MIA", "Los Angeles": "LAX", "Berlin": "BER", "Pattaya": "UTP"
+  "Miami": "MIA", "Los Angeles": "LAX", "Berlin": "BER", "Pattaya": "UTP", "Madrid": "MAD"
 };
 
 export default function DestinosPopulares({ onSelectDestination }) {
@@ -65,7 +65,7 @@ export default function DestinosPopulares({ onSelectDestination }) {
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
   };
 
-  // FETCH DIRETO NA SUA URL OFICIAL (Limpamos o fallback)
+  // FETCH DIRETO NA SUA URL OFICIAL
   useEffect(() => {
     setCarregando(true);
     fetch('https://ratehawkapi-pamd2cm4wa-uc.a.run.app/ofertas/vitrine')
@@ -126,6 +126,7 @@ export default function DestinosPopulares({ onSelectDestination }) {
           if(IATA_MAP[destino] === "SAO" || IATA_MAP[destino] === "GRU") return null;
 
           const slug = slugify(destino);
+          const codigoIata = IATA_MAP[destino] || 'RIO';
           const imgUrl = `/images/destinos/${categoriaPasta}/${slug}.jpg`;
           
           const oferta = ofertasAoVivo[destino];
@@ -139,8 +140,6 @@ export default function DestinosPopulares({ onSelectDestination }) {
               key={index}
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
-                
-                const codigoIata = IATA_MAP[destino] || 'RIO';
                 
                 if(onSelectDestination) {
                    onSelectDestination({
@@ -156,7 +155,10 @@ export default function DestinosPopulares({ onSelectDestination }) {
               <img 
                 src={imgUrl} 
                 alt={destino} 
-                onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=1200&auto=format&fit=crop' }} 
+                onError={(e) => { 
+                    e.target.onerror = null; // Impede loop caso o fallback também falhe
+                    e.target.src = `https://images.kiwi.com/photos/600x330/${codigoIata.toLowerCase()}.jpg`; 
+                }} 
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 brightness-90 group-hover:brightness-100"
               />
               
