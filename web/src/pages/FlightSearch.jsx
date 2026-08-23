@@ -135,14 +135,13 @@ export default function FlightSearch({ prefilledData }) {
   // ==================================================================
   // OUVINTE INTELIGENTE: Dispara quando o usuário clica num card de oferta
   // ==================================================================
+  // OUVINTE INTELIGENTE: Dispara quando o usuário clica num card de oferta
   useEffect(() => {
     if (prefilledData && prefilledData.destino) {
       const destId = prefilledData.destino;
       
-      // Atualiza o destino com o código IATA recebido
       setDestinations([{ id: destId, name: destId }]);
 
-      // Se o card trouxe datas reais do monitor, configura o período exato
       if (prefilledData.dataIda) {
         setDateType('specific');
         setDateFrom(prefilledData.dataIda);
@@ -154,7 +153,10 @@ export default function FlightSearch({ prefilledData }) {
         }
       }
 
-      // Dispara a pesquisa automaticamente para o cliente não precisar clicar de novo
+      // CORREÇÃO DO SCROLL: Rola a página direto para o buscador/resultados (evita o topo/banner)
+      window.scrollTo({ top: 250, behavior: 'smooth' });
+
+      // Dispara a pesquisa automaticamente
       setTimeout(() => {
         executeSearch(null, sortConfig, stopsConfig, destId, prefilledData.dataIda, prefilledData.dataVolta);
       }, 200);
