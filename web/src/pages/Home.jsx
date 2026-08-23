@@ -72,15 +72,21 @@ const HeroBlock = ({ data }) => {
 
           const MediaContent = (
             <>
-              {isVideo && slide.videoUrl ? (
+              {/* VÍDEO COM FORÇAMENTO DE AUTOPLAY DIRETO NO DOM (BURLANDO BLOQUEIO DO NAVEGADOR) */}
+              {(slide.mediaType === 'video' || (slide.videoUrl && slide.videoUrl.includes('.mp4'))) && slide.videoUrl ? (
                 <video 
                   key={slide.videoUrl}
+                  ref={(el) => { 
+                    if(el) { 
+                      el.defaultMuted = true; 
+                      el.muted = true; 
+                      el.play().catch(e => console.log("⏳ Aguardando interação do usuário para reproduzir vídeo...")); 
+                    } 
+                  }}
                   className="w-full h-full object-cover pointer-events-none" 
                   autoPlay 
                   loop 
-                  muted 
                   playsInline
-                  controls={false}
                 >
                   <source src={slide.videoUrl} type="video/mp4" />
                 </video>
