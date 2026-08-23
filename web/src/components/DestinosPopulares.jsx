@@ -44,7 +44,7 @@ export default function DestinosPopulares({ onSelectDestination }) {
     },
     internacional: {
       relevancia: [
-        "Paris", "Roma", "Londres", "Nova York", "Tokyo", "Barcelona", "Amsterdam", "Lisboa", "Florence", "Veneza", "Kyoto", "Cairo", "Atenas", "Machu Picchu", "Istanbul", "Sydney", "Dubai", "Bangkok", "Singapore", "Bali", "Praga", "Cape Town", "Buenos Aires", "Milan", "Seville", "Reykjavik", "Viena", "Munich", "Marrakech", "Rio de Janeiro"
+        "Paris", "Roma", "Londres", "Nova York", "Tokyo", "Barcelona", "Amsterdam", "Lisboa", "Florence", "Veneza", "Kyoto", "Cairo", "Atenas", "Machu Picchu", "Istanbul", "Sydney", "Dubai", "Bangkok", "Singapore", "Bali", "Praga", "Cape Town", "Buenos Aires", "Milan", "Seville", "Reykjavik", "Viena", "Munich", "Marrakech", "Madrid"
       ],
       fluxo: [
         "Bangkok", "Paris", "Londres", "Dubai", "Singapore", "Palma de Mallorca", "Kuala Lumpur", "Istanbul", "Tokyo", "Antalya", "Seoul", "Mecca", "Phuket", "Roma", "Barcelona", "Pattaya", "Shanghai", "Hong Kong", "Milan", "Nova York", "Amsterdam", "Antalya", "Viena", "Osaka", "Cancun", "Las Vegas", "Miami", "Los Angeles", "Lisboa", "Berlin"
