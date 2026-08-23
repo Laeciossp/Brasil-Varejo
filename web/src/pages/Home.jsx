@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createClient } from "@sanity/client";
 import imageUrlBuilder from '@sanity/image-url';
 import { ChevronLeft, ChevronRight, ArrowRight, Play, Pause } from 'lucide-react'; 
-import ViagensPage from './ViagensPage'; // A injeção da sua central de viagens!
+import ViagensPage from './ViagensPage'; 
 
 const client = createClient({
   projectId: 'o4upb251',
@@ -28,7 +28,7 @@ const HeroBlock = ({ data }) => {
     if (slides.length <= 1 || !isPlaying) return;
     const timer = setInterval(() => {
       setCurrent(c => (c === slides.length - 1 ? 0 : c + 1));
-    }, 6000); // Passa o slide a cada 6 segundos
+    }, 6000);
     return () => clearInterval(timer);
   }, [slides.length, isPlaying]);
 
@@ -53,6 +53,9 @@ const HeroBlock = ({ data }) => {
         style={{ transform: `translateX(-${current * 100}%)` }}
       >
         {slides.map((slide, idx) => {
+          // DEBUG: Mostra no F12 o que o Sanity enviou. Se videoUrl estiver null, o campo no Sanity tá com nome diferente.
+          console.log("🎥 Dados do Slide:", slide);
+
           let positionClasses = "items-center justify-center text-center"; 
           if (slide.textPosition === 'left') positionClasses = "items-center justify-start text-left pl-10 md:pl-20";
           if (slide.textPosition === 'right') positionClasses = "items-center justify-end text-right pr-10 md:pr-20";
@@ -64,10 +67,12 @@ const HeroBlock = ({ data }) => {
             ? 'bg-gray-900 text-white hover:bg-gray-700' 
             : 'bg-white text-gray-900 hover:bg-gray-100';
 
+          // AUTO-DETECÇÃO: Força a ser vídeo se tiver .mp4 na URL, mesmo que o botão no Sanity esteja errado
+          const isVideo = slide.mediaType === 'video' || (slide.videoUrl && slide.videoUrl.includes('.mp4'));
+
           const MediaContent = (
             <>
-              {slide.mediaType === 'video' && slide.videoUrl ? (
-                /* ESTRUTURA BLINDADA PARA VÍDEO EM LOOP PERFEITO */
+              {isVideo && slide.videoUrl ? (
                 <video 
                   key={slide.videoUrl}
                   className="w-full h-full object-cover pointer-events-none" 
@@ -75,14 +80,14 @@ const HeroBlock = ({ data }) => {
                   loop 
                   muted 
                   playsInline
-                  defaultMuted
+                  controls={false}
                 >
                   <source src={slide.videoUrl} type="video/mp4" />
                 </video>
               ) : (
                 <img 
                   src={urlFor(slide.image)} 
-                  alt={slide.headline} 
+                  alt={slide.headline || 'Banner'} 
                   className="w-full h-full object-cover object-top" 
                 />
               )}
@@ -189,14 +194,14 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Buscamos apenas o Hero do Sanity, ignorando as antigas sessões de varejo
+    // PESCA MILAGROSA: O coalesce tenta achar a URL do vídeo em TODOS os nomes de variáveis possíveis no Sanity
     const query = `*[_type == "homePage"][0]{
       pageBuilder[]{
         _type, _key,
         _type == "hero" => { 
           slides[]{ 
             title, mediaType, image, 
-            "videoUrl": videoFile.asset->url, 
+            "videoUrl": coalesce(videoFile.asset->url, video.asset->url, file.asset->url, mediaVideo.asset->url, videoUrl, videoLink), 
             link,
             headline, subheadline, buttonText, layoutStyle, textPosition, textColor
           } 
@@ -226,19 +231,14 @@ export default function Home() {
 
   return (
     <div className="w-full bg-gray-50 min-h-screen pb-20">
-      
-      {/* 1. RENDERIZA APENAS O SLIDER/BANNER DO TOPO */}
       {pageData.pageBuilder
         .filter((section) => section._type === 'hero')
         .map((section) => (
           <HeroBlock key={section._key} data={section} />
       ))}
-
-      {/* 2. INJETA A PÁGINA DE VIAGENS IMEDIATAMENTE ABAIXO DO BANNER */}
       <div className="-mt-8 relative z-10">
          <ViagensPage />
       </div>
-
     </div>
   );
 }
