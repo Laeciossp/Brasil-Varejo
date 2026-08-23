@@ -138,12 +138,18 @@ export default function DestinosPopulares({ onSelectDestination }) {
               key={index}
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
-                // Passa o IATA e as datas se a oferta existir para preencher o buscador na hora!
+                
+                // Pega o código IATA correto do mapa
+                const codigoIata = IATA_MAP[destino] || 'RIO';
+                
+                // Se o Firebase já tiver a oferta real, envia com a data. 
+                // Se não tiver, envia pelo menos o destino para o buscador não falhar!
                 if(onSelectDestination) {
                    onSelectDestination({
-                      iata: IATA_MAP[destino] || destino,
-                      ida: oferta?.dataIda || null,
-                      volta: oferta?.dataVolta || null
+                      iata: codigoIata,
+                      nome: destino,
+                      ida: oferta?.dataIda || '',
+                      volta: oferta?.dataVolta || ''
                    });
                 }
               }}

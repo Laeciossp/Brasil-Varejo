@@ -74,7 +74,7 @@ const FlightLegDetails = ({ trecho }) => (
   </div>
 );
 
-export default function FlightSearch() {
+export default function FlightSearch({ prefilledData }) {
   const navigate = useNavigate();
   const { addItem, clearCart } = useCartStore();
 
@@ -131,6 +131,35 @@ export default function FlightSearch() {
 
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const getSixMonthsStr = () => { const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString().split('T')[0]; };
+
+  // ==================================================================
+  // OUVINTE INTELIGENTE: Dispara quando o usuário clica num card de oferta
+  // ==================================================================
+  useEffect(() => {
+    if (prefilledData && prefilledData.destino) {
+      const destId = prefilledData.destino;
+      
+      // Atualiza o destino com o código IATA recebido
+      setDestinations([{ id: destId, name: destId }]);
+
+      // Se o card trouxe datas reais do monitor, configura o período exato
+      if (prefilledData.dataIda) {
+        setDateType('specific');
+        setDateFrom(prefilledData.dataIda);
+        if (prefilledData.dataVolta) {
+          setDateTo(prefilledData.dataVolta);
+          setTripType('return');
+        } else {
+          setTripType('oneway');
+        }
+      }
+
+      // Dispara a pesquisa automaticamente para o cliente não precisar clicar de novo
+      setTimeout(() => {
+        executeSearch(null, sortConfig, stopsConfig, destId, prefilledData.dataIda, prefilledData.dataVolta);
+      }, 200);
+    }
+  }, [prefilledData]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -189,9 +218,11 @@ export default function FlightSearch() {
     return false;
   };
 
-  const executeSearch = async (e, overrideSort = sortConfig, overrideStops = stopsConfig) => {
+  const executeSearch = async (e, overrideSort = sortConfig, overrideStops = stopsConfig, customDest = null, customIda = null, customVolta = null) => {
     if(e) e.preventDefault();
-    if (!origin || destinations.length === 0) { setError("Selecione Origem e Destino."); return; }
+    
+    const activeDestinations = customDest ? [{ id: customDest }] : destinations;
+    if (!origin || activeDestinations.length === 0) { setError("Selecione Origem e Destino."); return; }
     
     setLoading(true); setError(null); setExpandedFlight(null);
     setShowTripMenu(false); setShowPaxMenu(false); setShowCabinMenu(false); setShowDateMenu(false);
@@ -207,17 +238,17 @@ export default function FlightSearch() {
     setLastHoldIdaCount(parseInt(holdBagsIda, 10) || 0);
     setLastHoldVoltaCount(parseInt(holdBagsVolta, 10) || 0);
 
-    const searchDateFrom = dateFrom ? dateFrom : getTodayStr();
-    const searchDateToRange = dateFrom ? dateFrom : getSixMonthsStr();
-    const destIds = destinations.map(d => d.id).join(',');
+    const effectiveDateFrom = customIda || (dateFrom ? dateFrom : getTodayStr());
+    const searchDateToRange = customIda || (dateFrom ? dateFrom : getSixMonthsStr());
+    const destIds = activeDestinations.map(d => d.id).join(',');
 
     try {
-      let url = `${WORKER_URL}/search-flights?origin=${origin.id}&destination=${destIds}&dateFrom=${searchDateFrom}&dateToRange=${searchDateToRange}&adults=${a}&children=${c}&infants=${i}&holdBagsIda=${holdBagsIda}&holdBagsVolta=${holdBagsVolta}&cabin=${cabin}&sort=${overrideSort}&max_stopovers=${overrideStops}`;
+      let url = `${WORKER_URL}/search-flights?origin=${origin.id}&destination=${destIds}&dateFrom=${effectiveDateFrom}&dateToRange=${searchDateToRange}&adults=${a}&children=${c}&infants=${i}&holdBagsIda=${holdBagsIda}&holdBagsVolta=${holdBagsVolta}&cabin=${cabin}&sort=${overrideSort}&max_stopovers=${overrideStops}`;
       
       if (tripType === 'return') {
-        const searchRetFrom = dateTo ? dateTo : searchDateFrom;
-        const searchRetToRange = dateTo ? dateTo : getSixMonthsStr();
-        url += `&returnFrom=${searchRetFrom}&returnToRange=${searchRetToRange}`;
+        const effectiveDateTo = customVolta || (dateTo ? dateTo : effectiveDateFrom);
+        const searchRetToRange = customVolta || (dateTo ? dateTo : getSixMonthsStr());
+        url += `&returnFrom=${effectiveDateTo}&returnToRange=${searchRetToRange}`;
       }
 
       const res = await fetch(url);
@@ -315,7 +346,6 @@ export default function FlightSearch() {
               </div>
             </button>
             {showPaxMenu && (
-              // BOX DE PASSAGEIROS SUPER COMPACTA E ELEGANTE
               <div className="absolute top-full left-0 mt-2 w-[280px] bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50">
                 <h4 className="font-black text-[10px] uppercase tracking-wider text-purple-900 mb-1 border-b border-gray-100 pb-1.5">Passageiros</h4>
                 <div className="mb-3">
@@ -553,19 +583,19 @@ export default function FlightSearch() {
 
               <div className="w-full md:w-[320px] bg-gray-50 p-6 border-t md:border-t-0 md:border-l border-gray-200 flex flex-col justify-between">
                 <div className="mb-6">
-                  <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-200">
+                  <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
                     <div>
                       <p className="text-xs font-bold text-gray-800">{lastSearchedPax}x Item pessoal</p>
                     </div>
                     <span className="text-[10px] font-black uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded">Incluído</span>
                   </div>
-                  <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-200">
+                  <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
                     <div>
                       <p className="text-xs font-bold text-gray-800">{lastSearchedPax}x Mala de cabine</p>
                     </div>
                     <span className="text-[10px] font-black uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded">Incluído</span>
                   </div>
-                  <div className="flex justify-between items-center mb-2 pb-3 border-b border-gray-200">
+                  <div className="flex justify-between items-center mb-2 pb-3 border-b border-gray-100">
                     <div>
                       <p className="text-xs font-bold text-gray-800">{(lastHoldIdaCount + lastHoldVoltaCount)}x Mala(s) porão (Ida/Volta)</p>
                     </div>
