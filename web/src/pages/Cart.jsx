@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
-  Trash2, ShoppingCart, ArrowRight, ShieldCheck, MapPin, Lock, Truck, CreditCard, QrCode, Ticket, Users, PlaneTakeoff, PlaneLanding, Luggage
+  Trash2, ShoppingCart, ArrowRight, ShieldCheck, MapPin, Lock, Truck, CreditCard, QrCode, Ticket, Users, PlaneTakeoff, PlaneLanding, Luggage, Clock
 } from 'lucide-react';
 import { useUser } from "@clerk/clerk-react";
 import { createClient } from "@sanity/client"; 
@@ -54,9 +54,41 @@ export default function Cart() {
   const totalFinal = subtotal - discount + shippingCost;
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
+  // LÓGICA DO CRONÔMETRO DE URGÊNCIA (10 MINUTOS)
+  const flightItem = items.find(i => i.isTravel && i.flightDetails);
+  const [timeLeft, setTimeLeft] = useState(null);
+
+  useEffect(() => {
+    if (!flightItem || !flightItem.addedAt) return;
+    
+    const interval = setInterval(() => {
+        const now = Date.now();
+        const expiresAt = flightItem.addedAt + 10 * 60 * 1000; // 10 minutos
+        const diff = expiresAt - now;
+
+        if (diff <= 0) {
+            clearInterval(interval);
+            alert("Tempo esgotado! Os preços e a disponibilidade das passagens podem ter mudado. Por favor, busque novamente.");
+            clearCart();
+            navigate('/viagens');
+        } else {
+            setTimeLeft(diff);
+        }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [flightItem, clearCart, navigate]);
+
+  const formatCountdown = (ms) => {
+      if (!ms) return "10:00";
+      const totalSeconds = Math.floor(ms / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  };
+
   useEffect(() => { if (user && !customerName) setCustomerName(user.fullName || ''); }, [user]);
 
-  // INJEÇÃO DA PREFERÊNCIA DE ASSENTO NO PASSAGEIRO
   useEffect(() => {
     if (isDigitalCart) {
       setPassengers(prev => {
@@ -68,7 +100,7 @@ export default function Cart() {
                 name: '', dob: '', relationship: '', gender: '', 
                 cpf: '', rg: '', rgIssuer: '', nationality: 'Brasileira', 
                 passport: '', passportExpiry: '', email: '', phone: '',
-                seatPreference: '' // NOVO CAMPO
+                seatPreference: ''
             });
           }
         } else {
@@ -269,7 +301,6 @@ export default function Cart() {
 
       let internalNotes = `Venda Site. Is Digital: ${isDigitalCart}`;
       if (isDigitalCart) {
-          // SALVANDO A PREFERÊNCIA DE ASSENTO NO SANITY
           internalNotes += `\nPassageiros:\n${passengers.map((p, i) => `Pax ${i+1}: ${p.name} - CPF: ${p.cpf} - RG: ${p.rg} - Nasc: ${p.dob} - Assento: ${p.seatPreference || 'Sem Preferência'}`).join('\n')}`;
       }
       
@@ -336,14 +367,26 @@ export default function Cart() {
     <div className="bg-gray-50 min-h-screen py-10 font-sans">
       <div className="container mx-auto px-4 max-w-6xl">
         <h1 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-2">Carrinho ({items.length})</h1>
+        
+        {/* CRONÔMETRO DE URGÊNCIA */}
+        {flightItem && (
+            <div className="bg-red-50 border border-red-200 p-3 md:p-4 rounded-xl mb-6 flex flex-col md:flex-row items-center justify-center gap-3 shadow-sm animate-in fade-in slide-in-from-top-4">
+                <div className="flex items-center gap-2">
+                   <Clock className="text-red-500 animate-pulse" size={24} />
+                   <span className="text-red-800 font-bold text-sm md:text-base">Conclua sua compra em</span>
+                </div>
+                <span className="bg-red-600 text-white font-black px-3 py-1 rounded-lg text-xl tracking-widest shadow-inner">{formatCountdown(timeLeft)}</span>
+                <span className="text-red-800 font-medium text-sm md:text-base">para garantir esta tarifa e disponibilidade.</span>
+            </div>
+        )}
+
         <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
           <div className="flex-1 space-y-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-0 overflow-hidden space-y-0">
                 {items.map((item) => (
                     item.isTravel && item.flightDetails ? (
-                        // CARD DE PASSAGEM AÉREA CUSTOMIZADO E PROFISSIONAL
                         <div key={item.sku || item._id} className="bg-white border border-purple-100 p-0 flex flex-col relative shadow-sm">
-                            {/* Header da Passagem */}
+                            {/* Header da Passagem COM BOTÃO DE ALTERAR */}
                             <div className="bg-purple-600 text-white p-4 flex justify-between items-center">
                                 <div className="flex items-center gap-3">
                                     <div className="bg-white p-1.5 rounded-lg shadow-sm">
@@ -356,14 +399,18 @@ export default function Cart() {
                                         <h3 className="font-bold text-lg">{item.title}</h3>
                                     </div>
                                 </div>
-                                <button onClick={() => removeItem(item._id, item.sku)} className="bg-purple-700 hover:bg-red-500 text-white p-2 rounded-lg transition-colors">
-                                    <Trash2 size={18}/>
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => { clearCart(); navigate('/viagens'); }} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold transition-colors border border-white/30 shadow-sm whitespace-nowrap">
+                                        Alterar Voo
+                                    </button>
+                                    <button onClick={() => removeItem(item._id, item.sku)} className="bg-purple-700 hover:bg-red-500 text-white p-1.5 md:p-2 rounded-lg transition-colors shadow-sm">
+                                        <Trash2 size={18}/>
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Detalhes de Voo */}
                             <div className="p-6 flex flex-col md:flex-row gap-8">
-                                {/* Coluna Esquerda: Itinerário */}
                                 <div className="flex-1 space-y-6">
                                     <div className="flex gap-4">
                                         <div className="flex flex-col items-center justify-start pt-1">
@@ -391,7 +438,6 @@ export default function Cart() {
                                     )}
                                 </div>
 
-                                {/* Coluna Direita: Extrato e Bagagem */}
                                 <div className="w-full md:w-64 bg-purple-50 rounded-xl p-5 border border-purple-100 flex flex-col justify-between shadow-inner">
                                     <div>
                                         <h4 className="font-bold text-sm text-purple-900 mb-3 border-b border-purple-200 pb-2">Extrato do Carrinho</h4>
@@ -412,7 +458,6 @@ export default function Cart() {
                             </div>
                         </div>
                     ) : (
-                        // PRODUTO PADRÃO DO VAREJO
                         <div key={item.sku || item._id} className="flex gap-4 p-6 border-b border-gray-100 last:border-0">
                           <div className="w-20 h-20 bg-white border rounded-lg p-2 relative">
                               <img src={item.image} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
@@ -516,7 +561,6 @@ export default function Cart() {
                                        <option value="Outro">Outro</option>
                                     </select>
                                     
-                                    {/* CAMPO DE SELEÇÃO DE ASSENTO INJETADO */}
                                     <div className="md:col-span-2 bg-purple-50 p-3 rounded-lg border border-purple-100 flex flex-col md:flex-row items-center gap-3">
                                        <span className="text-xs font-bold text-purple-800 w-full md:w-auto">Preferência de Assento:</span>
                                        <select value={pax.seatPreference} onChange={e => handlePaxChange(index, 'seatPreference', e.target.value)} className="w-full flex-1 p-2 border border-purple-200 rounded-md text-sm text-purple-900 outline-none focus:border-purple-500 bg-white">

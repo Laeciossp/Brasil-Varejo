@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useCartStore from '../store/useCartStore';
+import { ShieldCheck } from 'lucide-react';
 
 const WORKER_URL = "https://palastore-flights-api.laeciossp.workers.dev";
 
@@ -15,7 +16,6 @@ const formatDateBr = (dateStr) => {
   return `${dias[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 };
 
-// COMPONENTE COUNTER MAIS COMPACTO
 const Counter = ({ label, subLabel, value, onChange, min = 0, max = 9, icon }) => {
   const handleDec = () => onChange(Math.max(min, parseInt(value, 10) - 1));
   const handleInc = () => onChange(Math.min(max, parseInt(value, 10) + 1));
@@ -132,10 +132,6 @@ export default function FlightSearch({ prefilledData }) {
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const getSixMonthsStr = () => { const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString().split('T')[0]; };
 
-  // ==================================================================
-  // OUVINTE INTELIGENTE: Dispara quando o usuário clica num card de oferta
-  // ==================================================================
-  // OUVINTE INTELIGENTE: Dispara quando o usuário clica num card de oferta
   useEffect(() => {
     if (prefilledData && prefilledData.destino) {
       const destId = prefilledData.destino;
@@ -153,10 +149,8 @@ export default function FlightSearch({ prefilledData }) {
         }
       }
 
-      // CORREÇÃO DO SCROLL: Rola a página direto para o buscador/resultados (evita o topo/banner)
       window.scrollTo({ top: 250, behavior: 'smooth' });
 
-      // Dispara a pesquisa automaticamente
       setTimeout(() => {
         executeSearch(null, sortConfig, stopsConfig, destId, prefilledData.dataIda, prefilledData.dataVolta);
       }, 200);
@@ -245,9 +239,11 @@ export default function FlightSearch({ prefilledData }) {
     const destIds = activeDestinations.map(d => d.id).join(',');
 
     try {
-      let url = `${WORKER_URL}/search-flights?origin=${origin.id}&destination=${destIds}&dateFrom=${effectiveDateFrom}&dateToRange=${searchDateToRange}&adults=${a}&children=${c}&infants=${i}&holdBagsIda=${holdBagsIda}&holdBagsVolta=${holdBagsVolta}&cabin=${cabin}&sort=${overrideSort}&max_stopovers=${overrideStops}`;
+      let url = `${WORKER_URL}/search-flights?origin=${origin.id}&destination=${destIds}&dateFrom=${effectiveDateFrom}&dateToRange=${searchDateToRange}&adults=${a}&children=${c}&infants=${i}&cabin=${cabin}&sort=${overrideSort}&max_stopovers=${overrideStops}`;
       
-      if (tripType === 'return') {
+      const isReturn = customVolta ? true : (tripType === 'return');
+      
+      if (isReturn) {
         const effectiveDateTo = customVolta || (dateTo ? dateTo : effectiveDateFrom);
         const searchRetToRange = customVolta || (dateTo ? dateTo : getSixMonthsStr());
         url += `&returnFrom=${effectiveDateTo}&returnToRange=${searchRetToRange}`;
@@ -299,6 +295,7 @@ export default function FlightSearch({ prefilledData }) {
         isTravel: true,
         handlingTime: 0,
         freeShipping: true,
+        addedAt: Date.now(), // <-- INJEÇÃO DO TIMESTAMP PARA O CRONÔMETRO
         flightDetails
     };
 
@@ -317,7 +314,6 @@ export default function FlightSearch({ prefilledData }) {
   return (
     <div className="max-w-6xl mx-auto p-4 font-sans pb-20">
       
-      {/* Z-INDEX REDUZIDO PARA Z-20 PARA NÃO SOBREPOR O HEADER FIXO */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-5 mb-4 relative z-20">
         <div className="flex flex-wrap items-center gap-4 mb-5">
           
@@ -509,17 +505,20 @@ export default function FlightSearch({ prefilledData }) {
         {renderedFlights.map((voo) => {
           const isExpanded = expandedFlight === voo.id;
           
-          const safeTotal = parseInt(voo.precoFinal, 10) || 0;
-          const unitBagPriceIda = voo.bags_price?.['1'] || 120;
-          const unitBagPriceVolta = voo.bags_price?.['1'] || 120;
+          const baseFare = parseInt(voo.precoFinal || voo.price, 10) || 0;
+          
+          const unitBagPriceIda = voo.bags_price?.['1'] ? Math.ceil(voo.bags_price['1']) : 120;
+          const unitBagPriceVolta = voo.bags_price?.['1'] ? Math.ceil(voo.bags_price['1']) : 120;
           
           const bagIdaSubtotal = lastHoldIdaCount > 0 ? (lastHoldIdaCount * unitBagPriceIda) : 0;
           const bagVoltaSubtotal = lastHoldVoltaCount > 0 ? (lastHoldVoltaCount * unitBagPriceVolta) : 0;
           const totalBagsCost = bagIdaSubtotal + bagVoltaSubtotal;
           
-          const passengerTotal = Math.max(0, safeTotal - totalBagsCost);
+          const passengerTotal = baseFare;
           const adultSubtotal = lastAdultsCount > 0 ? Math.ceil(passengerTotal * (lastAdultsCount / (lastAdultsCount + lastChildrenCount || 1))) : 0;
           const childSubtotal = lastChildrenCount > 0 ? (passengerTotal - adultSubtotal) : 0;
+
+          const safeTotal = baseFare + totalBagsCost;
 
           return (
             <div key={voo.id} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all overflow-hidden flex flex-col md:flex-row">
@@ -628,13 +627,20 @@ export default function FlightSearch({ prefilledData }) {
         })}
       </div>
 
-      {/* MODAL DE TARIFAS */}
+      {/* MODAL DE TARIFAS VIP E CONFIANÇA */}
       {checkoutModal && (
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl p-6 md:p-8 relative overflow-y-auto max-h-[95vh]">
-            <button onClick={() => setCheckoutModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 font-bold text-2xl">&times;</button>
-            <h2 className="text-2xl font-black text-gray-900 mb-2 text-center">Escolha sua Tarifa</h2>
-            <p className="text-gray-500 text-sm text-center mb-8">Personalize sua experiência de voo com as garantias Palastore</p>
+            <button onClick={() => setCheckoutModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 font-bold text-2xl z-50">&times;</button>
+            
+            {/* O NOVO BANNER DE CONFIANÇA AQUI */}
+            <div className="bg-gradient-to-br from-purple-900 to-orange-600 rounded-2xl p-6 mb-8 text-center shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-xl"></div>
+              <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-20 h-20 bg-white opacity-10 rounded-full blur-xl"></div>
+              <ShieldCheck size={36} className="mx-auto text-orange-300 mb-2" />
+              <h2 className="text-2xl md:text-3xl font-black text-white mb-1 tracking-tight drop-shadow-md">Escolha sua Tarifa</h2>
+              <p className="text-purple-100 text-sm md:text-base font-medium drop-shadow">Personalize sua experiência de voo com as garantias de proteção Palastore.</p>
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="border border-gray-200 rounded-xl p-6 flex flex-col hover:border-gray-400 transition-colors">
@@ -674,6 +680,14 @@ export default function FlightSearch({ prefilledData }) {
                 <button onClick={() => handleAddToCart('Flex', Math.ceil(checkoutModal.safeTotal * 1.15))} className="w-full py-3 bg-orange-100 text-orange-700 font-bold rounded-lg hover:bg-orange-200 transition-colors">Selecionar Flex</button>
               </div>
             </div>
+            
+            {/* BOTÃO DE VOLTAR INJETADO AQUI */}
+            <div className="mt-8 text-center">
+              <button onClick={() => setCheckoutModal(null)} className="text-gray-500 font-bold hover:text-gray-800 transition-colors underline">
+                Voltar para os resultados da busca
+              </button>
+            </div>
+            
           </div>
         </div>
       )}
