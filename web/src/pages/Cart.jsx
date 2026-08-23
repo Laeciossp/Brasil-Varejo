@@ -41,7 +41,8 @@ export default function Cart() {
   const { 
     items, removeItem, updateQuantity, selectedShipping, setShipping,
     customer, setActiveAddress, addAddress, setDocument, 
-    tipoPagamento, setTipoPagamento, globalCep, clearCart
+    tipoPagamento, setTipoPagamento, globalCep, clearCart,
+    addSavedPassenger
   } = useCartStore();
   
   const isDigitalCart = items.length > 0 && items.every(item => item.isTravel === true);
@@ -99,7 +100,7 @@ export default function Cart() {
                 name: '', dob: '', relationship: '', gender: '', 
                 cpf: '', rg: '', rgIssuer: '', nationality: 'Brasileira', 
                 passport: '', passportExpiry: '', email: '', phone: '',
-                seatPreference: ''
+                seatPreference: '', saveToProfile: false
             });
           }
         } else {
@@ -118,16 +119,37 @@ export default function Cart() {
      });
   };
 
-  // FUNÇÃO MÁGICA PARA IMPORTAR OS DADOS DO CLIENTE
-  const handleImportMyData = (index) => {
-    const nome = user?.fullName || customerName || '';
-    const email = user?.primaryEmailAddress?.emailAddress || '';
-    const cpf = customer?.document || '';
-    
-    handlePaxChange(index, 'name', nome);
-    handlePaxChange(index, 'email', email);
-    handlePaxChange(index, 'cpf', cpf);
-    handlePaxChange(index, 'relationship', 'Titular');
+  // IMPORTAÇÃO COMPLETA DE TODOS OS CAMPOS SALVOS
+  const handleImportSavedPax = (index, value) => {
+    if (!value) return;
+
+    if (value === 'me') {
+      const nome = user?.fullName || customerName || '';
+      const email = user?.primaryEmailAddress?.emailAddress || '';
+      const cpf = customer?.document || '';
+      
+      handlePaxChange(index, 'name', nome);
+      handlePaxChange(index, 'email', email);
+      handlePaxChange(index, 'cpf', cpf);
+      handlePaxChange(index, 'relationship', 'Titular');
+    } else {
+      const paxData = customer?.passengers?.[parseInt(value)];
+      if (paxData) {
+        handlePaxChange(index, 'name', paxData.name || '');
+        handlePaxChange(index, 'dob', paxData.dob || '');
+        handlePaxChange(index, 'relationship', paxData.relationship || 'Acompanhante');
+        handlePaxChange(index, 'gender', paxData.gender || '');
+        handlePaxChange(index, 'cpf', paxData.cpf || '');
+        handlePaxChange(index, 'rg', paxData.rg || '');
+        handlePaxChange(index, 'rgIssuer', paxData.rgIssuer || '');
+        handlePaxChange(index, 'nationality', paxData.nationality || 'Brasileira');
+        handlePaxChange(index, 'passport', paxData.passport || '');
+        handlePaxChange(index, 'passportExpiry', paxData.passportExpiry || '');
+        handlePaxChange(index, 'email', paxData.email || '');
+        handlePaxChange(index, 'phone', paxData.phone || '');
+        handlePaxChange(index, 'seatPreference', paxData.seatPreference || '');
+      }
+    }
   };
 
   useEffect(() => {
@@ -273,6 +295,16 @@ export default function Cart() {
     if (isDigitalCart) {
         const invalidPax = passengers.some(p => !p.name || !p.cpf || !p.dob || !p.relationship || !p.gender || !p.rg);
         if (invalidPax) return alert("Por favor, preencha todos os campos obrigatórios dos passageiros (Nome, Data Nasc., Parentesco, Gênero, CPF e RG).");
+        
+        // SALVA AUTOMATICAMENTE NO PERFIL OS PASSAGEIROS QUE TIVEREM O CHECKBOX MARCADO
+        passengers.forEach(pax => {
+            if (pax.saveToProfile && addSavedPassenger) {
+                const alreadyExists = customer?.passengers?.some(sp => sp.cpf === pax.cpf);
+                if (!alreadyExists) {
+                    addSavedPassenger({ ...pax, id: Math.random().toString(36).substr(2, 9) });
+                }
+            }
+        });
     } else {
         if (!customer.document || !customerName) return alert("Informe seus dados pessoais completos.");
     }
@@ -341,7 +373,6 @@ export default function Cart() {
       <div className="container mx-auto px-4 max-w-6xl">
         <h1 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-2">Carrinho ({items.length})</h1>
         
-        {/* CRONÔMETRO DE URGÊNCIA */}
         {flightItem && (
             <div className="bg-red-50 border border-red-200 p-3 md:p-4 rounded-xl mb-6 flex flex-col md:flex-row items-center justify-center gap-3 shadow-sm animate-in fade-in slide-in-from-top-4">
                 <div className="flex items-center gap-2">
@@ -507,16 +538,27 @@ export default function Cart() {
                            {passengers.map((pax, index) => (
                               <div key={index} className="bg-gray-50 p-5 rounded-xl border border-gray-200 space-y-4 shadow-sm">
                                  
-                                 {/* HEADER DO PASSAGEIRO COM O BOTÃO MÁGICO */}
                                  <h3 className="font-bold text-sm text-gray-800 flex items-center justify-between border-b border-gray-200 pb-2">
                                     <span className="flex items-center gap-2">
                                         <span className="bg-gray-900 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs">{index + 1}</span> Passageiro
                                     </span>
-                                    {index === 0 && (
-                                        <button onClick={() => handleImportMyData(index)} className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 transition-colors">
-                                            <UserCheck size={14}/> Puxar meus dados
-                                        </button>
-                                    )}
+                                    
+                                    <div className="flex items-center gap-2">
+                                        <UserCheck size={16} className="text-blue-600" />
+                                        <select 
+                                            className="text-xs border border-blue-200 bg-blue-50 text-blue-700 font-bold rounded-md p-1.5 outline-none cursor-pointer"
+                                            onChange={(e) => {
+                                                handleImportSavedPax(index, e.target.value);
+                                                e.target.value = '';
+                                            }}
+                                        >
+                                            <option value="">Preenchimento Rápido...</option>
+                                            <option value="me">Meus Dados (Titular)</option>
+                                            {customer?.passengers?.map((p, i) => (
+                                                <option key={i} value={i}>{p.name} ({p.relationship || 'Salvo'})</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                  </h3>
 
                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -565,6 +607,18 @@ export default function Cart() {
                                     </div>
                                     <input placeholder="E-mail" value={pax.email} onChange={e => handlePaxChange(index, 'email', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
                                     <input placeholder="Telefone" value={pax.phone} onChange={e => handlePaxChange(index, 'phone', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
+                                    
+                                    <div className="md:col-span-2 mt-2 pt-3 border-t border-gray-200">
+                                       <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer w-fit">
+                                          <input 
+                                            type="checkbox" 
+                                            className="w-4 h-4 rounded text-blue-600 border-gray-300 cursor-pointer" 
+                                            onChange={(e) => handlePaxChange(index, 'saveToProfile', e.target.checked)} 
+                                            checked={pax.saveToProfile || false} 
+                                          />
+                                          Salvar este passageiro no meu perfil para próximas viagens
+                                       </label>
+                                    </div>
                                  </div>
                               </div>
                            ))}
