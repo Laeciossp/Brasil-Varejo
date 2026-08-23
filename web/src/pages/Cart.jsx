@@ -353,7 +353,8 @@ export default function Cart() {
             items: items.map(i => ({ 
                 id: String(i._id || i.id || `item-${Date.now()}`).replace(/[^a-zA-Z0-9_.-]/g, "_"), 
                 title: i.title || i.name, 
-                description: i.isTravel && i.flightDetails ? `Tarifa ${i.flightDetails.tier} • ${i.quantity} Passageiro(s) • ${i.flightDetails.holdBagsIda + i.flightDetails.holdBagsVolta} Mala(s) Despachada(s)` : (i.title || i.name),
+                // Substitua a linha da description por esta:
+description: i.isTravel && i.flightDetails ? `Ida: ${i.flightDetails.ida.partida.replace('T', ' às ').substring(0, 16)}h • Tarifa ${i.flightDetails.tier} • ${i.quantity} Pax • ${i.flightDetails.holdBagsIda + i.flightDetails.holdBagsVolta} Mala(s)` : (i.title || i.name),
                 quantity: i.quantity, 
                 price: i.price, 
                 picture_url: i.image 
