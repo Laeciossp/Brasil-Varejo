@@ -67,19 +67,17 @@ const HeroBlock = ({ data }) => {
           const MediaContent = (
             <>
               {slide.mediaType === 'video' && slide.videoUrl ? (
-                /* ESTRUTURA DE VÍDEO BLINDADA PARA AUTOPLAY EM QUALQUER NAVEGADOR E CELULAR */
+                /* ESTRUTURA BLINDADA PARA VÍDEO EM LOOP PERFEITO */
                 <video 
-                  key={slide.videoUrl} /* Força o React a recarregar se a URL mudar */
-                  className="w-full h-full object-cover" 
-                  autoPlay={true} 
-                  muted={true} 
-                  loop={true} 
-                  playsInline={true}
-                  webkit-playsinline="true"
-                  disablePictureInPicture
+                  key={slide.videoUrl}
+                  className="w-full h-full object-cover pointer-events-none" 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline
+                  defaultMuted
                 >
                   <source src={slide.videoUrl} type="video/mp4" />
-                  Seu navegador não suporta a tag de vídeo.
                 </video>
               ) : (
                 <img 
@@ -89,7 +87,7 @@ const HeroBlock = ({ data }) => {
                 />
               )}
               {slide.layoutStyle === 'overlay' && slide.textColor === 'white' && (
-                <div className="absolute inset-0 bg-black/20"></div>
+                <div className="absolute inset-0 bg-black/30"></div>
               )}
             </>
           );
