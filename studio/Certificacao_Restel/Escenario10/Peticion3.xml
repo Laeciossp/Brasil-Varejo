@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<peticion>
+  <tipo>3</tipo>
+  <nombre>Confirmacion</nombre>
+  <agencia>Palastore</agencia>
+  <parametros>
+    <localizador>29775194</localizador>
+    <accion>AE</accion>
+  </parametros>
+</peticion>

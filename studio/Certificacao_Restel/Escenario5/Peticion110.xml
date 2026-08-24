@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<peticion>
+  <tipo>110</tipo>
+  <nombre>Disponibilidad</nombre>
+  <agencia>Palastore</agencia>
+  <parametros>
+    <hotel>745388#</hotel>
+    <pais>IN</pais>
+    <pais_cliente>IN</pais_cliente>
+    <categoria>0</categoria>
+    <fechaentrada>09/03/2026</fechaentrada>
+    <fechasalida>09/10/2026</fechasalida>
+    <afiliacion>RS</afiliacion>
+    <usuario>AGUARDANDO</usuario>
+    <idioma>1</idioma>
+    <informacion_hotel>0</informacion_hotel>
+    <tarifas_reembolsables>1</tarifas_reembolsables>
+    <comprimido>2</comprimido>
+    <gastos>1</gastos>
+    <numhab1>1</numhab1>
+    <paxes1>3-0</paxes1>
+    <edades1></edades1>
+  </parametros>
+</peticion>

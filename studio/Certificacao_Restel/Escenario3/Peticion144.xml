@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<peticion>
+  <tipo>144</tipo>
+  <nombre>Cancelacion</nombre>
+  <agencia>Palastore</agencia>
+  <parametros>
+    <datos_reserva>
+      <lin>DB#1#C+#50.00#0.00#OB#OK#20261010#20261011#EU#2-0#0#0#00000000#745388##</lin>
+      <idioma>1</idioma>
+    </datos_reserva>
+  </parametros>
+</peticion>

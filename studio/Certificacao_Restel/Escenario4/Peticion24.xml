@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<peticion>
+  <tipo>24</tipo>
+  <nombre>Observaciones</nombre>
+  <agencia>Palastore</agencia>
+  <parametros>
+    <lin>DB#1#C+#50.00#0.00#OB#OK#20261010#20261011#EU#2-0#0#0#00000000#601022##</lin>
+  </parametros>
+</peticion>
