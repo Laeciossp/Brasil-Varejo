@@ -6,6 +6,7 @@ import useCartStore from '../store/useCartStore';
 
 // IMPORTAÇÕES
 import FlightSearch from './FlightSearch'; 
+import HotelSearch from './HotelSearch'; // <-- ADICIONE ESTA LINHA AQUI
 import DestinosPopulares from '../components/DestinosPopulares';
 
 import { 
@@ -423,7 +424,7 @@ export default function ViagensPage() {
           {activeTab === 'onibus' && <PartnerIframe title="Passagens de Ônibus" url="https://www.awin1.com/cread.php?awinmid=65292&awinaffid=910543" noticeText="Compare e reserve passagens de ônibus para milhares de destinos em todo o Brasil. Processamento seguro via parceiro oficial." themeColor="green" />}
           {activeTab === 'seguros' && <PartnerIframe title="Seguro Viagem" url="https://seguroviagem.app/palastore" noticeText="Viaje protegido com cobertura completa e suporte 24h." themeColor="blue" />}
           {activeTab === 'voo_hotel' && <PartnerIframe title="Pacotes Voo + Hotel" url="https://br.trip.com/packages/?sourceFrom=IBUBundle_home&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Economize reservando Voo e Hotel juntos através do nosso parceiro Trip.com." themeColor="indigo" />}
-          {activeTab === 'hoteis' && <PartnerIframe title="Reserva de Hotéis" url="https://br.trip.com/hotels/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286297" noticeText="As melhores hospedagens ao redor do mundo. Parceria oficial Trip.com." themeColor="indigo" />}
+          {activeTab === 'hoteis' && <HotelSearch />}
           {activeTab === 'ofertas_hoteis' && <PartnerIframe title="Ofertas Especiais de Hotéis no Brasil" url="https://br.trip.com/hotels/list?flexType=1&cityId=-1&provinceId=0&countryId=19&cityName=&destName=Brasil&searchWord=Brasil&searchType=C&searchValue=140|19**19&checkin=2026-08-17&checkout=2026-08-18&crn=1&adult=2&listFilters=29~1*29*1~2*2,17~3*17*3,80~2~1*80*2&curr=BRL&locale=pt-BR&old=1&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Aproveite tarifas reduzidas para hospedagens em todo o Brasil. Parceria oficial Trip.com." themeColor="indigo" />}
           {activeTab === 'rentcars' && <RentcarsWidget />}
           {activeTab === 'carros' && <PartnerIframe title="Aluguel de Carros" url="https://br.trip.com/carhire/?channelid=14409&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Alugue veículos com as melhores locadoras globais. Processado via Trip.com." themeColor="indigo" />}
