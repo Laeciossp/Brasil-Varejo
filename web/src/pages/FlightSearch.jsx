@@ -304,8 +304,8 @@ export default function FlightSearch({ prefilledData }) {
     <div className="max-w-6xl mx-auto font-sans pb-10">
       
       {/* O NOVO HERO BANNER INSPIRACIONAL DO BUSCADOR */}
-      <div className="relative rounded-3xl overflow-hidden mb-8 shadow-xl">
-        <div className="absolute inset-0">
+      <div className="relative rounded-3xl mb-8 shadow-xl">
+        <div className="absolute inset-0 overflow-hidden rounded-3xl">
           <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2000&auto=format&fit=crop" alt="Voos" className="w-full h-full object-cover brightness-[0.55]" />
         </div>
         
@@ -425,7 +425,7 @@ export default function FlightSearch({ prefilledData }) {
                 )}
               </div>
 
-              <div className="col-span-1 md:col-span-4 z-20 h-12 md:h-full relative" ref={dateRef}>
+              <div className="col-span-1 md:col-span-4 z-[40] h-12 md:h-full relative" ref={dateRef}>
                 <div onClick={() => setShowDateMenu(!showDateMenu)} className="flex items-center justify-between border border-gray-300 rounded-md px-4 h-full cursor-pointer hover:border-purple-600 bg-white">
                   <div className="flex flex-col justify-center">
                     <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Partida</span>
@@ -463,7 +463,7 @@ export default function FlightSearch({ prefilledData }) {
                 )}
               </div>
 
-              <div className="col-span-1 md:col-span-2 h-12 md:h-full z-[20]">
+              <div className="col-span-1 md:col-span-2 h-12 md:h-full z-10">
                 <button onClick={(e) => executeSearch(e)} disabled={loading} className="w-full h-full bg-[#00a698] hover:bg-[#008f82] text-white font-extrabold rounded-md shadow-md text-base uppercase tracking-wide transition">
                   {loading ? 'Buscando...' : 'Pesquisar'}
                 </button>
