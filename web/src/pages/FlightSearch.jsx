@@ -303,8 +303,8 @@ export default function FlightSearch({ prefilledData }) {
   return (
     <div className="max-w-6xl mx-auto font-sans pb-10">
       
-      {/* O NOVO HERO BANNER INSPIRACIONAL DO BUSCADOR (z-30 ADICIONADO AQUI) */}
-      <div className="relative z-30 rounded-3xl mb-8 shadow-xl">
+      {/* CAMADA Z-50 ADICIONADA AQUI PARA BLINDAR A FOTO DE FUNDO */}
+      <div className="relative z-50 rounded-3xl mb-8 shadow-xl">
         <div className="absolute inset-0 overflow-hidden rounded-3xl">
           <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2000&auto=format&fit=crop" alt="Voos" className="w-full h-full object-cover brightness-[0.55]" />
         </div>
@@ -313,7 +313,8 @@ export default function FlightSearch({ prefilledData }) {
           <h2 className="text-3xl md:text-5xl font-black text-white mb-2 drop-shadow-lg">Para onde vamos hoje?</h2>
           <p className="text-white/90 font-medium text-sm md:text-lg mb-8 drop-shadow">Encontre as melhores passagens com segurança, rapidez e flexibilidade.</p>
           
-          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 p-5 relative z-20">
+          {/* Z-40 APLICADO AQUI PARA CAIXA DE PESQUISA */}
+          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 p-5 relative z-40">
             <div className="flex flex-wrap items-center gap-4 mb-5">
               <div className="relative" ref={tripRef}>
                 <button onClick={() => setShowTripMenu(!showTripMenu)} className="flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-purple-50 text-sm font-bold text-gray-700 transition">
@@ -383,8 +384,10 @@ export default function FlightSearch({ prefilledData }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-auto md:h-[50px] relative z-30">
-              <div className="relative col-span-1 md:col-span-3 flex items-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white z-[60] h-12 md:h-full" ref={originRef}>
+            {/* CONTAINER DO GRID COM Z-50 */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-auto md:h-[50px] relative z-50">
+              
+              <div className="relative col-span-1 md:col-span-3 flex items-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white z-50 h-12 md:h-full" ref={originRef}>
                 <span className="text-gray-400 font-medium mr-2 text-sm">De</span>
                 {origin ? (
                   <div className="bg-purple-600 text-white text-xs font-bold px-2 py-1.5 rounded flex items-center gap-1 shadow-sm overflow-hidden">
@@ -405,7 +408,7 @@ export default function FlightSearch({ prefilledData }) {
                 )}
               </div>
 
-              <div className="relative col-span-1 md:col-span-3 flex items-center flex-wrap gap-1 border border-gray-300 rounded-md p-1.5 hover:border-purple-600 bg-white z-[50] min-h-[48px] md:h-full" ref={destRef}>
+              <div className="relative col-span-1 md:col-span-3 flex items-center flex-wrap gap-1 border border-gray-300 rounded-md p-1.5 hover:border-purple-600 bg-white z-40 min-h-[48px] md:h-full" ref={destRef}>
                 <span className="text-gray-400 font-medium mr-1 text-sm pl-1">Para</span>
                 {destinations.map(d => (
                   <div key={d.id} className="bg-purple-600 text-white text-xs font-bold px-2 py-1.5 rounded flex items-center gap-1 shadow-sm">
@@ -425,7 +428,7 @@ export default function FlightSearch({ prefilledData }) {
                 )}
               </div>
 
-              <div className="col-span-1 md:col-span-4 z-[40] h-12 md:h-full relative" ref={dateRef}>
+              <div className="col-span-1 md:col-span-4 z-50 h-12 md:h-full relative" ref={dateRef}>
                 <div onClick={() => setShowDateMenu(!showDateMenu)} className="flex items-center justify-between border border-gray-300 rounded-md px-4 h-full cursor-pointer hover:border-purple-600 bg-white">
                   <div className="flex flex-col justify-center">
                     <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Partida</span>
@@ -463,7 +466,8 @@ export default function FlightSearch({ prefilledData }) {
                 )}
               </div>
 
-              <div className="col-span-1 md:col-span-2 h-12 md:h-full z-10">
+              {/* BOTAO DE PESQUISA REBAIXADO PARA Z-0 */}
+              <div className="col-span-1 md:col-span-2 h-12 md:h-full relative z-0">
                 <button onClick={(e) => executeSearch(e)} disabled={loading} className="w-full h-full bg-[#00a698] hover:bg-[#008f82] text-white font-extrabold rounded-md shadow-md text-base uppercase tracking-wide transition">
                   {loading ? 'Buscando...' : 'Pesquisar'}
                 </button>
