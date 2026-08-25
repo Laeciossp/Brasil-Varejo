@@ -315,7 +315,7 @@ export default function FlightSearch({ prefilledData }) {
           
           {/* Z-40 APLICADO AQUI PARA CAIXA DE PESQUISA */}
           <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 p-5 relative z-40">
-            <div className="flex flex-wrap items-center gap-4 mb-5">
+            <div className="flex flex-wrap items-center gap-4 mb-5 relative z-50">
               <div className="relative" ref={tripRef}>
                 <button onClick={() => setShowTripMenu(!showTripMenu)} className="flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-purple-50 text-sm font-bold text-gray-700 transition">
                   {tripNames[tripType]} <span className="text-[10px] text-purple-600">▼</span>
@@ -385,7 +385,7 @@ export default function FlightSearch({ prefilledData }) {
             </div>
 
             {/* CONTAINER DO GRID COM Z-50 */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-auto md:h-[50px] relative z-50">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-auto md:h-[50px] relative z-40">
               
               <div className="relative col-span-1 md:col-span-3 flex items-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white z-50 h-12 md:h-full" ref={originRef}>
                 <span className="text-gray-400 font-medium mr-2 text-sm">De</span>
