@@ -303,8 +303,8 @@ export default function FlightSearch({ prefilledData }) {
   return (
     <div className="max-w-6xl mx-auto font-sans pb-10">
       
-      {/* O NOVO HERO BANNER INSPIRACIONAL DO BUSCADOR */}
-      <div className="relative rounded-3xl mb-8 shadow-xl">
+      {/* O NOVO HERO BANNER INSPIRACIONAL DO BUSCADOR (z-30 ADICIONADO AQUI) */}
+      <div className="relative z-30 rounded-3xl mb-8 shadow-xl">
         <div className="absolute inset-0 overflow-hidden rounded-3xl">
           <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2000&auto=format&fit=crop" alt="Voos" className="w-full h-full object-cover brightness-[0.55]" />
         </div>
