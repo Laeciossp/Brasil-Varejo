@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-// Certifique-se de importar o app do firebase inicializado no seu projeto
+import { app } from '../firebase'; // <-- DESCOMENTE E IMPORTE O APP AQUI
 // import { app } from '../firebase'; // Ajuste o caminho conforme seu projeto
 
 export default function HotelSearch() {
@@ -47,7 +47,7 @@ export default function HotelSearch() {
 
     try {
       // INICIALIZAÇÃO DO FIREBASE FUNCTIONS
-      const functions = getFunctions(); // Se precisar passar o app: getFunctions(app)
+      const functions = getFunctions(app); // Se precisar passar o app: getFunctions(app)
       const searchRestelHotels = httpsCallable(functions, 'searchRestelHotels');
 
       const response = await searchRestelHotels({
