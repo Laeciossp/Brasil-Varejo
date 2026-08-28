@@ -1,1 +1,18 @@
-<resposta><tipo>202</tipo><parametros><estado>00</estado><n_localizador>29775194</n_localizador></parametros></resposta>
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE respuesta SYSTEM "http://xml.hotelresb2b.com/xml/dtd/res_reserva.dtd">
+<respuesta>
+	<tipo><![CDATA[202]]></tipo>
+	<nombre><![CDATA[Servicio de pre-reserva]]></nombre>
+	<agencia><![CDATA[PALASTORE XML INHOUSE BR XML @]]></agencia>
+	<parametros>
+		<estado><![CDATA[00]]></estado>
+		<n_localizador><![CDATA[55894464]]></n_localizador>
+		<importe_total_reserva><![CDATA[180.28]]></importe_total_reserva>
+		<divisa_total><![CDATA[BR]]></divisa_total>
+		<n_mensaje><![CDATA[00000000]]></n_mensaje>
+		<n_expediente><![CDATA[00000000]]></n_expediente>
+		<observaciones><![CDATA[]]></observaciones>
+		<datos><![CDATA[]]></datos>
+		<id>eb28a2dd-36ea-42ce-8de2-ebc5cf53a212</id>
+	</parametros>
+</respuesta>

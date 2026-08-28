@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <peticion>
+  <nombre>Servicio de confirmacion</nombre>
+  <agencia>PALASTORE XML INHOUSE BR XML @</agencia>
   <tipo>3</tipo>
-  <nombre>Confirmacion</nombre>
-  <agencia>Palastore</agencia>
   <parametros>
-    <localizador>29775194</localizador>
+    <localizador>55894455</localizador>
     <accion>AE</accion>
   </parametros>
 </peticion>

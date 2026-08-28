@@ -1,27 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <peticion>
-  <tipo>110</tipo>
-  <nombre>Disponibilidad</nombre>
-  <agencia>Palastore</agencia>
-  <parametros>
-    <hotel>745388#</hotel>
-    <pais>CN</pais>
-    <pais_cliente>CN</pais_cliente>
-    <categoria>0</categoria>
-    <fechaentrada>09/03/2026</fechaentrada>
-    <fechasalida>09/05/2026</fechasalida>
-    <afiliacion>RS</afiliacion>
-    <usuario>AGUARDANDO</usuario>
-    <idioma>1</idioma>
-    <informacion_hotel>0</informacion_hotel>
-    <tarifas_reembolsables>1</tarifas_reembolsables>
-    <comprimido>2</comprimido>
-    <gastos>1</gastos>
-    <numhab1>1</numhab1>
-    <paxes1>2-0</paxes1>
-    <edades1></edades1>
-    <numhab2>1</numhab2>
-    <paxes2>1-0</paxes2>
-    <edades2></edades2>
-  </parametros>
+    <tipo>110</tipo>
+    <nombre>Servicio de disponibilidad por lista de hoteles</nombre>
+    <agencia>Palastore</agencia>
+    <parametros>
+        <hotel>745388#994214#962243#601022#758213#752553#</hotel>
+        <pais>MV</pais>
+        <pais_cliente>CN</pais_cliente>
+        <categoria>0</categoria>
+        <fechaentrada>08/30/2026</fechaentrada>
+        <fechasalida>09/01/2026</fechasalida>
+        <afiliacion>RS</afiliacion>
+        <usuario>BJ0932</usuario>
+        <numhab1>1</numhab1>
+        <paxes1>2-0</paxes1>
+        <edades1></edades1>
+        <numhab2>1</numhab2>
+        <paxes2>1-0</paxes2>
+        <edades2></edades2>
+        <numhab3>0</numhab3>
+        <paxes3>2-0</paxes3>
+        <edades3></edades3>
+        <idioma>1</idioma>
+        <informacion_hotel>0</informacion_hotel>
+        <tarifas_reembolsables>0</tarifas_reembolsables>
+        <comprimido>2</comprimido>
+        <gastos>1</gastos>
+    </parametros>
 </peticion>

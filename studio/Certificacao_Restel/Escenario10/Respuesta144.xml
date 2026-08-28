@@ -1,1 +1,19 @@
-<resposta><tipo>144</tipo><parametros><politicaCanc><entra_en_gastos>0</entra_en_gastos></politicaCanc></parametros></resposta>
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE respuesta SYSTEM "http://xml.hotelresb2b.com/xml/dtd/res_algGastosCancAll.dtd">
+<respuesta>
+	<tipo><![CDATA[144]]></tipo>
+	<nombre><![CDATA[Servicio de gastos de cancelacion]]></nombre>
+	<agencia><![CDATA[PALASTORE XML INHOUSE BR XML @]]></agencia>
+	<parametros>
+		<politicaCanc fecha="30/08/2026">
+			<dias_antelacion><![CDATA[2]]></dias_antelacion>
+			<horas_antelacion><![CDATA[0]]></horas_antelacion>
+			<noches_gasto><![CDATA[1]]></noches_gasto>
+			<estCom_gasto><![CDATA[0]]></estCom_gasto>
+			<concepto><![CDATA[En caso de cancelaci�n con menos de 2 dias de la entrada del cliente  el hotel facturar� 1 noches por gastos de cancelaci�n. ]]></concepto>
+			<entra_en_gastos><![CDATA[1]]></entra_en_gastos>
+		</politicaCanc>
+		<fechaEntraGastos><![CDATA[28/08/2026]]></fechaEntraGastos>
+		<id>3c0702e3-faab-4e30-b533-f5ac455a03b2</id>
+	</parametros>
+</respuesta>

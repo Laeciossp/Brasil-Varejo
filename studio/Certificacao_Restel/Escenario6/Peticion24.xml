@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <peticion>
-  <tipo>24</tipo>
-  <nombre>Observaciones</nombre>
+  <nombre>Observaciones hoteles</nombre>
   <agencia>Palastore</agencia>
+  <tipo>24</tipo>
   <parametros>
-    <lin>DB#1#C+#50.00#0.00#OB#OK#20261010#20261011#EU#1-1#0#0#00000000#745388##</lin>
+    <lin>SG#1#VR#154.50#0#OB#OK#20260830#20260831#BR#1-0:1#0#0#4920FB628C41241DBDD69D020FB2E5447FC0947A5F3CA043C4F92D279F24D2C2|0D0D0|0000#745388#,SG#1#VR#154.50#0#OB#OK#20260831#20260901#BR#1-0:1#0#0#4920FB628C41241DBDD69D020FB2E5447FC0947A5F3CA043C4F92D279F24D2C2|0D0D0|0000#745388#</lin>
   </parametros>
 </peticion>

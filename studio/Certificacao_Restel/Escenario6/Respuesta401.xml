@@ -1,1 +1,13 @@
-<resposta><tipo>401</tipo><parametros><estado>00</estado><localizador_baja>ANULADA</localizador_baja></parametros></resposta>
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE respuesta SYSTEM "http://xml.hotelresb2b.com/xml/dtd/res_cancelacion.dtd">
+<respuesta>
+	<tipo><![CDATA[401]]></tipo>
+	<nombre><![CDATA[Servicio de anulacion]]></nombre>
+	<agencia><![CDATA[PALASTORE XML INHOUSE BR XML @]]></agencia>
+	<parametros>
+		<estado>00</estado>
+		<localizador>55894463</localizador>
+		<localizador_baja>Su reserva ha sido anulada [Localizador baja:BA326002]</localizador_baja>
+		<id>9766e871-17ab-40af-b7c6-cc618edbb1b7</id>
+	</parametros>
+</respuesta>

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <peticion>
   <tipo>142</tipo>
-  <nombre>Gastos Confirmados</nombre>
+  <nombre>Servicio de gastos</nombre>
   <parametros>
-    <usuario>AGUARDANDO</usuario>
-    <localizador>29775194</localizador>
+    <usuario>BJ0932</usuario>
+    <localizador>55894455</localizador>
     <idioma>1</idioma>
   </parametros>
 </peticion>

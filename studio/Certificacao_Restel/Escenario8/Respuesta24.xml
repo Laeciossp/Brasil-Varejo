@@ -1,1 +1,16 @@
-<resposta><tipo>24</tipo><parametros><observaciones><observacion>TESTE</observacion></observaciones></parametros></resposta>
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE respuesta SYSTEM "http://xml.hotelresb2b.com/xml/dtd/res_hotobs.dtd">
+<respuesta>
+	<tipo><![CDATA[24]]></tipo>
+	<nombre><![CDATA[Observaciones hoteles]]></nombre>
+	<agencia><![CDATA[PALASTORE XML INHOUSE BR XML @]]></agencia>
+	<parametros>
+		<hotel>
+			<codigo><![CDATA[12973]]></codigo>
+			<codigo_cobol><![CDATA[601022]]></codigo_cobol>
+			<observaciones num="0">
+			</observaciones>
+		</hotel>
+		<id>909ae837-a114-4fa1-8ab1-2481d49ba52d</id>
+	</parametros>
+</respuesta>

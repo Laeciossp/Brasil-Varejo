@@ -1,1 +1,13 @@
-<resposta><tipo>3</tipo><parametros><estado>00</estado><localizador_corto>25495917</localizador_corto></parametros></resposta>
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE respuesta SYSTEM "http://xml.hotelresb2b.com/xml/dtd/res_anul_confirm.dtd">
+<respuesta>
+	<tipo><![CDATA[3]]></tipo>
+	<nombre><![CDATA[Servicio de confirmacion]]></nombre>
+	<agencia><![CDATA[PALASTORE XML INHOUSE BR XML @]]></agencia>
+	<parametros>
+		<estado>00</estado>
+		<localizador>55894455</localizador>
+		<localizador_corto>53763739</localizador_corto>
+		<id>8598726f-ec6a-405a-bef6-f2848cebce8d</id>
+	</parametros>
+</respuesta>

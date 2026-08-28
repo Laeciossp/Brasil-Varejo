@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <peticion>
+  <nombre>Servicio de anulacion</nombre>
+  <agencia>PALASTORE XML INHOUSE BR XML @</agencia>
   <tipo>401</tipo>
-  <nombre>Anulacion</nombre>
-  <agencia>Palastore</agencia>
   <parametros>
-    <localizador_largo>29775194</localizador_largo>
-    <localizador_corto>25495917</localizador_corto>
+    <localizador_largo>55894464</localizador_largo>
+    <localizador_corto>53763751</localizador_corto>
   </parametros>
 </peticion>

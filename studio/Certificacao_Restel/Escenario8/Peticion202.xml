@@ -1,30 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <peticion>
+  <nombre>Servicio de pre-reserva</nombre>
+  <agencia>PALASTORE XML INHOUSE BR XML @</agencia>
   <tipo>202</tipo>
-  <nombre>Pre-reserva</nombre>
-  <agencia>Palastore</agencia>
   <parametros>
     <codigo_hotel>601022</codigo_hotel>
     <nombre_cliente>CLIENTE TEST</nombre_cliente>
-    <email>contato@palastore.com.br</email>
-    <telefono>11999999999</telefono>
+    <email>test@test.com</email>
+    <telefono>123456789</telefono>
+    <num_expediente>00000000</num_expediente>
     <forma_pago>44</forma_pago>
     <res>
-      <lin>DB#1#C+#50.00#0.00#OB#OK#20261010#20261011#EU#2-0#0#0#00000000#601022##</lin>
+      <lin>CF#1#C+#566.80#0#OB#OK#20260830#20260831#BR#2-0#0#0#4920FB628C41241D650960E086D7249D7FC0947A5F3CA0435BC66E4927BB88CE|0D0D0|0000#601022#,CF#1#C+#566.80#0#OB#OK#20260831#20260901#BR#2-0#0#0#4920FB628C41241D650960E086D7249D7FC0947A5F3CA0435BC66E4927BB88CE|0D0D0|0000#601022#,CF#1#C+#566.80#0#OB#OK#20260901#20260902#BR#2-0#0#0#4920FB628C41241D650960E086D7249D7FC0947A5F3CA0435BC66E4927BB88CE|0D0D0|0000#601022#</lin>
     </res>
     <paxes>
-      <pax>
-        <titulo>Sr.</titulo>
-        <nombrePax>Viajante</nombrePax>
-        <apellidos>Teste</apellidos>
-        <edad></edad>
-      </pax>
-      <pax>
-        <titulo>Sr.</titulo>
-        <nombrePax>Viajante</nombrePax>
-        <apellidos>Teste</apellidos>
-        <edad></edad>
-      </pax>
+      <pax><titulo>Sr.</titulo><nombrePax>Prueba</nombrePax><apellidos>Pruebas</apellidos><edad>30</edad></pax>
+<pax><titulo>Sr.</titulo><nombrePax>Prueba</nombrePax><apellidos>Pruebas</apellidos><edad>30</edad></pax>
+
     </paxes>
   </parametros>
 </peticion>

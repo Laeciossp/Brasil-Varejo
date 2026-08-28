@@ -1,1 +1,26 @@
-<resposta><tipo>24</tipo><parametros><observaciones><observacion>TESTE</observacion></observaciones></parametros></resposta>
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE respuesta SYSTEM "http://xml.hotelresb2b.com/xml/dtd/res_hotobs.dtd">
+<respuesta>
+	<tipo><![CDATA[24]]></tipo>
+	<nombre><![CDATA[Observaciones hoteles]]></nombre>
+	<agencia><![CDATA[PALASTORE XML INHOUSE BR XML @]]></agencia>
+	<parametros>
+		<hotel>
+			<codigo><![CDATA[291005]]></codigo>
+			<codigo_cobol><![CDATA[745388]]></codigo_cobol>
+			<observaciones num="2">
+				<observacion>
+					<obs_texto><![CDATA[PORTUGUESE - ESTAS S�O AS NOTAS E OBSERVA��ES DO HOTEL DE TEST]]></obs_texto>
+					<obs_desde><![CDATA[20260101]]></obs_desde>
+					<obs_hasta><![CDATA[20261231]]></obs_hasta>
+				</observacion>
+				<observacion>
+					<obs_texto><![CDATA[test ? $]]></obs_texto>
+					<obs_desde><![CDATA[20260101]]></obs_desde>
+					<obs_hasta><![CDATA[20261231]]></obs_hasta>
+				</observacion>
+			</observaciones>
+		</hotel>
+		<id>5d3a9bb7-b20a-4c60-a373-6178ad674c49</id>
+	</parametros>
+</respuesta>

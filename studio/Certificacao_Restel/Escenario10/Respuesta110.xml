@@ -1,1 +1,73 @@
-<resposta><tipo>110</tipo><param><hotls><hot><res><pax><hab><reg><lin>DB#1#C+#50.00#0.00#OB#OK#20261010#20261011#EU#1-2#0#0#00000000#745388##</lin></reg></hab></pax></res></hot></hotls></param></resposta>
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE respuesta SYSTEM "http://xml.hotelresb2b.com/xml/dtd/res_disponibilidad_110.dtd">
+<respuesta>
+	<tipo><![CDATA[110]]></tipo>
+	<nombre><![CDATA[Servicio de disponibilidad por lista de hoteles]]></nombre>
+	<agencia><![CDATA[PALASTORE XML INHOUSE BR XML @]]></agencia>
+	<param>
+		<hotls num="2">
+			<hot>
+				<cod><![CDATA[601022]]></cod>
+				<afi><![CDATA[RS]]></afi>
+				<nom><![CDATA[HOTEL XML TEST NON REFUND]]></nom>
+				<pro><![CDATA[MVMOL]]></pro>
+				<prn><![CDATA[MOLDAVIA]]></prn>
+				<pob><![CDATA[MOLDAVIA TEST POBL]]></pob>
+				<cat><![CDATA[4]]></cat>
+				<fen>20260830</fen>
+				<fsa>20260831</fsa>
+				<pdr><![CDATA[N]]></pdr>
+				<cal><![CDATA[0]]></cal>
+				<mar><![CDATA[HA#EC#]]></mar>
+				<res>
+					<pax cod="1-2">
+						<hab cod="CF" desc="Cuadruple (2ad+2nin) Deluxe">
+							<reg cod="OB" prr="1133.59" div="BR" esr="OK" nr="0">
+								<lin><![CDATA[CF#2#C+#1133.59#0#OB#OK#20260830#20260831#BR#1-2:4,5,7,9#0#0#4920FB628C41241D650960E086D7249D7FC0947A5F3CA04301B3C1444621FD4C|0D0D0|0000#601022#]]></lin>
+							</reg>
+							<reg cod="BB" prr="1360.31" div="BR" esr="OK" nr="0">
+								<lin><![CDATA[CF#2#C+#1360.31#0#BB#OK#20260830#20260831#BR#1-2:4,5,7,9#0#0#4920FB628C41241D650960E086D7249D7FC0947A5F3CA04301B3C1444621FD4C|0D0D0|0000#601022#]]></lin>
+							</reg>
+						</hab>
+					</pax>
+				</res>
+				<pns>S</pns>
+				<end>0</end>
+				<enh>12</enh>
+				<cat2><![CDATA[BA]]></cat2>
+				<city_tax><![CDATA[A partir de la fecha de: 01/07/2018 hasta el dia  31/12/2018 castellano tax.]]></city_tax>
+				<tipo_establecimiento><![CDATA[Hotel]]></tipo_establecimiento>
+			</hot>
+			<hot>
+				<cod><![CDATA[745388]]></cod>
+				<afi><![CDATA[RS]]></afi>
+				<nom><![CDATA[THIS HOTEL IS NOT REAL DO NOT.]]></nom>
+				<pro><![CDATA[MVMOL]]></pro>
+				<prn><![CDATA[MOLDAVIA]]></prn>
+				<pob><![CDATA[MOLDAVIA TEST POBL]]></pob>
+				<cat><![CDATA[3]]></cat>
+				<fen>20260830</fen>
+				<fsa>20260831</fsa>
+				<pdr><![CDATA[N]]></pdr>
+				<cal><![CDATA[0]]></cal>
+				<mar><![CDATA[HA#ST#]]></mar>
+				<res>
+					<pax cod="1-2">
+						<hab cod="TP" desc="Triple">
+							<reg cod="OB" prr="463.49" div="BR" esr="OK" nr="0">
+								<lin><![CDATA[TP#2#VR#463.49#0#OB#OK#20260830#20260831#BR#1-2:4,5,7,9#0#0#4920FB628C41241D650960E086D7249D7FC0947A5F3CA04301B3C1444621FD4C|0D0D0|0000#745388#]]></lin>
+							</reg>
+						</hab>
+					</pax>
+				</res>
+				<pns>N</pns>
+				<end>2</end>
+				<enh>12</enh>
+				<cat2><![CDATA[]]></cat2>
+				<city_tax><![CDATA[A partir de la fecha de: 01/07/2018 hasta el dia  31/12/2018 castellano tax.]]></city_tax>
+				<tipo_establecimiento><![CDATA[Hotel]]></tipo_establecimiento>
+			</hot>
+		</hotls>
+		<id>ce731b88-97b1-4d27-a4be-f72cff82a27a</id>
+	</param>
+</respuesta>

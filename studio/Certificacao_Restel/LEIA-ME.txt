@@ -1,6 +1,0 @@
-O que acabou de acontecer?Se você olhar a sua pasta studio agora, vai ver que nasceu uma pasta nova chamada Certificacao_Restel.
-Dentro dela, o script criou automaticamente as pastas de Escenario1 até Escenario10 (que a Restel exige receber compactadas no e-mail). E dentro da pasta Escenario1, ele já fabricou o seu primeiro documento oficial: o Peticion110.xml formatado milimetricamente para 1 adulto, no hotel de teste 745388!  Quando a Marina te mandar o codigousu, o clausu e o secacc, nós só vamos substituir ali na linha 10 do código e adicionar a função do axios para o nosso script disparar esse XML para eles, receber o pacote de ofertas e salvar a Respuesta110.xml do lado!  
-
-
-
-O que falta agora é literalmente a "chave do cofre". Assim que a Marina te responder com o codigousu, clausu e secacc, nós vamos:  Preencher aquelas variáveis lá no topo do código.Adicionar o comando de disparo (usando o axios) para o robô pegar esse arquivo Peticion110.xml e enviar direto para a porta de entrada deles ([xml.hotelresb2b.com/xml/listen_xml.jsp](https://xml.hotelresb2b.com/xml/listen_xml.jsp)).  Mandar o robô pegar a resposta da Restel e salvar automaticamente como Respuesta110.xml dentro da mesma pasta.

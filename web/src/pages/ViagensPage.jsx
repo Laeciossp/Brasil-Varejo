@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom'; // <-- useLocation adicionado aqui
 import { createClient } from "@sanity/client";
 import { formatCurrency } from '../lib/utils';
 import useCartStore from '../store/useCartStore';
 
-// IMPORTAÇÕES
+// IMPORTAÇÕES DA AGÊNCIA
 import FlightSearch from './FlightSearch'; 
-import HotelSearch from './HotelSearch'; // <-- ADICIONE ESTA LINHA AQUI
+import HotelSearch from './HotelSearch';
+import FlightHotelPackage from './FlightHotelPackage'; 
 import DestinosPopulares from '../components/DestinosPopulares';
+import PalastoreCruzeiros from './PalastoreCruzeiros'; 
 
 import { 
   Plane, Bus, ShieldCheck, ArrowRight, ExternalLink, Briefcase, 
@@ -344,14 +346,24 @@ const RentcarsWidget = () => {
 // ==========================================
 export default function ViagensPage() {
   const [activeTab, setActiveTab] = useState('voos'); 
-  
-  // Estado para capturar os dados do card clicado
   const [dadosPreenchidos, setDadosPreenchidos] = useState(null);
+
+  // 👇 NOVA LÓGICA DE DETECÇÃO DA URL 👇
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabFromUrl = params.get('tab');
+    if (tabFromUrl) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [location]);
+  // 👆 FIM DA NOVA LÓGICA 👆
   
-  // REMOVIDO: A aba separada "Ofertas de Voos", pois agora ela mora dentro da aba "Passagens Aéreas"
   const menuItems = [
     { id: 'voos', label: 'Passagens Aéreas', icon: Plane },
     { id: 'roteiros', label: 'Roteiros Exclusivos', icon: Compass },
+    { id: 'cruzeiros', label: 'Cruzeiros', icon: Ship },
     { id: 'hoteis', label: 'Hotéis', icon: Building },
     { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Star },
     { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
@@ -405,25 +417,20 @@ export default function ViagensPage() {
 
         <div className="bg-white rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100 min-h-[700px] flex flex-col overflow-hidden mb-12">
           
-          {/* A INTEGRAÇÃO ACONTECE AQUI: BUSCADOR EM CIMA E VITRINE EMBAIXO */}
           {activeTab === 'voos' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full h-full flex-grow">
-               
-               {/* 1. O Buscador (Hero) */}
                <FlightSearch prefilledData={dadosPreenchidos} />
-               
-               {/* 2. A Vitrine Dinâmica Acoplada */}
                <div className="mt-8 pt-8 border-t border-gray-200">
                   <DestinosPopulares onSelectDestination={handleDestinoClick} />
                </div>
-
             </div>
           )}
 
           {activeTab === 'roteiros' && <RoteirosExclusivos />}
+          {activeTab === 'cruzeiros' && <PalastoreCruzeiros />} 
           {activeTab === 'onibus' && <PartnerIframe title="Passagens de Ônibus" url="https://www.awin1.com/cread.php?awinmid=65292&awinaffid=910543" noticeText="Compare e reserve passagens de ônibus para milhares de destinos em todo o Brasil. Processamento seguro via parceiro oficial." themeColor="green" />}
           {activeTab === 'seguros' && <PartnerIframe title="Seguro Viagem" url="https://seguroviagem.app/palastore" noticeText="Viaje protegido com cobertura completa e suporte 24h." themeColor="blue" />}
-          {activeTab === 'voo_hotel' && <PartnerIframe title="Pacotes Voo + Hotel" url="https://br.trip.com/packages/?sourceFrom=IBUBundle_home&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Economize reservando Voo e Hotel juntos através do nosso parceiro Trip.com." themeColor="indigo" />}
+          {activeTab === 'voo_hotel' && <FlightHotelPackage />} 
           {activeTab === 'hoteis' && <HotelSearch />}
           {activeTab === 'ofertas_hoteis' && <PartnerIframe title="Ofertas Especiais de Hotéis no Brasil" url="https://br.trip.com/hotels/list?flexType=1&cityId=-1&provinceId=0&countryId=19&cityName=&destName=Brasil&searchWord=Brasil&searchType=C&searchValue=140|19**19&checkin=2026-08-17&checkout=2026-08-18&crn=1&adult=2&listFilters=29~1*29*1~2*2,17~3*17*3,80~2~1*80*2&curr=BRL&locale=pt-BR&old=1&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Aproveite tarifas reduzidas para hospedagens em todo o Brasil. Parceria oficial Trip.com." themeColor="indigo" />}
           {activeTab === 'rentcars' && <RentcarsWidget />}
