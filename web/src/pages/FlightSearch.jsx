@@ -16,6 +16,16 @@ const formatDateBr = (dateStr) => {
   return `${dias[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 };
 
+// ==========================================
+// FUNÇÃO BLINDADA: IGNORA FUSO HORÁRIO (TIMEZONE)
+// ==========================================
+const formatSafeDate = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+};
+
 const Counter = ({ label, subLabel, value, onChange, min = 0, max = 9, icon }) => {
   const handleDec = () => onChange(Math.max(min, parseInt(value, 10) - 1));
   const handleInc = () => onChange(Math.min(max, parseInt(value, 10) + 1));
@@ -436,12 +446,14 @@ export default function FlightSearch({ prefilledData }) {
                 <div onClick={() => setShowDateMenu(!showDateMenu)} className="flex items-center justify-between border border-gray-300 rounded-md px-4 h-full cursor-pointer hover:border-purple-600 bg-white">
                   <div className="flex flex-col justify-center">
                     <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Partida</span>
-                    <span className="text-sm font-bold text-gray-900 leading-tight">{dateType==='specific' && dateFrom ? new Date(dateFrom).toLocaleDateString('pt-BR') : 'A qualquer momento'}</span>
+                    {/* USO DA FUNÇÃO BLINDADA AQUI */}
+                    <span className="text-sm font-bold text-gray-900 leading-tight">{dateType==='specific' && dateFrom ? formatSafeDate(dateFrom) : 'A qualquer momento'}</span>
                   </div>
                   <div className="w-px h-6 bg-gray-200 mx-2"></div>
                   <div className={`flex flex-col justify-center ${tripType==='oneway'?'opacity-30':''}`}>
                     <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Regresso</span>
-                    <span className="text-sm font-bold text-gray-900 leading-tight">{tripType==='return' && dateType==='specific' && dateTo ? new Date(dateTo).toLocaleDateString('pt-BR') : 'A qualquer momento'}</span>
+                    {/* USO DA FUNÇÃO BLINDADA AQUI */}
+                    <span className="text-sm font-bold text-gray-900 leading-tight">{tripType==='return' && dateType==='specific' && dateTo ? formatSafeDate(dateTo) : 'A qualquer momento'}</span>
                   </div>
                 </div>
 
