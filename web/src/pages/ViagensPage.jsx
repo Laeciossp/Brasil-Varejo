@@ -13,7 +13,7 @@ import {
   Plane, Bus, ShieldCheck, ArrowRight, ExternalLink, Briefcase, 
   Building, Car, MapPin, Compass, Train, Star, Search,
   Globe, Castle, Sun, Palmtree, Filter, X,
-  Snowflake, Ship, Calendar, Tag, CheckCircle, TreePine, Gift, Coffee, Wand2
+  Snowflake, Ship, Calendar, Tag, CheckCircle, TreePine, Gift, Coffee, Wand2, Anchor
 } from 'lucide-react';
 
 const client = createClient({
@@ -327,7 +327,8 @@ export default function ViagensPage() {
   const menuItems = [
     { id: 'voos', label: 'Passagens Aéreas', icon: Plane },
     { id: 'roteiros', label: 'Roteiros Exclusivos', icon: Compass },
-    { id: 'cruzeiros', label: 'Cruzeiros', icon: Ship },
+    { id: 'cruzeiros', label: 'Cruzeiros (Palastore)', icon: Ship },
+    { id: 'cruzeiros_ncl', label: 'Cruzeiros NCL', icon: Anchor },
     { id: 'hoteis', label: 'Hotéis', icon: Building },
     { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Star },
     { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
@@ -392,6 +393,10 @@ export default function ViagensPage() {
 
           {activeTab === 'roteiros' && <RoteirosExclusivos />}
           {activeTab === 'cruzeiros' && <PalastoreCruzeiros />} 
+          
+          {/* Aba de Cruzeiros NCL Adicionada */}
+          {activeTab === 'cruzeiros_ncl' && <PartnerIframe title="Cruzeiros Norwegian (NCL)" url="https://www.ncl.com/br/pt/vacations?sort=price_low_high&insider=v2yy4-palastore-cruzeiros-promocionais" noticeText="Explore os premiados cruzeiros da Norwegian Cruise Line. Selecione seu roteiro e entre em contato conosco para finalizar sua reserva com benefícios exclusivos." themeColor="orange" />}
+          
           {activeTab === 'onibus' && <PartnerIframe title="Passagens de Ônibus" url="https://www.awin1.com/cread.php?awinmid=65292&awinaffid=910543" noticeText="Compare e reserve passagens de ônibus para milhares de destinos em todo o Brasil. Processamento seguro via parceiro oficial." themeColor="green" />}
           {activeTab === 'seguros' && <PartnerIframe title="Seguro Viagem" url="https://seguroviagem.app/palastore" noticeText="Viaje protegido com cobertura completa e suporte 24h." themeColor="blue" />}
           {activeTab === 'voo_hotel' && <FlightHotelPackage />} 
@@ -400,10 +405,7 @@ export default function ViagensPage() {
           {activeTab === 'rentcars' && <RentcarsWidget />}
           {activeTab === 'carros' && <PartnerIframe title="Aluguel de Carros" url="https://br.trip.com/carhire/?channelid=14409&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Alugue veículos com as melhores locadoras globais. Processado via Trip.com." themeColor="indigo" />}
           {activeTab === 'translado' && <PartnerIframe title="Translado Aeroporto" url="https://br.trip.com/airport-transfers/?Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19413340&locale=pt_br" noticeText="Chegue ao seu destino sem preocupações. Veículos exclusivos Trip.com." themeColor="indigo" />}
-          
-          {/* Aba Passeios corrigida */}
           {activeTab === 'passeios' && <PartnerIframe title="Passeios e Ingressos (Trip.com)" url="https://br.trip.com/things-to-do/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Compre ingressos para atrações turísticas pelo mundo com nosso parceiro Trip.com." themeColor="indigo" />}
-          
           {activeTab === 'viator' && (
             <PartnerWidgetViator 
                title="Experiências e Passeios (Viator)" 
