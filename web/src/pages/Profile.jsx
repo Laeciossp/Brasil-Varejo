@@ -3,7 +3,7 @@ import { createClient } from '@sanity/client';
 import { Link } from 'react-router-dom';
 import { 
   Package, User, MapPin, LogOut, MessageSquare, Send, 
-  ShoppingBag, CheckCircle2, Trash2, CreditCard, Truck,
+  ShoppingBag, CheckCircle2, Trash2, CreditCard, Mail, Clock,
   XCircle, ChevronRight, AlertCircle, Edit2, ExternalLink, Users
 } from 'lucide-react';
 import { useUser, SignOutButton } from "@clerk/clerk-react";
@@ -39,7 +39,7 @@ export default function Profile() {
     neighborhood: '', city: '', state: '', document: ''
   });
 
-  // Estados Passageiros (Com E-mail e Telefone adicionados)
+  // Estados Passageiros
   const [showPaxForm, setShowPaxForm] = useState(false);
   const [editingPaxId, setEditingPaxId] = useState(null);
   const [newPax, setNewPax] = useState({
@@ -72,12 +72,10 @@ export default function Profile() {
     const email = user.primaryEmailAddress.emailAddress;
     
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
-      _id, orderNumber, _createdAt, status, totalAmount, cancellationReason, paymentMethod, shippingAddress,
+      _id, orderNumber, _createdAt, status, totalAmount, cancellationReason, paymentMethod, customer, customerEmail,
       "trackingCode": coalesce(trackingCode, logistics.trackingCode),
       "trackingUrl": coalesce(trackingUrl, logistics.trackingUrl),
       "carrier": coalesce(carrier, logistics.selectedCarrier, logistics.carrier),
-      "shippedAt": coalesce(shippedAt, logistics.shippedAt),
-      "deliveryEstimate": coalesce(deliveryEstimate, logistics.shippingMethod, shippingMethod), 
       "items": items[]{ 
         productName, quantity, price,
         "productSlug": coalesce(product->slug.current, *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].slug.current), 
@@ -159,7 +157,7 @@ export default function Profile() {
   };
 
   const getStatusLabel = (status) => {
-    const map = { pending: 'Aguardando Pagamento', paid: 'Pagamento Aprovado', invoiced: 'Nota Fiscal Emitida', shipped: 'Em Trânsito', delivered: 'Entregue', cancelled: 'Cancelado' };
+    const map = { pending: 'Aguardando Pagamento', paid: 'Pagamento Aprovado', invoiced: 'Nota Fiscal Emitida', shipped: 'Processando', delivered: 'Emitido (E-Ticket)', cancelled: 'Cancelado' };
     return map[status] || status;
   };
 
@@ -235,7 +233,11 @@ export default function Profile() {
                                 <h3 className="font-bold text-gray-900">Nenhum pedido encontrado</h3>
                                 <p className="text-gray-500 text-sm mt-1">Aproveite nossas ofertas e faça sua primeira compra!</p>
                             </div>
-                        ) : orders.map((order) => (
+                        ) : orders.map((order) => {
+                             // Tenta pegar o e-mail de entrega salvo no Sanity (customer.email, customerEmail ou fallback do Clerk)
+                             const orderEmail = order.customer?.email || order.customerEmail || user.primaryEmailAddress.emailAddress;
+
+                             return (
                              <div key={order._id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-lg hover:border-orange-200 transition-all group">
                                 <div className="bg-gray-50/50 p-5 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4">
                                     <div className="flex gap-4 items-center">
@@ -283,16 +285,14 @@ export default function Profile() {
                                         </div>
 
                                         <div className="lg:w-1/3 space-y-6 lg:border-l lg:border-gray-100 lg:pl-6">
+                                            
+                                            {/* SEÇÃO MODIFICADA: ENVIO DIGITAL */}
                                             <div>
-                                                <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2 flex items-center gap-1"><MapPin size={12}/> Entrega em:</h4>
-                                                {order.shippingAddress ? (
-                                                    <div className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                                        <p className="font-bold text-gray-800">{order.shippingAddress.street}, {order.shippingAddress.number}</p>
-                                                        <p>{order.shippingAddress.neighborhood}</p>
-                                                        <p>{order.shippingAddress.city} - {order.shippingAddress.state}</p>
-                                                        <p className="text-xs text-gray-400 mt-1">CEP: {order.shippingAddress.zip}</p>
-                                                    </div>
-                                                ) : <p className="text-xs text-gray-400 italic bg-gray-50 p-2 rounded">Endereço não registrado.</p>}
+                                                <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2 flex items-center gap-1"><Mail size={12}/> Entrega Digital:</h4>
+                                                <div className="text-sm text-gray-600 leading-relaxed bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+                                                    <p className="font-bold text-blue-900">{orderEmail}</p>
+                                                    <p className="text-[11px] text-blue-700 mt-1">Os e-tickets/vouchers serão enviados para este endereço.</p>
+                                                </div>
                                             </div>
 
                                             <div className="space-y-3">
@@ -301,20 +301,17 @@ export default function Profile() {
                                                     <p className="text-sm font-medium text-gray-800">{getPaymentLabel(order.paymentMethod)}</p>
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-1 flex items-center gap-1"><Truck size={12}/> Prazo Estimado:</h4>
-                                                    <p className="text-sm font-medium text-green-700">{order.deliveryEstimate || '5 a 12 dias úteis'}</p>
+                                                    {/* SEÇÃO MODIFICADA: PRAZO ESTIMADO */}
+                                                    <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-1 flex items-center gap-1"><Clock size={12}/> Prazo de Emissão:</h4>
+                                                    <p className="text-[13px] font-bold text-green-700 leading-tight">Até 2 horas após a confirmação do pagamento</p>
                                                 </div>
                                                 
+                                                {/* Localizador/Rastreamento para Turismo (Opcional, caso a API devolva um código) */}
                                                 {order.trackingCode && (
-                                                    <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg mt-2">
-                                                        <h4 className="text-xs font-black uppercase text-blue-800 tracking-wider mb-2 flex items-center gap-1"><Truck size={12}/> Rastreamento:</h4>
-                                                        <p className="text-sm font-bold text-gray-800 mb-1 font-mono tracking-wider bg-white p-1 rounded border border-blue-100 inline-block">{order.trackingCode}</p>
-                                                        {order.carrier && <p className="text-xs text-gray-600 mb-2">Transportadora: {order.carrier}</p>}
-                                                        {order.trackingUrl && (
-                                                            <a href={order.trackingUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 mt-1">
-                                                                Acompanhar Entrega <ExternalLink size={10}/>
-                                                            </a>
-                                                        )}
+                                                    <div className="bg-orange-50 border border-orange-100 p-3 rounded-lg mt-2">
+                                                        <h4 className="text-xs font-black uppercase text-orange-800 tracking-wider mb-2 flex items-center gap-1"><CheckCircle2 size={12}/> Localizador (PNR):</h4>
+                                                        <p className="text-sm font-bold text-gray-800 mb-1 font-mono tracking-wider bg-white p-1 rounded border border-orange-100 inline-block">{order.trackingCode}</p>
+                                                        {order.carrier && <p className="text-xs text-gray-600 mb-2">Companhia: {order.carrier}</p>}
                                                     </div>
                                                 )}
 
@@ -334,7 +331,7 @@ export default function Profile() {
                                     </div>
                                     <div className="border-t border-gray-100 pt-4 mt-4">
                                         <button onClick={() => setActiveChatOrder(activeChatOrder === order._id ? null : order._id)} className="text-gray-600 text-sm font-bold flex items-center gap-2 hover:text-orange-600 transition-colors">
-                                            <MessageSquare size={16}/> {activeChatOrder === order._id ? 'Ocultar Chat' : 'Precisa de ajuda com este pedido?'}
+                                            <MessageSquare size={16}/> {activeChatOrder === order._id ? 'Ocultar Chat' : 'Precisa de ajuda com esta reserva?'}
                                         </button>
                                         {activeChatOrder === order._id && (
                                             <div className="mt-4 bg-white p-4 rounded-xl border border-gray-200 shadow-inner animate-in fade-in slide-in-from-top-2">
@@ -362,7 +359,8 @@ export default function Profile() {
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                             );
+                        })}
                     </div>
                 )}
 
