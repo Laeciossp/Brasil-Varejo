@@ -242,6 +242,47 @@ const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
   );
 };
 
+// ==========================================
+// BANNER DE REDIRECIONAMENTO NCL (GLASSMORPHISM)
+// ==========================================
+const NclRedirectBanner = ({ title, url, description, buttonText, imageBg, icon: Icon }) => {
+  return (
+    <div className="animate-in fade-in zoom-in-95 duration-500 w-full flex flex-col items-center mb-10">
+       <div className="relative w-full rounded-3xl overflow-hidden shadow-2xl min-h-[450px] flex items-center p-6 md:p-12 lg:p-16">
+          
+          {/* Imagem de Fundo (ncl.png da pasta public) e Degradê de Leitura */}
+          <div className="absolute inset-0">
+            <img src={imageBg} alt={title} className="w-full h-full object-cover object-center" />
+            <div className="absolute inset-0 bg-gradient-to-r from-gray-900/90 via-gray-900/50 to-transparent"></div>
+          </div>
+          
+          {/* Card Flutuante de Vidro (Glassmorphism) */}
+          <div className="relative z-10 bg-white/10 backdrop-blur-md border border-white/20 p-8 md:p-10 rounded-3xl max-w-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+            <div className="bg-orange-500 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-lg">
+                <Icon size={32} className="text-white" />
+            </div>
+            
+            <h3 className="text-3xl md:text-4xl font-black text-white mb-4 tracking-tight drop-shadow-md">{title}</h3>
+            
+            <p className="text-white/90 text-sm md:text-base font-medium mb-8 leading-relaxed">
+              {description}
+            </p>
+            
+            <a 
+              href={url} 
+              target="_blank" 
+              rel="noreferrer" 
+              className="w-full bg-[#f39c12] hover:bg-[#e67e22] text-white py-4 rounded-xl font-black text-sm md:text-base uppercase tracking-widest transition-all shadow-lg transform active:scale-95 flex items-center justify-center gap-3"
+            >
+              {buttonText} <ExternalLink size={20} />
+            </a>
+          </div>
+
+       </div>
+    </div>
+  );
+};
+
 const PartnerWidgetViator = ({ title, url, noticeText, themeColor }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -394,8 +435,17 @@ export default function ViagensPage() {
           {activeTab === 'roteiros' && <RoteirosExclusivos />}
           {activeTab === 'cruzeiros' && <PalastoreCruzeiros />} 
           
-          {/* Aba de Cruzeiros NCL Adicionada */}
-          {activeTab === 'cruzeiros_ncl' && <PartnerIframe title="Cruzeiros Norwegian (NCL)" url="https://www.ncl.com/br/pt/vacations?sort=price_low_high&insider=v2yy4-palastore-cruzeiros-promocionais" noticeText="Explore os premiados cruzeiros da Norwegian Cruise Line. Selecione seu roteiro e entre em contato conosco para finalizar sua reserva com benefícios exclusivos." themeColor="orange" />}
+          {/* NOVA ABA NCL COM CARD FLUTUANTE SOBRE A IMAGEM NCL.PNG */}
+          {activeTab === 'cruzeiros_ncl' && (
+            <NclRedirectBanner 
+               title="Cruzeiros Norwegian (NCL)" 
+               url="https://www.ncl.com/br/pt/vacations?sort=price_low_high&insider=v2yy4-palastore-cruzeiros-promocionais" 
+               description="Explore o catálogo oficial da Norwegian Cruise Line. Selecione seu roteiro dos sonhos no buscador parceiro e contate nosso suporte para garantir sua reserva com benefícios e flexibilidade Palastore."
+               buttonText="Pesquisar Cruzeiros Agora"
+               imageBg="/ncl.png"
+               icon={Anchor}
+            />
+          )}
           
           {activeTab === 'onibus' && <PartnerIframe title="Passagens de Ônibus" url="https://www.awin1.com/cread.php?awinmid=65292&awinaffid=910543" noticeText="Compare e reserve passagens de ônibus para milhares de destinos em todo o Brasil. Processamento seguro via parceiro oficial." themeColor="green" />}
           {activeTab === 'seguros' && <PartnerIframe title="Seguro Viagem" url="https://seguroviagem.app/palastore" noticeText="Viaje protegido com cobertura completa e suporte 24h." themeColor="blue" />}
