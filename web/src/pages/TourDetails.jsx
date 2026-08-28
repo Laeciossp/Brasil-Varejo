@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { createClient } from "@sanity/client";
 import { PortableText } from '@portabletext/react';
 import { 
-  MapPin, Calendar, ShieldCheck, ArrowRight, Plane, 
+  MapPin, Calendar, ShieldCheck, Plane, 
   CheckCircle, XCircle, ChevronDown, ChevronUp, MessageCircle
 } from 'lucide-react';
-import { formatCurrency } from '../lib/utils';
-import useCartStore from '../store/useCartStore';
 
 const client = createClient({
   projectId: 'o4upb251',
@@ -21,9 +19,7 @@ const client = createClient({
 // ==========================================
 const cleanHTML = (html) => {
   if (!html) return '';
-  // Substitui <br> e </p> por quebras de linha reais
   let text = html.replace(/<br\s*[\/]?>/gi, '\n').replace(/<\/p>/gi, '\n\n');
-  // Remove todas as outras tags HTML e o &nbsp;
   text = text.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
   return text.trim();
 };
@@ -35,14 +31,11 @@ const SafeContent = ({ content }) => {
     const firstBlockText = content[0]?.children?.[0]?.text || '';
     if (firstBlockText.includes('<p>') || firstBlockText.includes('<strong>')) {
       const fullText = content.map(block => block.children.map(c => c.text).join('')).join('\n');
-      // 🔥 ADD: text-justify
       return <div className="prose prose-sm text-gray-600 text-justify max-w-none whitespace-pre-line">{cleanHTML(fullText)}</div>;
     }
-    // 🔥 ADD: text-justify
     return <div className="prose prose-sm text-gray-600 text-justify max-w-none"><PortableText value={content} /></div>;
   }
 
-  // 🔥 ADD: text-justify
   return <div className="prose prose-sm text-gray-600 text-justify max-w-none whitespace-pre-line">{cleanHTML(content)}</div>;
 };
 
@@ -54,7 +47,6 @@ const ItineraryAccordion = ({ content }) => {
 
   if (!content) return <p className="text-gray-500 italic">Itinerário não disponível.</p>;
 
-  // Transforma o conteúdo bruto em texto limpo
   let fullText = '';
   if (Array.isArray(content)) {
     fullText = content.map(block => block.children.map(c => c.text).join('')).join('\n');
@@ -63,14 +55,12 @@ const ItineraryAccordion = ({ content }) => {
   }
   fullText = cleanHTML(fullText);
 
-  // Lógica Ninja para separar o texto por "Dias" (1º DIA, 2º DIA, etc)
   const daysArray = [];
   const regex = /(\d+º\s*DIA.*?(?=\d+º\s*DIA|$))/gis;
   let match;
 
   while ((match = regex.exec(fullText)) !== null) {
     const rawMatch = match[0].trim();
-    // Separa o título (Ex: "1º DIA – TER – AUCKLAND") do corpo do texto
     const titleMatch = rawMatch.match(/^(.*?)(?:\n|$)/);
     const title = titleMatch ? titleMatch[1].trim() : 'Dia da Viagem';
     const description = rawMatch.replace(title, '').trim();
@@ -78,7 +68,6 @@ const ItineraryAccordion = ({ content }) => {
     daysArray.push({ title, description });
   }
 
-  // Se a lógica ninja não achar os "Dias", renderiza tudo como texto normal para não ficar branco
   if (daysArray.length === 0) {
     return <div className="prose prose-sm text-gray-600 whitespace-pre-line">{fullText}</div>;
   }
@@ -113,8 +102,6 @@ const ItineraryAccordion = ({ content }) => {
 // ==========================================
 export default function TourDetails() {
   const { slug } = useParams();
-  const navigate = useNavigate();
-  const { addItem, setShipping } = useCartStore();
 
   const [tour, setTour] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -126,7 +113,7 @@ export default function TourDetails() {
       setLoading(true);
       try {
         const query = `*[_type == "tour" && slug.current == $slug][0]{
-          _id, title, price,
+          _id, title,
           "imageUrl": images[0].asset->url,
           "images": images[].asset->url,
           tags, itinerary, included, excluded
@@ -145,28 +132,6 @@ export default function TourDetails() {
     };
     fetchTour();
   }, [slug]);
-
-  const handleBookNow = () => {
-    addItem({
-      _id: tour._id,
-      title: tour.title,
-      slug: { current: slug },
-      price: tour.price,
-      image: tour.imageUrl || activeImage,
-      sku: `TOUR-${tour._id.slice(-6)}`,
-      variantName: "Pacote Duplo", 
-      isTravel: true
-    });
-
-    setShipping({
-        name: "Emissão Digital (E-Ticket / Voucher)",
-        price: 0,
-        delivery_time: 1,
-        company: "Operadora"
-    });
-
-    navigate('/cart');
-  };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-orange-500 rounded-full animate-spin"></div></div>;
   if (!tour) return <div className="p-20 text-center text-gray-500 font-bold">Roteiro não encontrado.</div>;
@@ -206,10 +171,9 @@ export default function TourDetails() {
             {/* COLUNA ESQUERDA (Galeria e Conteúdo) */}
             <div className="flex-1 w-full min-w-0">
                
-               {/* GALERIA FIXA: VISUALIZADOR GRANDE EM CIMA + MINIATURAS EMBAIXO */}
+               {/* GALERIA FIXA */}
                {tour.images && tour.images.length > 0 && (
                   <div className="mb-10 bg-white p-2 rounded-2xl shadow-sm border border-gray-100">
-                     {/* FOTO PRINCIPAL (Visualizador) */}
                      <div className="w-full aspect-[16/9] md:aspect-[21/9] bg-gray-100 rounded-xl overflow-hidden mb-2 relative">
                          <img 
                             src={activeImage} 
@@ -218,7 +182,6 @@ export default function TourDetails() {
                          />
                      </div>
                      
-                     {/* MINIATURAS (Scroll horizontal no celular, quebra de linha no desktop) */}
                      {tour.images.length > 1 && (
                          <div className="flex overflow-x-auto md:grid md:grid-cols-6 lg:grid-cols-8 gap-2 scrollbar-hide">
                             {tour.images.map((img, i) => (
@@ -272,23 +235,20 @@ export default function TourDetails() {
                </div>
             </div>
 
-            {/* COLUNA DIREITA (Preço e Checkout) */}
+            {/* COLUNA DIREITA (Apenas Informações e WhatsApp) */}
             <div className="w-full lg:w-[360px] flex-shrink-0">
                <div className="bg-white p-6 md:p-8 rounded-3xl shadow-xl border border-gray-100 sticky top-24">
                   <span className="bg-orange-50 text-orange-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wide mb-6 inline-block border border-orange-100">
                      Pacote Oficial Queensberry
                   </span>
                   
-                  <div className="mb-6">
-                     <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">A partir de</p>
-                     <p className="text-4xl lg:text-5xl font-black text-gray-900 tracking-tighter truncate">
-                        {formatCurrency(tour.price)}
+                  <div className="mb-8">
+                     <h3 className="text-xl font-black text-gray-900 tracking-tight leading-snug mb-3">
+                        Deseja saber os valores e datas disponíveis?
+                     </h3>
+                     <p className="text-sm text-gray-500 leading-relaxed">
+                        Nossos consultores estão prontos para enviar o orçamento detalhado deste roteiro diretamente no seu WhatsApp.
                      </p>
-                     <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 mt-4">
-                         <p className="text-[10px] font-medium text-gray-500 leading-relaxed text-center">
-                            Valores calculados com base no câmbio referencial. Taxas de processamento e impostos locais já inclusos no valor total.
-                         </p>
-                     </div>
                   </div>
 
                   <div className="space-y-4 mb-8 pt-6 border-t border-gray-100">
@@ -306,23 +266,16 @@ export default function TourDetails() {
                      </div>
                   </div>
 
-                  {/* BOTÕES DE AÇÃO */}
+                  {/* BOTÃO DE AÇÃO ÚNICO */}
                   <div className="space-y-3">
                      <button 
-                        onClick={handleBookNow} 
-                        className="w-full py-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-black uppercase tracking-widest flex justify-center items-center gap-2 transition-all shadow-lg transform active:scale-95"
-                     >
-                        Reservar Agora <ArrowRight size={18} />
-                     </button>
-
-                     <button 
                         onClick={() => {
-                           const msg = encodeURIComponent(`Olá! Gostaria de tirar dúvidas e obter mais informações sobre o roteiro: ${tour.title}`);
+                           const msg = encodeURIComponent(`Olá! Gostaria de consultar os valores e datas disponíveis para o roteiro: ${tour.title}`);
                            window.open(`https://wa.me/5571983810420?text=${msg}`, '_blank');
                         }} 
                         className="w-full py-4 bg-[#25D366] hover:bg-[#1ebd5a] text-white rounded-xl font-black uppercase tracking-widest flex justify-center items-center gap-2 transition-all shadow-lg transform active:scale-95"
                      >
-                        Tirar Dúvidas <MessageCircle size={18} />
+                        Consultar Valores <MessageCircle size={18} />
                      </button>
                   </div>
 

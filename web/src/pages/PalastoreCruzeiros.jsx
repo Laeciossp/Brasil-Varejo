@@ -16,30 +16,6 @@ const sanityClient = createClient({
 const normalize = (s) => s ? String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim() : "";
 
 // ==============================================================
-// 💰 2. CONVERSOR FINANCEIRO BLINDADO E MOTOR DE LUCRO
-// ==============================================================
-const MARGEM_LUCRO = 1.15; // Ex: 1.15 = 15% em cima do valor da API
-
-const parseMoedaBrasileira = (valorString) => {
-  if (!valorString) return 0;
-  let texto = String(valorString).replace(/[^\d.,]/g, '');
-  if (texto.includes('.') && texto.includes(',')) {
-    texto = texto.replace(/\./g, '').replace(',', '.');
-  } else if (texto.includes(',')) {
-    texto = texto.replace(',', '.');
-  }
-  return parseFloat(texto) || 0;
-};
-
-const formatarMoedaComLucro = (valorAPI) => {
-  if (!valorAPI || valorAPI === "---") return "---";
-  const numeroCerto = parseMoedaBrasileira(valorAPI);
-  if (numeroCerto === 0) return "---";
-  const valorComLucro = numeroCerto * MARGEM_LUCRO;
-  return valorComLucro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-};
-
-// ==============================================================
 // 🪄 RASTREADOR DE NAVIO (CHAVE MESTRA)
 // ==============================================================
 const getSanityShip = (cruzeiro, sanityNavios) => {
@@ -68,7 +44,7 @@ export default function PalastoreCruzeiros() {
 
   const [etapa, setEtapa] = useState(1); 
   const [cruzeiroAtivo, setCruzeiroAtivo] = useState(null);
-  const [imagemModal, setImagemModal] = useState(null); // ESTADO PARA A FOTO AMPLIADA
+  const [imagemModal, setImagemModal] = useState(null);
 
   useEffect(() => {
     let montado = true;
@@ -130,40 +106,78 @@ export default function PalastoreCruzeiros() {
     }
   };
 
-  const DICIONARIO_PORTOS = {
-    'KEL': 'Kiel', 'PCN': 'Port Canaveral', 'FLL': 'Fort Lauderdale', 'MIA': 'Miami', 
-    'ROM': 'Roma (Civitavecchia)', 'BCN': 'Barcelona', 'LAX': 'Los Angeles', 'GAL': 'Galveston', 
-    'SSZ': 'Santos', 'GIG': 'Rio de Janeiro', 'SSA': 'Salvador', 'ITJ': 'Itajaí'
+  // ==============================================================
+  // 🌍 DICIONÁRIOS GIGANTES HARDCODED (À PROVA DE FALHAS)
+  // ==============================================================
+  const DICIONARIO_DESTINOS = {
+    'CARIBE': 'Caribe', 'CARIBE ORIENTAL': 'Caribe Oriental', 'CARIBE OCIDENTAL': 'Caribe Ocidental',
+    'CARIBE DO SUL': 'Caribe do Sul', 'BAHAMAS': 'Bahamas', 'AMERICA DO SUL': 'América do Sul',
+    'MEDITERRANEO': 'Mediterrâneo', 'NORTE DA EUROPA': 'Norte da Europa', 'ALASCA': 'Alasca',
+    'ASIA': 'Ásia', 'AUSTRALIA E NOVA ZELANDIA': 'Austrália e N. Zelândia', 'BERMUDAS': 'Bermudas',
+    'CANADA E NOVA INGLATERRA': 'Canadá / N. Inglaterra', 'HAVAI': 'Havaí', 'CANAL DO PANAMA': 'Canal do Panamá',
+    'TRANSATLANTICO': 'Travessia Transatlântica', 'ORIENTE MEDIO': 'Oriente Médio'
   };
 
-  const DICIONARIO_DESTINOS = {
-    'CARIBBEAN': 'Caribe', 'EASTERN CARIBBEAN': 'Caribe Oriental', 'WESTERN CARIBBEAN': 'Caribe Ocidental',
-    'SOUTHERN CARIBBEAN': 'Caribe do Sul', 'MEDITERRANEAN': 'Mediterrâneo', 'SOUTH AMERICA': 'América do Sul', 'BAHAMAS': 'Bahamas'
+  const DICIONARIO_PORTOS = {
+    'SSZ': 'Santos', 'SANTOS': 'Santos',
+    'GIG': 'Rio de Janeiro', 'RIO DE JANEIRO': 'Rio de Janeiro', 'RIO': 'Rio de Janeiro',
+    'SSA': 'Salvador', 'SALVADOR': 'Salvador',
+    'ITJ': 'Itajaí', 'ITAJAI': 'Itajaí',
+    'MCZ': 'Maceió', 'MACEIO': 'Maceió',
+    'REC': 'Recife', 'RECIFE': 'Recife',
+    'BUE': 'Buenos Aires', 'BUENOS AIRES': 'Buenos Aires',
+    'MVD': 'Montevidéu', 'MONTEVIDEO': 'Montevidéu',
+    'MIA': 'Miami', 'MIAMI': 'Miami',
+    'FLL': 'Fort Lauderdale', 'FORT LAUDERDALE': 'Fort Lauderdale',
+    'PCN': 'Port Canaveral', 'PORT CANAVERAL': 'Port Canaveral',
+    'ROM': 'Roma (Civitavecchia)', 'CIVITAVECCHIA': 'Roma (Civitavecchia)',
+    'BCN': 'Barcelona', 'BARCELONA': 'Barcelona',
+    'LAX': 'Los Angeles', 'LOS ANGELES': 'Los Angeles',
+    'GAL': 'Galveston', 'GALVESTON': 'Galveston',
+    'KEL': 'Kiel', 'KIEL': 'Kiel',
+    'GEN': 'Gênova', 'GENOA': 'Gênova', 'GENOVA': 'Gênova',
+    'VEN': 'Veneza', 'VENICE': 'Veneza',
+    'NAP': 'Nápoles', 'NAPLES': 'Nápoles',
+    'MRS': 'Marselha', 'MARSEILLE': 'Marselha',
+    'DXB': 'Dubai', 'DUBAI': 'Dubai'
+  };
+
+  const traduzirPorto = (codigoBruto) => {
+    if (!codigoBruto) return 'Porto Indefinido';
+    const limpo = String(codigoBruto).trim().toUpperCase();
+    return DICIONARIO_PORTOS[limpo] || codigoBruto; 
   };
 
   const companhiasUnicas = [...new Set(sanityNavios.map(n => n.companhia))].filter(Boolean).sort();
   const naviosUnicos = [...new Set(sanityNavios.map(n => n.nome))].filter(Boolean).sort();
+  
+  // A LISTA DE PORTOS DO MENU AGORA É FIXA (Garante que nunca fique vazia)
+  const listaDePortosFixa = [...new Set(Object.values(DICIONARIO_PORTOS))].sort();
 
   // ==============================================================
-  // 🔍 FILTRO COMPLETO (INCLUINDO DURAÇÃO)
+  // 🔍 FILTRO COMPLETO 
   // ==============================================================
   const cruzeirosFiltrados = todosCruzeiros.filter(c => {
     const navioSanity = getSanityShip(c, sanityNavios);
     const compAPI = normalize(navioSanity ? navioSanity.companhia : (c.companhiaNome || c.companhia));
     const navAPI = normalize(navioSanity ? navioSanity.nome : (c.navioNome || c.navio));
-    const porto = c.portoEmbarque || c.porto || '';
-    const dest = c.destino || c.regiao || '';
+    
+    // A mágica acontece aqui: A comparação é feita com o porto já traduzido
+    const portoCruzeiro = traduzirPorto(c.portoEmbarque);
+    
+    const textoPesquisaDestino = normalize((c.destino || '') + ' ' + (c.regiao || '') + ' ' + (c.nomeRoteiro || ''));
 
     const filtroNav = normalize(filtros.navio);
     const filtroComp = normalize(filtros.companhia);
     const filtroDuracao = filtros.duracao;
+    const filtroDest = normalize(filtros.destino);
 
     if (filtroComp && !compAPI.includes(filtroComp)) return false;
     if (filtroNav && navAPI !== filtroNav && !navAPI.includes(filtroNav)) return false;
-    if (filtros.portoEmbarque && porto !== filtros.portoEmbarque) return false;
-    if (filtros.destino && dest !== filtros.destino) return false;
     
-    // Regra da Duração (Nro de Noites)
+    if (filtros.portoEmbarque && portoCruzeiro !== filtros.portoEmbarque) return false;
+    if (filtroDest && !textoPesquisaDestino.includes(filtroDest)) return false;
+    
     if (filtroDuracao) {
       const noites = parseInt(c.noites, 10);
       if (filtroDuracao === '1-3' && (noites < 1 || noites > 3)) return false;
@@ -178,7 +192,7 @@ export default function PalastoreCruzeiros() {
   const selecionarCruzeiro = (cruzeiro) => { setCruzeiroAtivo(cruzeiro); setEtapa(2); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
   // ==============================================================
-  // 🧩 RENDERIZAÇÃO DA MATRIZ E BOTÕES
+  // 🧩 RENDERIZAÇÃO DA MATRIZ E BOTÕES DO WHATSAPP
   // ==============================================================
   const renderizarTabelaMatriz = () => {
     if (!cruzeiroAtivo) return null;
@@ -298,7 +312,7 @@ export default function PalastoreCruzeiros() {
 
       <div className="w-full max-w-[1400px] flex flex-col lg:flex-row gap-6 mt-8 px-4 items-start relative">
         
-        {/* SIDEBAR COM O NOVO FILTRO DE DURAÇÃO */}
+        {/* SIDEBAR COM OS FILTROS */}
         {etapa === 1 && (
           <div className="w-full lg:w-[320px] flex-shrink-0 bg-white shadow-lg border border-gray-200 rounded-xl overflow-hidden">
             <div className="bg-[#2c3e50] text-white font-black py-4 px-5 uppercase text-sm tracking-widest flex items-center gap-2">
@@ -324,17 +338,17 @@ export default function PalastoreCruzeiros() {
                   <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 block">Destino da Viagem</label>
                   <select className="w-full border-2 border-gray-200 rounded-lg p-2.5 text-xs font-semibold text-gray-700 bg-gray-50 outline-none focus:border-blue-500" value={filtros.destino} onChange={(e) => setFiltros({...filtros, destino: e.target.value})}>
                     <option value="">Qualquer Destino</option>
-                    {Object.entries(DICIONARIO_DESTINOS).sort().map(([key, value]) => <option key={key} value={key}>{value}</option>)}
+                    {Object.entries(DICIONARIO_DESTINOS).map(([key, value]) => <option key={key} value={key}>{value}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 block">Porto de Embarque</label>
                   <select className="w-full border-2 border-gray-200 rounded-lg p-2.5 text-xs font-semibold text-gray-700 bg-gray-50 outline-none focus:border-blue-500" value={filtros.portoEmbarque} onChange={(e) => setFiltros({...filtros, portoEmbarque: e.target.value})}>
                     <option value="">Qualquer Porto</option>
-                    {Object.entries(DICIONARIO_PORTOS).sort((a,b) => a[1].localeCompare(b[1])).map(([key, value]) => <option key={key} value={key}>{value}</option>)}
+                    {/* A LISTA DE PORTOS AGORA É FIXA (NUNCA VAI ESTAR VAZIA) */}
+                    {listaDePortosFixa.map(porto => <option key={porto} value={porto}>{porto}</option>)}
                   </select>
                 </div>
-                {/* ⏱️ NOVO FILTRO DE DURAÇÃO */}
                 <div>
                   <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 block">Duração (Noites)</label>
                   <select className="w-full border-2 border-gray-200 rounded-lg p-2.5 text-xs font-semibold text-gray-700 bg-gray-50 outline-none focus:border-blue-500" value={filtros.duracao} onChange={(e) => setFiltros({...filtros, duracao: e.target.value})}>
@@ -414,6 +428,9 @@ export default function PalastoreCruzeiros() {
                   const navioSanity = getSanityShip(cruzeiro, sanityNavios);
                   const nomeNavioOficial = navioSanity ? navioSanity.nome : cruzeiro.navioNome || "Navio Especial";
                   const fotoListagem = navioSanity ? navioSanity.imagemPrincipal : null;
+                  
+                  // Usa a função de tradução no display do card
+                  const portoDeEmbarqueDisplay = traduzirPorto(cruzeiro.portoEmbarque);
 
                   return (
                     <div key={idx} className="bg-white shadow-md border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition group">
@@ -434,7 +451,7 @@ export default function PalastoreCruzeiros() {
                           
                           <div>
                             <h3 className="text-[14px] text-gray-800 font-black uppercase tracking-wide leading-tight">{cruzeiro.nomeRoteiro}</h3>
-                            <p className="text-[12px] text-gray-500 mt-1">Partindo de: <strong className="text-gray-700">{DICIONARIO_PORTOS[cruzeiro.portoEmbarque] || cruzeiro.portoEmbarque}</strong></p>
+                            <p className="text-[12px] text-gray-500 mt-1">Partindo de: <strong className="text-gray-700">{portoDeEmbarqueDisplay}</strong></p>
                             <p className="text-[11px] text-gray-500 mt-0.5">Navio: <span className="text-blue-700 font-bold">{nomeNavioOficial}</span></p>
                           </div>
                         </div>
