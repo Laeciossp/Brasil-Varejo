@@ -137,6 +137,8 @@ export default function FlightSearch({ prefilledData }) {
       const destId = prefilledData.destino;
       setDestinations([{ id: destId, name: destId }]);
 
+      let customTripType = 'return';
+      
       if (prefilledData.dataIda) {
         setDateType('specific');
         setDateFrom(prefilledData.dataIda);
@@ -145,11 +147,12 @@ export default function FlightSearch({ prefilledData }) {
           setTripType('return');
         } else {
           setTripType('oneway');
+          customTripType = 'oneway';
         }
       }
       window.scrollTo({ top: 250, behavior: 'smooth' });
       setTimeout(() => {
-        executeSearch(null, sortConfig, stopsConfig, destId, prefilledData.dataIda, prefilledData.dataVolta);
+        executeSearch(null, sortConfig, stopsConfig, destId, prefilledData.dataIda, prefilledData.dataVolta, customTripType);
       }, 200);
     }
   }, [prefilledData]);
@@ -211,7 +214,7 @@ export default function FlightSearch({ prefilledData }) {
     return false;
   };
 
-  const executeSearch = async (e, overrideSort = sortConfig, overrideStops = stopsConfig, customDest = null, customIda = null, customVolta = null) => {
+  const executeSearch = async (e, overrideSort = sortConfig, overrideStops = stopsConfig, customDest = null, customIda = null, customVolta = null, customTripType = null) => {
     if(e) e.preventDefault();
     
     const activeDestinations = customDest ? [{ id: customDest }] : destinations;
@@ -231,17 +234,18 @@ export default function FlightSearch({ prefilledData }) {
     setLastHoldIdaCount(parseInt(holdBagsIda, 10) || 0);
     setLastHoldVoltaCount(parseInt(holdBagsVolta, 10) || 0);
 
-    const effectiveDateFrom = customIda || (dateFrom ? dateFrom : getTodayStr());
-    const searchDateToRange = customIda || (dateFrom ? dateFrom : getSixMonthsStr());
+    const effectiveDateFrom = customIda || (dateType === 'specific' && dateFrom ? dateFrom : getTodayStr());
+    const searchDateToRange = customIda || (dateType === 'specific' && dateFrom ? dateFrom : getSixMonthsStr());
     const destIds = activeDestinations.map(d => d.id).join(',');
 
     try {
       let url = `${WORKER_URL}/search-flights?origin=${origin.id}&destination=${destIds}&dateFrom=${effectiveDateFrom}&dateToRange=${searchDateToRange}&adults=${a}&children=${c}&infants=${i}&cabin=${cabin}&sort=${overrideSort}&max_stopovers=${overrideStops}`;
-      const isReturn = customVolta ? true : (tripType === 'return');
+      const activeTripType = customTripType || tripType;
+      const isReturn = customVolta ? true : (activeTripType === 'return');
       
       if (isReturn) {
-        const effectiveDateTo = customVolta || (dateTo ? dateTo : effectiveDateFrom);
-        const searchRetToRange = customVolta || (dateTo ? dateTo : getSixMonthsStr());
+        const effectiveDateTo = customVolta || (dateType === 'specific' && dateTo ? dateTo : effectiveDateFrom);
+        const searchRetToRange = customVolta || (dateType === 'specific' && dateTo ? dateTo : getSixMonthsStr());
         url += `&returnFrom=${effectiveDateTo}&returnToRange=${searchRetToRange}`;
       }
 
