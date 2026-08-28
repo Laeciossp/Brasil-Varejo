@@ -1,21 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom'; // <-- useLocation adicionado aqui
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { createClient } from "@sanity/client";
-import { formatCurrency } from '../lib/utils';
-import useCartStore from '../store/useCartStore';
 
 // IMPORTAÇÕES DA AGÊNCIA
 import FlightSearch from './FlightSearch'; 
 import HotelSearch from './HotelSearch';
 import FlightHotelPackage from './FlightHotelPackage'; 
 import DestinosPopulares from '../components/DestinosPopulares';
-import PalastoreCruzeiros from './PalastoreCruzeiros'; 
+import PalastoreCruzeiros from './PalastoreCruzeiros';
 
 import { 
   Plane, Bus, ShieldCheck, ArrowRight, ExternalLink, Briefcase, 
   Building, Car, MapPin, Compass, Train, Star, Search,
-  Globe, Castle, Mountain, Sun, Waves, Palmtree, Filter, X,
-  Snowflake, Ship, Calendar, Tag, CheckCircle, TreePine, Gift, Coffee, Wand2, TrendingUp
+  Globe, Castle, Sun, Palmtree, Filter, X,
+  Snowflake, Ship, Calendar, Tag, CheckCircle, TreePine, Gift, Coffee, Wand2
 } from 'lucide-react';
 
 const client = createClient({
@@ -26,7 +24,7 @@ const client = createClient({
 });
 
 // ==========================================
-// ROTEIROS QUEENSBERRY
+// ROTEIROS QUEENSBERRY (SEM PREÇOS)
 // ==========================================
 const RoteirosExclusivos = () => {
   const [tours, setTours] = useState([]);
@@ -34,12 +32,8 @@ const RoteirosExclusivos = () => {
   const [searchTerm, setSearchTerm] = useState('');
   
   const [activeTheme, setActiveTheme] = useState('Todos');
-  const [priceRange, setPriceRange] = useState({ min: '', max: '' });
   const [selectedCountries, setSelectedCountries] = useState([]);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  
-  const { addItem, setShipping } = useCartStore();
-  const navigate = useNavigate();
 
   const themes = [
     { id: 'Todos', label: 'Todos os Roteiros', icon: Globe },
@@ -65,7 +59,7 @@ const RoteirosExclusivos = () => {
     const fetchTours = async () => {
       try {
         const query = `*[_type == "tour" && (!defined(isActive) || isActive == true) && !(_id in path("drafts.**"))][0...2000] | order(_createdAt desc) {
-          _id, title, price, "slug": slug.current, "imageUrl": images[0].asset->url, "tags": coalesce(tags, tematicas, []) 
+          _id, title, "slug": slug.current, "imageUrl": images[0].asset->url, "tags": coalesce(tags, tematicas, []) 
         }`;
         const data = await client.fetch(query);
         const normalizedData = data.map(tour => {
@@ -84,18 +78,6 @@ const RoteirosExclusivos = () => {
     fetchTours();
   }, []);
 
-  const handleQuickBook = (e, tour) => {
-    e.preventDefault();
-    e.stopPropagation();
-    addItem({
-      _id: tour._id, title: tour.title, slug: { current: tour.slug }, price: tour.price, image: tour.imageUrl,
-      sku: `TOUR-${tour._id.slice(-6)}`, variantName: "Pacote Duplo", isTravel: true
-    });
-    setShipping({ name: "Emissão Digital (E-Ticket / Voucher)", price: 0, delivery_time: 1, company: "Operadora" });
-    alert("Roteiro adicionado! Finalize a reserva no carrinho.");
-    navigate('/cart');
-  };
-
   const availableCountries = useMemo(() => {
     const macroThemesUpper = themes.map(t => t.id.toUpperCase());
     const allTags = tours.flatMap(t => t.normalizedTags || []);
@@ -108,10 +90,7 @@ const RoteirosExclusivos = () => {
     setSelectedCountries(prev => prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]);
   };
 
-  const handlePriceChange = (e) => setPriceRange({ ...priceRange, [e.target.name]: e.target.value });
-
   const clearFilters = () => {
-    setPriceRange({ min: '', max: '' });
     setSelectedCountries([]);
     setActiveTheme('Todos');
     setSearchTerm('');
@@ -121,11 +100,8 @@ const RoteirosExclusivos = () => {
     const searchLower = searchTerm.toLowerCase();
     const matchSearch = tour.title.toLowerCase().includes(searchLower) || (tour.normalizedTags && tour.normalizedTags.some(tag => tag.toLowerCase().includes(searchLower)));
     const matchTheme = activeTheme === 'Todos' || (tour.normalizedTags && tour.normalizedTags.includes(activeTheme.toUpperCase()));
-    const tourPrice = tour.price || 0;
-    const matchMin = priceRange.min ? tourPrice >= parseFloat(priceRange.min) : true;
-    const matchMax = priceRange.max ? tourPrice <= parseFloat(priceRange.max) : true;
     const matchCountry = selectedCountries.length === 0 || (tour.normalizedTags && selectedCountries.some(c => tour.normalizedTags.includes(c.toUpperCase())));
-    return matchSearch && matchTheme && matchMin && matchMax && matchCountry;
+    return matchSearch && matchTheme && matchCountry;
   });
 
   return (
@@ -165,19 +141,10 @@ const RoteirosExclusivos = () => {
                 <input type="text" placeholder="Nome do roteiro..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-orange-500 outline-none transition-colors" />
              </div>
 
-             <div className="mb-6">
-                <h3 className="font-bold text-gray-900 mb-3 text-sm uppercase tracking-wide">Faixa de Preço</h3>
-                <div className="flex gap-2 items-center">
-                   <div className="relative w-full"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">R$</span><input type="number" name="min" placeholder="Mínimo" value={priceRange.min} onChange={handlePriceChange} className="w-full pl-8 pr-2 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-orange-500 outline-none"/></div>
-                   <span className="text-gray-300">-</span>
-                   <div className="relative w-full"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">R$</span><input type="number" name="max" placeholder="Máximo" value={priceRange.max} onChange={handlePriceChange} className="w-full pl-8 pr-2 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-orange-500 outline-none"/></div>
-                </div>
-             </div>
-
              {availableCountries.length > 0 && (
                 <div className="mb-6">
                    <h3 className="font-bold text-gray-900 mb-3 text-sm uppercase tracking-wide">País / Região</h3>
-                   <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
+                   <div className="space-y-2 max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
                       <label className="flex items-center gap-3 cursor-pointer group select-none hover:bg-gray-50 p-2 rounded-lg transition-colors border-b border-gray-100 mb-2">
                          <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${selectedCountries.length === 0 ? 'bg-orange-600 border-orange-600' : 'border-gray-300 bg-white group-hover:border-orange-400'}`}>
                             {selectedCountries.length === 0 && <span className="text-white text-[10px] font-bold">✓</span>}
@@ -198,7 +165,7 @@ const RoteirosExclusivos = () => {
                 </div>
              )}
 
-             {(selectedCountries.length > 0 || priceRange.min || priceRange.max || searchTerm || activeTheme !== 'Todos') && (
+             {(selectedCountries.length > 0 || searchTerm || activeTheme !== 'Todos') && (
                 <div className="pt-4 border-t border-gray-100">
                   <button onClick={clearFilters} className="w-full text-xs font-bold text-red-500 bg-red-50 hover:bg-red-100 py-3 rounded-xl transition-all uppercase tracking-wide">Limpar Filtros</button>
                 </div>
@@ -231,14 +198,13 @@ const RoteirosExclusivos = () => {
                             </div>
                          </div>
                          <div className="p-5 flex flex-col flex-1 bg-white">
-                            <div className="mt-auto flex justify-between items-end">
-                               <div>
-                                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">A partir de</p>
-                                  <p className="text-2xl font-black text-gray-900 leading-none">{formatCurrency(tour.price)}</p>
-                               </div>
-                               <button onClick={(e) => handleQuickBook(e, tour)} className="w-12 h-12 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-all shadow-sm transform active:scale-95 flex-shrink-0 border border-orange-100" title="Reservar">
-                                  <ArrowRight size={20} className="-rotate-45 group-hover:rotate-0 transition-transform duration-300" />
-                               </button>
+                            <div className="mt-auto flex justify-between items-center w-full pt-2">
+                               <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1">
+                                  <Calendar size={14}/> Consulte Datas
+                               </span>
+                               <span className="flex items-center gap-1.5 text-[12px] font-black text-orange-600 group-hover:text-orange-700 transition-colors uppercase tracking-wider">
+                                  Ver Roteiro <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                               </span>
                             </div>
                          </div>
                       </Link>
@@ -248,7 +214,7 @@ const RoteirosExclusivos = () => {
                 <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4"><Compass size={40} className="text-gray-300" /></div>
                    <h3 className="text-xl font-bold text-gray-800">Nenhum roteiro atende aos seus filtros.</h3>
-                   <p className="text-gray-500 mt-2 mb-6">Tente ajustar o preço ou remover alguns países.</p>
+                   <p className="text-gray-500 mt-2 mb-6">Tente alterar sua busca ou remover alguns países.</p>
                    <button onClick={clearFilters} className="px-6 py-3 bg-orange-600 text-white font-bold rounded-xl shadow-lg hover:bg-orange-700 transition-colors">Limpar Filtros</button>
                 </div>
              )}
@@ -348,7 +314,6 @@ export default function ViagensPage() {
   const [activeTab, setActiveTab] = useState('voos'); 
   const [dadosPreenchidos, setDadosPreenchidos] = useState(null);
 
-  // 👇 NOVA LÓGICA DE DETECÇÃO DA URL 👇
   const location = useLocation();
 
   useEffect(() => {
@@ -358,7 +323,6 @@ export default function ViagensPage() {
       setActiveTab(tabFromUrl);
     }
   }, [location]);
-  // 👆 FIM DA NOVA LÓGICA 👆
   
   const menuItems = [
     { id: 'voos', label: 'Passagens Aéreas', icon: Plane },
