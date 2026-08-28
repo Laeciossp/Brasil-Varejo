@@ -3,7 +3,7 @@ import { Ship, Search, Calendar, MessageCircle, CheckCircle, X, Maximize2 } from
 import { createClient } from "@sanity/client";
 
 // ==============================================================
-// 1. CONEXÃO COM O SANITY
+// 1. CONEXÃO COM O SANITY E CONFIGURAÇÕES
 // ==============================================================
 const sanityClient = createClient({
   projectId: 'o4upb251',
@@ -15,21 +15,12 @@ const sanityClient = createClient({
 
 const normalize = (s) => s ? String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim() : "";
 
-// ==============================================================
-// 🪄 RASTREADOR DE NAVIO (CHAVE MESTRA)
-// ==============================================================
-const getSanityShip = (cruzeiro, sanityNavios) => {
-  if (!cruzeiro.navioId) return null;
-  return sanityNavios.find(s => 
-    s.codigoOperadora && 
-    String(s.codigoOperadora).trim().toUpperCase() === String(cruzeiro.navioId).trim().toUpperCase()
-  );
-};
-
 const hoje = new Date();
 const daqui60dias = new Date(); daqui60dias.setDate(hoje.getDate() + 60);
 const daqui1Ano = new Date(); daqui1Ano.setFullYear(hoje.getFullYear() + 1);
 const formataData = (d) => d.toISOString().split('T')[0];
+
+const FOTO_CORINGA = "https://images.unsplash.com/photo-1599640842225-85d111c60e6b?q=80&w=1000&auto=format&fit=crop";
 
 export default function PalastoreCruzeiros() {
   const [sanityNavios, setSanityNavios] = useState([]); 
@@ -107,7 +98,7 @@ export default function PalastoreCruzeiros() {
   };
 
   // ==============================================================
-  // 🌍 DICIONÁRIOS GIGANTES HARDCODED (À PROVA DE FALHAS)
+  // 🌍 DICIONÁRIOS
   // ==============================================================
   const DICIONARIO_DESTINOS = {
     'CARIBE': 'Caribe', 'CARIBE ORIENTAL': 'Caribe Oriental', 'CARIBE OCIDENTAL': 'Caribe Ocidental',
@@ -148,23 +139,50 @@ export default function PalastoreCruzeiros() {
     return DICIONARIO_PORTOS[limpo] || codigoBruto; 
   };
 
-  const companhiasUnicas = [...new Set(sanityNavios.map(n => n.companhia))].filter(Boolean).sort();
-  const naviosUnicos = [...new Set(sanityNavios.map(n => n.nome))].filter(Boolean).sort();
-  
-  // A LISTA DE PORTOS DO MENU AGORA É FIXA (Garante que nunca fique vazia)
+  // ==============================================================
+  // 🪄 INTELIGÊNCIA DO NAVIO (PERFIL CORINGA PARA NÃO PERDER VENDA)
+  // ==============================================================
+  const getNavioDisplay = (cruzeiro) => {
+    // Tenta achar no Sanity primeiro
+    const navioSanity = sanityNavios.find(s => s.codigoOperadora && String(s.codigoOperadora).trim().toUpperCase() === String(cruzeiro.navioId).trim().toUpperCase());
+    if (navioSanity) return navioSanity;
+
+    // Se não achou, cria um perfil "Falso" seguro para o cliente clicar
+    let nomeAPI = cruzeiro.navioNome || "";
+    let compAPI = cruzeiro.companhiaNome || "Companhia Marítima";
+
+    // Regra de substituição pedida: "Especial" vira "Costa Preciosa"
+    if (!nomeAPI || nomeAPI.toUpperCase().includes("ESPECIAL") || nomeAPI.toUpperCase().includes("SPECIAL")) {
+      nomeAPI = "Costa Preciosa";
+    }
+
+    return {
+      nome: nomeAPI,
+      companhia: compAPI,
+      imagemPrincipal: FOTO_CORINGA,
+      categoriasCabine: [
+        { nomeAmigavel: "Interna", descricaoLimpa: "Acomodação confortável com excelente custo-benefício.", variacoes: [] },
+        { nomeAmigavel: "Vista Mar / Externa", descricaoLimpa: "Cabine com janela ou escotilha para luz natural.", variacoes: [] },
+        { nomeAmigavel: "Varanda / Balcony", descricaoLimpa: "Aproveite a brisa do mar na sua varanda privativa.", variacoes: [] },
+        { nomeAmigavel: "Suíte", descricaoLimpa: "Acomodação espaçosa de luxo com mimos exclusivos.", variacoes: [] }
+      ]
+    };
+  };
+
+  // Extrai listas dinâmicas com base no que realmente existe, para o filtro não ficar com opções vazias
+  const companhiasUnicas = [...new Set(todosCruzeiros.map(c => getNavioDisplay(c).companhia))].filter(Boolean).sort();
+  const naviosUnicos = [...new Set(todosCruzeiros.map(c => getNavioDisplay(c).nome))].filter(Boolean).sort();
   const listaDePortosFixa = [...new Set(Object.values(DICIONARIO_PORTOS))].sort();
 
   // ==============================================================
   // 🔍 FILTRO COMPLETO 
   // ==============================================================
   const cruzeirosFiltrados = todosCruzeiros.filter(c => {
-    const navioSanity = getSanityShip(c, sanityNavios);
-    const compAPI = normalize(navioSanity ? navioSanity.companhia : (c.companhiaNome || c.companhia));
-    const navAPI = normalize(navioSanity ? navioSanity.nome : (c.navioNome || c.navio));
+    const navioDisplay = getNavioDisplay(c);
     
-    // A mágica acontece aqui: A comparação é feita com o porto já traduzido
+    const compAPI = normalize(navioDisplay.companhia);
+    const navAPI = normalize(navioDisplay.nome);
     const portoCruzeiro = traduzirPorto(c.portoEmbarque);
-    
     const textoPesquisaDestino = normalize((c.destino || '') + ' ' + (c.regiao || '') + ' ' + (c.nomeRoteiro || ''));
 
     const filtroNav = normalize(filtros.navio);
@@ -192,31 +210,21 @@ export default function PalastoreCruzeiros() {
   const selecionarCruzeiro = (cruzeiro) => { setCruzeiroAtivo(cruzeiro); setEtapa(2); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
   // ==============================================================
-  // 🧩 RENDERIZAÇÃO DA MATRIZ E BOTÕES DO WHATSAPP
+  // 🧩 RENDERIZAÇÃO DA MATRIZ
   // ==============================================================
   const renderizarTabelaMatriz = () => {
     if (!cruzeiroAtivo) return null;
-    const navioSanity = getSanityShip(cruzeiroAtivo, sanityNavios);
-
-    if (!navioSanity || !navioSanity.categoriasCabine) {
-      return (
-        <div className="w-full bg-white border border-gray-200 mt-6 shadow-sm p-8 text-center rounded-lg">
-          <Ship className="mx-auto text-gray-300 mb-3" size={40}/>
-          <p className="text-gray-500 font-bold uppercase tracking-wider text-sm">O visual das cabines deste navio ainda não foi sincronizado.</p>
-        </div>
-      );
-    }
-
+    const navioDisplay = getNavioDisplay(cruzeiroAtivo);
     const tiposTarifa = [...new Set(cruzeiroAtivo.cabinesDisponiveis.map(c => c.nomeTarifa))];
 
     return (
       <div className="w-full bg-white border border-gray-200 mt-6 shadow-sm text-sm rounded-b-lg">
         <div className="flex bg-[#2c3e50] text-white font-bold uppercase text-[10px] tracking-wider rounded-t-lg">
-          <div className="w-2/5 p-4 border-r border-gray-600">Acomodações do Catálogo</div>
+          <div className="w-2/5 p-4 border-r border-gray-600">Acomodações</div>
           {tiposTarifa.map(tarifa => (<div key={tarifa} className="flex-1 p-4 text-center border-r border-gray-600 truncate">{tarifa}</div>))}
         </div>
 
-        {navioSanity.categoriasCabine.map((catSanity, idx) => {
+        {navioDisplay.categoriasCabine.map((catSanity, idx) => {
           
           const ofertasDestaCabine = cruzeiroAtivo.cabinesDisponiveis.filter(apiCab => {
             const sName = normalize(catSanity.nomeAmigavel);
@@ -230,12 +238,12 @@ export default function PalastoreCruzeiros() {
 
             const isInterna = sName.includes('interna');
             const isVaranda = sName.includes('varanda') || sName.includes('balcony');
-            const isExterna = sName.includes('externa') || sName.includes('vista') || sName.includes('mar');
+            const isExterna = sName.includes('externa') || sName.includes('vista') || sName.includes('mar') || sName.includes('ocean');
             const isSuite = sName.includes('suite');
 
             const apiIsInterna = aName.includes('interna') || aType.includes('interna');
             const apiIsVaranda = aName.includes('varanda') || aType.includes('varanda') || aName.includes('balcony');
-            const apiIsExterna = aName.includes('externa') || aType.includes('externa') || aName.includes('ocean');
+            const apiIsExterna = aName.includes('externa') || aType.includes('externa') || aName.includes('ocean') || aName.includes('vista');
             const apiIsSuite = aName.includes('suite') || aType.includes('suite');
 
             if (isInterna && apiIsInterna) return true;
@@ -269,7 +277,7 @@ export default function PalastoreCruzeiros() {
               {tiposTarifa.map(tarifa => {
                 const temDisponibilidade = ofertasDestaCabine.some(c => c.nomeTarifa === tarifa);
                 
-                const wpText = encodeURIComponent(`Olá! Tenho interesse na cabine *${catSanity.nomeAmigavel}* (Tarifa: ${tarifa}) no navio *${navioSanity.nome}* para a saída de *${cruzeiroAtivo.dataEmbarque}*. Pode me passar a cotação e opções de decks?`);
+                const wpText = encodeURIComponent(`Olá! Tenho interesse na cabine *${catSanity.nomeAmigavel}* (Tarifa: ${tarifa}) no navio *${navioDisplay.nome}* para a saída de *${cruzeiroAtivo.dataEmbarque}*. Pode me passar a cotação e opções de decks?`);
                 const wpLink = `https://wa.me/5571983810420?text=${wpText}`;
 
                 return (
@@ -345,7 +353,6 @@ export default function PalastoreCruzeiros() {
                   <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 block">Porto de Embarque</label>
                   <select className="w-full border-2 border-gray-200 rounded-lg p-2.5 text-xs font-semibold text-gray-700 bg-gray-50 outline-none focus:border-blue-500" value={filtros.portoEmbarque} onChange={(e) => setFiltros({...filtros, portoEmbarque: e.target.value})}>
                     <option value="">Qualquer Porto</option>
-                    {/* A LISTA DE PORTOS AGORA É FIXA (NUNCA VAI ESTAR VAZIA) */}
                     {listaDePortosFixa.map(porto => <option key={porto} value={porto}>{porto}</option>)}
                   </select>
                 </div>
@@ -425,11 +432,7 @@ export default function PalastoreCruzeiros() {
                 </div>
               ) : (
                 cruzeirosFiltrados.map((cruzeiro, idx) => {
-                  const navioSanity = getSanityShip(cruzeiro, sanityNavios);
-                  const nomeNavioOficial = navioSanity ? navioSanity.nome : cruzeiro.navioNome || "Navio Especial";
-                  const fotoListagem = navioSanity ? navioSanity.imagemPrincipal : null;
-                  
-                  // Usa a função de tradução no display do card
+                  const navioDisplay = getNavioDisplay(cruzeiro);
                   const portoDeEmbarqueDisplay = traduzirPorto(cruzeiro.portoEmbarque);
 
                   return (
@@ -438,9 +441,9 @@ export default function PalastoreCruzeiros() {
                         <div className="flex items-center gap-5 w-full md:w-auto">
                           
                           {/* 🖼️ FOTO DO NAVIO CLICÁVEL COM EFEITO DE LUPA */}
-                          {fotoListagem ? (
-                            <div className="relative group/img cursor-pointer" onClick={() => setImagemModal(fotoListagem)}>
-                              <img src={fotoListagem} alt="Navio" className="w-32 h-20 object-cover border border-gray-200 rounded-lg shadow-sm group-hover/img:opacity-80 transition" />
+                          {navioDisplay.imagemPrincipal ? (
+                            <div className="relative group/img cursor-pointer" onClick={() => setImagemModal(navioDisplay.imagemPrincipal)}>
+                              <img src={navioDisplay.imagemPrincipal} alt="Navio" className="w-32 h-20 object-cover border border-gray-200 rounded-lg shadow-sm group-hover/img:opacity-80 transition" />
                               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition">
                                 <div className="bg-black/50 p-1 rounded-full"><Maximize2 className="text-white" size={14}/></div>
                               </div>
@@ -452,7 +455,7 @@ export default function PalastoreCruzeiros() {
                           <div>
                             <h3 className="text-[14px] text-gray-800 font-black uppercase tracking-wide leading-tight">{cruzeiro.nomeRoteiro}</h3>
                             <p className="text-[12px] text-gray-500 mt-1">Partindo de: <strong className="text-gray-700">{portoDeEmbarqueDisplay}</strong></p>
-                            <p className="text-[11px] text-gray-500 mt-0.5">Navio: <span className="text-blue-700 font-bold">{nomeNavioOficial}</span></p>
+                            <p className="text-[11px] text-gray-500 mt-0.5">Navio: <span className="text-blue-700 font-bold">{navioDisplay.nome}</span></p>
                           </div>
                         </div>
                         <div className="text-center px-8 border-l border-gray-200 hidden md:block">
