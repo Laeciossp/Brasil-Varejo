@@ -243,20 +243,22 @@ const PartnerIframe = ({ title, url, noticeText, themeColor }) => {
 };
 
 // ==========================================
-// BANNER DE REDIRECIONAMENTO NCL (GLASSMORPHISM)
+// BANNER DE REDIRECIONAMENTO NCL (AJUSTADO PARA A DIREITA)
 // ==========================================
 const NclRedirectBanner = ({ title, url, description, buttonText, imageBg, icon: Icon }) => {
   return (
     <div className="animate-in fade-in zoom-in-95 duration-500 w-full flex flex-col items-center mb-10">
-       <div className="relative w-full rounded-3xl overflow-hidden shadow-2xl min-h-[450px] flex items-center p-6 md:p-12 lg:p-16">
+       {/* justify-end empurra o card para a direita para não cobrir o navio */}
+       <div className="relative w-full rounded-3xl overflow-hidden shadow-2xl min-h-[450px] flex items-center justify-end p-6 md:p-12 lg:p-16">
           
-          {/* Imagem de Fundo (ncl.png da pasta public) e Degradê de Leitura */}
+          {/* Imagem de Fundo (ncl.png da pasta public) e Degradê Invertido */}
           <div className="absolute inset-0">
             <img src={imageBg} alt={title} className="w-full h-full object-cover object-center" />
-            <div className="absolute inset-0 bg-gradient-to-r from-gray-900/90 via-gray-900/50 to-transparent"></div>
+            {/* O degradê agora vem da direita (bg-gradient-to-l) para cobrir apenas a área onde o card está */}
+            <div className="absolute inset-0 bg-gradient-to-l from-gray-900/90 via-gray-900/40 to-transparent"></div>
           </div>
           
-          {/* Card Flutuante de Vidro (Glassmorphism) */}
+          {/* Card Flutuante de Vidro (Glassmorphism) na Direita */}
           <div className="relative z-10 bg-white/10 backdrop-blur-md border border-white/20 p-8 md:p-10 rounded-3xl max-w-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
             <div className="bg-orange-500 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-lg">
                 <Icon size={32} className="text-white" />
