@@ -9,7 +9,8 @@ import order from './order'
 import customer from './customer'
 import staff from './staff'
 import tour from './tour' 
-import navio from './navio' // 👈 Nova importação do schema de Cruzeiros/Navios
+import navio from './navio' 
+import ofertaMarketing from './ofertaMarketing' // 👈 Nova importação dos Cruzeiros Temáticos
 
 // --- Schemas da Home / Page Builder ---
 import hero from './hero'
@@ -28,7 +29,8 @@ export const schemaTypes = [
   customer,
   staff,
   tour,
-  navio, // 👈 Declare o navio aqui para ele aparecer no painel do Sanity
+  navio, 
+  ofertaMarketing, // 👈 Declare a ofertaMarketing aqui para aparecer no painel do Sanity
 
   // Page Builder da Home
   hero,
