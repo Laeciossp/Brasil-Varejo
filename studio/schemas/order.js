@@ -30,6 +30,7 @@ export default {
       initialValue: 'pending'
     },
     
+    // Campos Ocultos de Sistema
     { name: 'cpf', type: 'string', hidden: true },
     { name: 'customerEmail', type: 'string', hidden: true },
     { name: 'customerDocument', type: 'string', hidden: true },
@@ -63,20 +64,20 @@ export default {
           fields: [
             { name: 'product', title: 'Vínculo (Produto Físico)', type: 'reference', to: [{ type: 'product' }] },
             { name: 'productName', title: 'Serviço / Produto', type: 'string' },
-            { name: 'serviceType', title: 'Categoria do Serviço', type: 'string' }, // <-- NOVO CAMPO
+            { name: 'serviceType', title: 'Categoria do Serviço', type: 'string' },
             { name: 'variantName', title: 'Tarifa / Variação', type: 'string' },
-            { name: 'description', title: 'Roteiro & Horários Detalhados', type: 'text', rows: 6 }, // <-- AUMENTADO PARA CABER TUDO
+            { name: 'description', title: 'Roteiro & Horários Detalhados', type: 'text', rows: 6 },
             { name: 'quantity', title: 'Quantidade (Pax)', type: 'number' },
             { name: 'price', title: 'Preço Unitário', type: 'number' },
             { name: 'imageUrl', title: 'Imagem', type: 'string' }
           ],
           preview: {
-            select: { title: 'productName', subtitle: 'serviceType', imageUrl: 'imageUrl' },
+            select: { title: 'productName', subtitle: 'description', imageUrl: 'imageUrl' },
             prepare({ title, subtitle, imageUrl }) {
               return {
                 title: title,
-                subtitle: subtitle || 'Sem Categoria',
-                media: imageUrl ? React.createElement('img', { src: imageUrl, style: { objectFit: 'cover', height: '100%', width: '100%' } }) : undefined
+                subtitle: subtitle || 'Sem detalhes adicionais',
+                media: imageUrl ? React.createElement('img', { src: imageUrl, style: { objectFit: 'cover' } }) : undefined
               }
             }
           }
