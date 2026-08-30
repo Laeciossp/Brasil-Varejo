@@ -45,9 +45,13 @@ export default function Cart() {
     addSavedPassenger
   } = useCartStore();
   
-  const isDigitalCart = items.length > 0 && items.every(item => item.isTravel === true);
+  const isItemTravel = (item) => item.isTravel === true || !!item.flightDetails || !!item.transferPayload;
+  const travelItems = items.filter(isItemTravel);
+  const physicalItems = items.filter(i => !isItemTravel(i));
+  const hasTravelItems = travelItems.length > 0;
+  const isOnlyDigital = hasTravelItems && physicalItems.length === 0;
   
-  const totalTickets = items.filter(i => i.isTravel).reduce((max, item) => {
+  const totalTickets = travelItems.reduce((max, item) => {
     let itemPax = item.quantity || 1;
     if (item.transferPayload) {
       itemPax = (item.transferPayload.adults || 0) + (item.transferPayload.children || 0);
@@ -64,7 +68,7 @@ export default function Cart() {
   const totalFinal = subtotal - discount + shippingCost;
   const activeAddress = customer.addresses?.find(a => a.id === customer.activeAddressId);
 
-  const flightItem = items.find(i => i.isTravel && i.flightDetails);
+  const flightItem = items.find(i => i.flightDetails && !i.transferPayload);
   const [timeLeft, setTimeLeft] = useState(null);
 
   useEffect(() => {
@@ -99,7 +103,7 @@ export default function Cart() {
   useEffect(() => { if (user && !customerName) setCustomerName(user.fullName || ''); }, [user]);
 
   useEffect(() => {
-    if (isDigitalCart) {
+    if (hasTravelItems) {
       setPassengers(prev => {
         if (prev.length === totalTickets) return prev;
         const newArr = [...prev];
@@ -118,7 +122,7 @@ export default function Cart() {
         return newArr;
       });
     }
-  }, [totalTickets, isDigitalCart]);
+  }, [totalTickets, hasTravelItems]);
 
   const handlePaxChange = (index, field, value) => {
      setPassengers(prev => {
@@ -178,14 +182,14 @@ export default function Cart() {
 
   useEffect(() => {
     const recalculate = async () => {
-      if (isDigitalCart) {
+      if (isOnlyDigital) {
          const digitalShipping = { name: "Emissão Digital (E-Ticket / Voucher)", price: 0, delivery_time: 1, company: "Operadora" };
          setShippingOptions([digitalShipping]);
          setShipping(digitalShipping);
          return; 
       }
       const targetZip = activeAddress?.zip || (globalCep !== 'Informe seu CEP' ? globalCep : null);
-      if (!targetZip || items.length === 0) {
+      if (!targetZip || physicalItems.length === 0) {
           if (!targetZip) setShipping(null);
           return;
       }
@@ -193,11 +197,11 @@ export default function Cart() {
       const cleanZip = targetZip.replace(/\D/g, '');
       const isLocal = cleanZip === '43850000';
       const isNearby = ['40', '41', '42', '43', '44', '48'].some(p => cleanZip.startsWith(p));
-      const maxHandlingTime = items.reduce((max, item) => Math.max(max, parseInt(item.handlingTime) || 4), 4);
+      const maxHandlingTime = physicalItems.reduce((max, item) => Math.max(max, parseInt(item.handlingTime) || 4), 4);
       const extraDays = isNearby ? 4 : maxHandlingTime; 
       const postingDays = 1;
       let finalOptions = [];
-      const physicalItems = items.filter(i => !i.isTravel);
+      
       const paidItems = physicalItems.filter(i => !i.freeShipping);
       const hasPaidItems = paidItems.length > 0;
       const allFree = physicalItems.length > 0 && !hasPaidItems;
@@ -303,7 +307,7 @@ export default function Cart() {
       }
     };
     recalculate();
-  }, [customer.activeAddressId, items.length, globalCep, isDigitalCart]);
+  }, [customer.activeAddressId, items.length, globalCep, isOnlyDigital]);
 
   const handleSaveAddress = () => {
     if (!newAddr.zip || !newAddr.street || !newAddr.number) return alert("Preencha os dados obrigatórios.");
@@ -314,9 +318,9 @@ export default function Cart() {
 
   const handleCheckout = async () => {
     if (!isLoaded || !user) return alert("Faça login para continuar.");
-    if (items.length === 0 || !selectedShipping || !activeAddress) return alert("Selecione a forma de entrega e preencha seu endereço de faturamento.");
+    if (physicalItems.length > 0 && (!selectedShipping || !activeAddress)) return alert("Selecione a forma de entrega e preencha o endereço.");
     
-    if (isDigitalCart) {
+    if (hasTravelItems) {
         const invalidPax = passengers.some(p => !p.name || !p.cpf || !p.dob || !p.relationship || !p.gender || !p.rg);
         if (invalidPax) return alert("Por favor, preencha todos os campos obrigatórios dos passageiros (Nome, Data Nasc., Parentesco, Gênero, CPF e RG).");
         
@@ -328,28 +332,23 @@ export default function Cart() {
                 }
             }
         });
-    } else {
-        if (!customer.document || !customerName) return alert("Informe seus dados pessoais completos.");
     }
+    if (!isOnlyDigital && (!customer.document || !customerName)) return alert("Informe seus dados pessoais completos.");
 
     setLoading(true);
     try {
       const orderNumber = `#PALA-${Math.floor(Date.now() / 1000)}`;
       
-      const finalCustomerName = isDigitalCart && passengers[0] ? passengers[0].name : customerName;
-      const finalCustomerDoc = isDigitalCart && passengers[0] ? passengers[0].cpf : customer.document;
+      const finalCustomerName = hasTravelItems && passengers[0] ? passengers[0].name : customerName;
+      const finalCustomerDoc = hasTravelItems && passengers[0] ? passengers[0].cpf : customer.document;
 
-      let internalNotes = `Venda Site. Is Digital: ${isDigitalCart}`;
-      if (isDigitalCart) {
-          internalNotes += `\nPassageiros:\n${passengers.map((p, i) => `Pax ${i+1}: ${p.name} - CPF: ${p.cpf} - RG: ${p.rg} - Nasc: ${p.dob} - Assento: ${p.seatPreference || 'Sem Preferência'}`).join('\n')}`;
-      }
+      let internalNotes = `Venda Site. Only Digital: ${isOnlyDigital}`;
       
       const orderDoc = {
         _type: 'order', orderNumber, status: 'pending',
         customer: { name: finalCustomerName, email: user.primaryEmailAddress?.emailAddress, cpf: finalCustomerDoc, phone: "" },
         
-        // AQUI: Injetamos o array estruturado de passageiros direto no Sanity
-        passengers: isDigitalCart ? passengers.map(p => ({
+        passengers: hasTravelItems ? passengers.map(p => ({
             _key: Math.random().toString(36).substring(7),
             name: p.name, cpf: p.cpf, rg: p.rg, rgIssuer: p.rgIssuer, 
             dob: p.dob, gender: p.gender, nationality: p.nationality,
@@ -358,26 +357,56 @@ export default function Cart() {
         })) : [],
 
         items: items.map(item => {
-            let desc = item.description;
-            if (item.isTravel && item.flightDetails && !desc) {
-                const numMalas = item.flightDetails.holdBagsIda + item.flightDetails.holdBagsVolta;
-                desc = `Tarifa: ${item.flightDetails.tier} | Malas Inclusas: Mochila, Mala de Cabine(10kg)${numMalas > 0 ? ` + ${numMalas} Mala(s) Despachada(s)` : ''}`;
+            let sType = '📦 Produto Físico';
+            let desc = item.description || '';
+
+            // LÓGICA DE DESCRIÇÃO ROBUSTA PARA O SANITY
+            if (item.transferPayload) {
+                sType = '🚐 Transfer / Transporte';
+                const tp = item.transferPayload;
+                desc = `📍 ORIGEM: ${tp.pickupName}\n🏁 DESTINO: ${tp.dropoffName}\n\n📆 IDA: ${tp.date} às ${tp.time}\n`;
+                if (tp.returnDate) desc += `📆 VOLTA: ${tp.returnDate} às ${tp.returnTime}\n`;
+                if (tp.flightNumber) desc += `\n✈️ Voo Informado: ${tp.flightNumber}\n`;
+                desc += `\n👥 Passageiros: ${tp.adults} Adultos, ${tp.children} Crianças`;
+                desc += `\n🧳 Malas: ${tp.largeBags} G (23kg), ${tp.smallBags} P (12kg)`;
+                if (tp.needsChildSeat) desc += `\n👶 Cadeirinha Infantil Inclusa`;
+                if (tp.hasBabyStroller) desc += `\n🍼 Carrinho de Bebê Incluso`;
             }
+            else if (item.flightDetails) {
+                sType = '✈️ Passagem Aérea';
+                const fd = item.flightDetails;
+                const fDate = (d) => {
+                    if(!d) return '';
+                    const dt = new Date(d);
+                    return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} às ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+                };
+                desc = `🛫 IDA: ${fd.ida.origem} ➔ ${fd.ida.destino}\n🕒 Embarque: ${fDate(fd.ida.partida)}\n`;
+                if (fd.volta) {
+                    desc += `\n🛬 VOLTA: ${fd.volta.origem} ➔ ${fd.volta.destino}\n🕒 Embarque: ${fDate(fd.volta.partida)}\n`;
+                }
+                const numMalas = (fd.holdBagsIda || 0) + (fd.holdBagsVolta || 0);
+                desc += `\n🏷️ Tarifa: ${fd.tier}\n🧳 Franquia: Mochila + Mala de Mão 10kg${numMalas > 0 ? ` + ${numMalas} Mala(s) Despachada(s)` : ''}`;
+            } 
+            else if (item.isTravel) {
+                sType = '🛎️ Serviços de Turismo';
+            }
+
             const baseItem = {
                 _key: Math.random().toString(36).substring(7),
                 productName: item.title || item.name, 
+                serviceType: sType,
                 description: desc,
                 variantName: item.variantName || "Padrão", 
                 quantity: item.quantity, 
                 price: item.price, 
                 imageUrl: item.image
             };
-            if (!item.isTravel && item._id) {
+            if (!isItemTravel(item) && item._id) {
                 baseItem.product = { _type: 'reference', _ref: String(item._id).replace(/[^a-zA-Z0-9_.-]/g, "_") };
             }
             return baseItem;
         }),
-        shippingAddress: activeAddress, billingAddress: activeAddress, carrier: selectedShipping.name, shippingCost: parseFloat(selectedShipping.price), totalAmount: totalFinal, paymentMethod: tipoPagamento, internalNotes: `Venda Site. Is Digital: ${isDigitalCart}`
+        shippingAddress: activeAddress, billingAddress: activeAddress, carrier: selectedShipping?.name || 'N/A', shippingCost: parseFloat(selectedShipping?.price || 0), totalAmount: totalFinal, paymentMethod: tipoPagamento, internalNotes
       };
       
       const createdOrder = await client.create(orderDoc);
@@ -388,15 +417,23 @@ export default function Cart() {
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            items: items.map(i => ({ 
-                id: String(i._id || i.id || `item-${Date.now()}`).replace(/[^a-zA-Z0-9_.-]/g, "_"), 
-                title: i.title || i.name, 
-                description: i.description || (i.title || i.name),
-                quantity: i.quantity, 
-                price: i.price, 
-                picture_url: i.image 
-            })), 
-            shipping: parseFloat(selectedShipping.price), email: user.primaryEmailAddress.emailAddress, tipoPagamento, shippingAddress: activeAddress, 
+            items: items.map(i => {
+                let desc = i.description;
+                if (i.flightDetails && !desc && !i.transferPayload) {
+                    desc = `Voo Ida/Volta: ${i.flightDetails.ida.origem} -> ${i.flightDetails.ida.destino}`;
+                } else if (i.transferPayload && !desc) {
+                    desc = `Transfer: ${i.transferPayload.pickupName} -> ${i.transferPayload.dropoffName}`;
+                }
+                return {
+                    id: String(i._id || i.id || `item-${Date.now()}`).replace(/[^a-zA-Z0-9_.-]/g, "_"), 
+                    title: i.title || i.name, 
+                    description: desc || (i.title || i.name),
+                    quantity: i.quantity, 
+                    price: i.price, 
+                    picture_url: i.image 
+                }
+            }), 
+            shipping: parseFloat(selectedShipping?.price || 0), email: user.primaryEmailAddress.emailAddress, tipoPagamento, shippingAddress: activeAddress, 
             customerDocument: finalCustomerDoc, totalAmount: totalFinal, orderId: sanityId, customerName: finalCustomerName
         })
       });
@@ -440,9 +477,10 @@ export default function Cart() {
     }
   };
 
-  const canCheckout = isDigitalCart 
-     ? (selectedShipping && activeAddress && passengers.length > 0 && passengers.every(p => p.name && p.cpf))
-     : (selectedShipping && activeAddress && customer.document && customerName);
+  const paxValid = !hasTravelItems || (passengers.length > 0 && passengers.every(p => p.name && p.cpf));
+  const shippingValid = isOnlyDigital ? true : (selectedShipping && activeAddress);
+  const buyerValid = isOnlyDigital ? true : (customer.document && customerName);
+  const canCheckout = paxValid && shippingValid && buyerValid;
 
   if (items.length === 0) return (
     <div className="min-h-[70vh] flex flex-col items-center justify-center bg-white">
@@ -483,7 +521,7 @@ export default function Cart() {
           <div className="flex-1 space-y-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-0 overflow-hidden space-y-0">
                 {items.map((item) => (
-                    item.isTravel && item.flightDetails ? (
+                    item.flightDetails ? (
                         <div key={item.sku || item._id} className="bg-white border border-purple-100 p-0 flex flex-col relative shadow-sm">
                             <div className="bg-purple-600 text-white p-4 flex justify-between items-center">
                                 <div className="flex items-center gap-3">
@@ -542,37 +580,63 @@ export default function Cart() {
                                             <div className="flex justify-between">
                                                 <span>Passageiros:</span> 
                                                 <span className="font-bold">
-                                                    {item.transferPayload ? (item.transferPayload.adults + item.transferPayload.children) : item.quantity}
+                                                    {item.transferPayload ? (item.transferPayload.adults + item.transferPayload.children) : (item.flightDetails.pax || item.quantity)}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between"><span>Tarifa / Categoria:</span> <span className="font-bold text-right">{item.flightDetails.tier}</span></div>
                                             
-                                            {/* CORREÇÃO AQUI: EXIBIÇÃO DETALHADA E ROBUSTA DAS MALAS */}
-                                            <div className="pt-2 border-t border-purple-200 mt-3">
-                                                <span className="flex items-center gap-1 font-bold text-purple-900 mb-2"><Luggage size={14}/> Franquia de Bagagem (Por Pax):</span>
-                                                <div className="flex flex-col gap-1.5 text-[10px]">
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-purple-700">1x Mochila / Item Pessoal</span>
-                                                        <span className="font-bold text-green-800 bg-green-100 px-2 rounded-full">Incluso</span>
+                                            {/* SEPARAÇÃO INTELIGENTE DE MALAS (SEM MEXER NO SEU DESIGN TAILWIND) */}
+                                            {item.transferPayload ? (
+                                                <div className="pt-2 border-t border-purple-200 mt-3">
+                                                    <span className="flex items-center gap-1 font-bold text-purple-900 mb-2"><Luggage size={14}/> Bagagem do Veículo:</span>
+                                                    <div className="flex flex-col gap-1.5 text-[10px]">
+                                                        {item.transferPayload.largeBags > 0 && (
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-purple-700">Mala(s) G (até 23kg)</span>
+                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.transferPayload.largeBags}x</span>
+                                                            </div>
+                                                        )}
+                                                        {item.transferPayload.smallBags > 0 && (
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-purple-700">Mala(s) P (até 12kg)</span>
+                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.transferPayload.smallBags}x</span>
+                                                            </div>
+                                                        )}
+                                                        {item.transferPayload.largeBags === 0 && item.transferPayload.smallBags === 0 && (
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-purple-700">Malas Declaradas</span>
+                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">Nenhuma</span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-purple-700">1x Mala de Cabine (10kg)</span>
-                                                        <span className="font-bold text-green-800 bg-green-100 px-2 rounded-full">Incluso</span>
-                                                    </div>
-                                                    {item.flightDetails.holdBagsIda > 0 && (
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-purple-700">Bagagem Despachada (Ida)</span>
-                                                            <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsIda}x de 23kg</span>
-                                                        </div>
-                                                    )}
-                                                    {item.flightDetails.holdBagsVolta > 0 && (
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-purple-700">Bagagem Despachada (Volta)</span>
-                                                            <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsVolta}x de 23kg</span>
-                                                        </div>
-                                                    )}
                                                 </div>
-                                            </div>
+                                            ) : (
+                                                <div className="pt-2 border-t border-purple-200 mt-3">
+                                                    <span className="flex items-center gap-1 font-bold text-purple-900 mb-2"><Luggage size={14}/> Franquia de Bagagem (Por Pax):</span>
+                                                    <div className="flex flex-col gap-1.5 text-[10px]">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-purple-700">1x Mochila / Item Pessoal</span>
+                                                            <span className="font-bold text-green-800 bg-green-100 px-2 rounded-full">Incluso</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-purple-700">1x Mala de Cabine (10kg)</span>
+                                                            <span className="font-bold text-green-800 bg-green-100 px-2 rounded-full">Incluso</span>
+                                                        </div>
+                                                        {item.flightDetails.holdBagsIda > 0 && (
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-purple-700">Bagagem Despachada (Ida)</span>
+                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsIda}x de 23kg</span>
+                                                            </div>
+                                                        )}
+                                                        {item.flightDetails.holdBagsVolta > 0 && (
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-purple-700">Bagagem Despachada (Volta)</span>
+                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsVolta}x de 23kg</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
 
                                         </div>
                                     </div>
@@ -586,17 +650,21 @@ export default function Cart() {
                     ) : (
                         <div key={item.sku || item._id} className="flex gap-4 p-6 border-b border-gray-100 last:border-0">
                           <div className="w-20 h-20 bg-white border rounded-lg p-2 relative">
-                              <img src={item.image} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
-                              {item.freeShipping && !item.isTravel && (
+                              <img src={item.image || item.imageUrl} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
+                              {item.freeShipping && !isItemTravel(item) && (
                                    <div className="absolute bottom-0 left-0 right-0 bg-green-600 text-white text-[8px] font-bold text-center py-0.5">FRETE GRÁTIS</div>
                                )}
                           </div>
                           <div className="flex-1 flex flex-col justify-between">
                             <div className="flex justify-between">
-                                <div><span className="font-medium text-gray-900 line-clamp-2">{item.title}</span>{item.variantName && <p className="text-xs text-gray-500 mt-1">{item.variantName}</p>}</div>
+                                <div>
+                                    <span className="font-medium text-gray-900 line-clamp-2">{item.title}</span>
+                                    {item.description && <p className="text-xs text-gray-500 mt-1 line-clamp-1">{item.description}</p>}
+                                    {item.variantName && <p className="text-xs text-blue-600 font-bold mt-1">{item.variantName}</p>}
+                                </div>
                                 <button onClick={() => removeItem(item._id, item.sku)} className="text-red-500"><Trash2 size={18}/></button>
                             </div>
-                            <div className="flex justify-between items-end">
+                            <div className="flex justify-between items-end mt-2">
                                 <div className="flex items-center border rounded-lg">
                                   <button onClick={() => updateQuantity(item._id, item.quantity - 1, item.sku)} disabled={item.quantity <= 1} className="px-3 py-1 disabled:opacity-50">-</button>
                                   <span className="px-2 text-sm font-bold">{item.quantity}</span>
@@ -613,12 +681,12 @@ export default function Cart() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
                 <div className="flex justify-between items-center">
                    <h2 className="text-lg font-bold flex gap-2">
-                      <MapPin className="text-orange-500"/> {isDigitalCart ? "Endereço de Faturamento" : "Endereço de Entrega"}
+                      <MapPin className="text-orange-500"/> {isOnlyDigital ? "Endereço de Faturamento" : "Endereço de Entrega"}
                    </h2>
                    <button onClick={() => setShowAddressForm(!showAddressForm)} className="text-blue-600 font-bold text-sm">+ Adicionar</button>
                 </div>
                 
-                {isDigitalCart && (
+                {isOnlyDigital && (
                    <div className="bg-blue-50 border border-blue-100 text-blue-800 p-3 rounded-lg text-sm mb-4">
                       Como este é um produto de viagem digital, não haverá entrega física. O endereço abaixo será usado apenas para a emissão da Nota Fiscal.
                    </div>
@@ -648,7 +716,7 @@ export default function Cart() {
                     ))}
                 </div>
 
-                {isDigitalCart ? (
+                {hasTravelItems ? (
                     <div className="pt-6 border-t border-gray-100 space-y-4">
                         <h2 className="text-lg font-bold flex items-center gap-2 text-gray-900">
                            <Users className="text-orange-500"/> Dados dos Passageiros
@@ -769,8 +837,8 @@ export default function Cart() {
                     <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-center">
                            <span className="flex gap-1 text-gray-600 font-medium">
-                              {isDigitalCart ? <Ticket size={14}/> : <Truck size={14}/>} 
-                              {isDigitalCart ? "Taxa de Emissão" : "Frete"}
+                              {isOnlyDigital ? <Ticket size={14}/> : <Truck size={14}/>} 
+                              {isOnlyDigital ? "Taxa de Emissão" : "Frete"}
                            </span>
                            {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? (selectedShipping.price === 0 ? 'Grátis' : formatCurrency(selectedShipping.price)) : '--'}</span>}
                         </div>
