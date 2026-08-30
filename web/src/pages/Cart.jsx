@@ -47,11 +47,15 @@ export default function Cart() {
   
   const isDigitalCart = items.length > 0 && items.every(item => item.isTravel === true);
   
-  const totalTickets = items.filter(i => i.isTravel).reduce((acc, item) => {
+  // CORREÇÃO: Pega a MAIOR quantidade de passageiros entre os itens, e não a soma deles!
+  const totalTickets = items.filter(i => i.isTravel).reduce((max, item) => {
+    let itemPax = item.quantity || 1;
     if (item.transferPayload) {
-      return acc + (item.transferPayload.adults || 0) + (item.transferPayload.children || 0);
+      itemPax = (item.transferPayload.adults || 0) + (item.transferPayload.children || 0);
+    } else if (item.flightDetails && item.flightDetails.pax) {
+      itemPax = item.flightDetails.pax;
     }
-    return acc + item.quantity;
+    return Math.max(max, itemPax);
   }, 0);
 
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
@@ -440,7 +444,6 @@ export default function Cart() {
     <div className="bg-gray-50 min-h-screen py-10 font-sans">
       <div className="container mx-auto px-4 max-w-6xl">
         
-        {/* CABEÇALHO DO CARRINHO COM NOVO BOTÃO DE VOLTAR */}
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">Carrinho ({items.length})</h1>
           <button 
