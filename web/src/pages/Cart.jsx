@@ -46,7 +46,14 @@ export default function Cart() {
   } = useCartStore();
   
   const isDigitalCart = items.length > 0 && items.every(item => item.isTravel === true);
-  const totalTickets = items.filter(i => i.isTravel).reduce((acc, item) => acc + item.quantity, 0);
+  
+  // CORREÇÃO 1: Cálculo inteligente de tickets (Aérea = quantity, Transfer = payload de passageiros)
+  const totalTickets = items.filter(i => i.isTravel).reduce((acc, item) => {
+    if (item.transferPayload) {
+      return acc + (item.transferPayload.adults || 0) + (item.transferPayload.children || 0);
+    }
+    return acc + item.quantity;
+  }, 0);
 
   const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
   const shippingCost = (selectedShipping && typeof selectedShipping.price === 'number') ? selectedShipping.price : 0;
@@ -111,14 +118,16 @@ export default function Cart() {
     }
   }, [totalTickets, isDigitalCart]);
 
+  // CORREÇÃO: Atualização imutável do objeto para o React renderizar corretamente
   const handlePaxChange = (index, field, value) => {
      setPassengers(prev => {
         const newArr = [...prev];
-        newArr[index][field] = value;
+        newArr[index] = { ...newArr[index], [field]: value };
         return newArr;
      });
   };
 
+  // CORREÇÃO 2: Atualização em massa (Batch Update) para a importação funcionar perfeitamente
   const handleImportSavedPax = (index, value) => {
     if (!value) return;
 
@@ -127,26 +136,45 @@ export default function Cart() {
       const email = user?.primaryEmailAddress?.emailAddress || '';
       const cpf = customer?.document || '';
       
-      handlePaxChange(index, 'name', nome);
-      handlePaxChange(index, 'email', email);
-      handlePaxChange(index, 'cpf', cpf);
-      handlePaxChange(index, 'relationship', 'Titular');
+      setPassengers(prev => {
+          const newArr = [...prev];
+          newArr[index] = { 
+            ...newArr[index], 
+            name: nome, 
+            email: email, 
+            cpf: cpf, 
+            relationship: 'Titular',
+            nationality: 'Brasileira'
+          };
+          return newArr;
+      });
     } else {
-      const paxData = customer?.passengers?.[parseInt(value)];
+      // Localiza o passageiro salvo no array do store
+      const paxData = customer?.passengers?.find(p => String(p.id) === String(value)) || customer?.passengers?.[parseInt(value)];
+      
       if (paxData) {
-        handlePaxChange(index, 'name', paxData.name || '');
-        handlePaxChange(index, 'dob', paxData.dob || '');
-        handlePaxChange(index, 'relationship', paxData.relationship || 'Acompanhante');
-        handlePaxChange(index, 'gender', paxData.gender || '');
-        handlePaxChange(index, 'cpf', paxData.cpf || '');
-        handlePaxChange(index, 'rg', paxData.rg || '');
-        handlePaxChange(index, 'rgIssuer', paxData.rgIssuer || '');
-        handlePaxChange(index, 'nationality', paxData.nationality || 'Brasileira');
-        handlePaxChange(index, 'passport', paxData.passport || '');
-        handlePaxChange(index, 'passportExpiry', paxData.passportExpiry || '');
-        handlePaxChange(index, 'email', paxData.email || '');
-        handlePaxChange(index, 'phone', paxData.phone || '');
-        handlePaxChange(index, 'seatPreference', paxData.seatPreference || '');
+        console.log("Dados do passageiro resgatados:", paxData); // Olhe no F12 do navegador o que aparece aqui
+
+        setPassengers(prev => {
+            const newArr = [...prev];
+            newArr[index] = { 
+                ...newArr[index],
+                name: paxData.name || paxData.nome || paxData.fullName || '',
+                dob: paxData.dob || paxData.birthDate || paxData.dataNascimento || paxData.nascimento || '',
+                relationship: paxData.relationship || paxData.parentesco || paxData.tipo || 'Acompanhante',
+                gender: paxData.gender || paxData.genero || paxData.sexo || '',
+                cpf: paxData.cpf || paxData.documento || '',
+                rg: paxData.rg || paxData.identidade || '',
+                rgIssuer: paxData.rgIssuer || paxData.orgaoEmissor || paxData.emissor || '',
+                nationality: paxData.nationality || paxData.nacionalidade || 'Brasileira',
+                passport: paxData.passport || paxData.passaporte || '',
+                passportExpiry: paxData.passportExpiry || paxData.validadePassaporte || '',
+                email: paxData.email || paxData.correo || '',
+                phone: paxData.phone || paxData.telefone || paxData.celular || '',
+                seatPreference: paxData.seatPreference || paxData.assento || paxData.preferenciaAssento || ''
+            };
+            return newArr;
+        });
       }
     }
   };
@@ -319,7 +347,6 @@ export default function Cart() {
           internalNotes += `\nPassageiros:\n${passengers.map((p, i) => `Pax ${i+1}: ${p.name} - CPF: ${p.cpf} - RG: ${p.rg} - Nasc: ${p.dob} - Assento: ${p.seatPreference || 'Sem Preferência'}`).join('\n')}`;
       }
       
-      // MÁGICA 1: O Sanity não aceita o | no ID, então só criamos referência se for Produto Físico!
       const orderDoc = {
         _type: 'order', orderNumber, status: 'pending',
         customer: { name: finalCustomerName, email: user.primaryEmailAddress?.emailAddress, cpf: finalCustomerDoc, phone: "" },
@@ -332,7 +359,6 @@ export default function Cart() {
                 price: item.price, 
                 imageUrl: item.image
             };
-            // Adiciona a referência APENAS se não for viagem (produtos físicos)
             if (!item.isTravel && item._id) {
                 baseItem.product = { _type: 'reference', _ref: String(item._id).replace(/[^a-zA-Z0-9_.-]/g, "_") };
             }
@@ -346,15 +372,13 @@ export default function Cart() {
       
       const baseUrl = import.meta.env.VITE_API_URL || 'https://brasil-varejo-api.laeciossp.workers.dev';
       
-      // MÁGICA 2: Injetando a description rica para o Mercado Pago exibir bonito!
       const response = await fetch(`${baseUrl}/checkout`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             items: items.map(i => ({ 
                 id: String(i._id || i.id || `item-${Date.now()}`).replace(/[^a-zA-Z0-9_.-]/g, "_"), 
                 title: i.title || i.name, 
-                // Substitua a linha da description por esta:
-description: i.isTravel && i.flightDetails ? `Ida: ${i.flightDetails.ida.partida.replace('T', ' às ').substring(0, 16)}h • Tarifa ${i.flightDetails.tier} • ${i.quantity} Pax • ${i.flightDetails.holdBagsIda + i.flightDetails.holdBagsVolta} Mala(s)` : (i.title || i.name),
+                description: i.description || (i.title || i.name),
                 quantity: i.quantity, 
                 price: i.price, 
                 picture_url: i.image 
@@ -417,14 +441,14 @@ description: i.isTravel && i.flightDetails ? `Ida: ${i.flightDetails.ida.partida
                                     </div>
                                     <div>
                                         <div className="text-[10px] font-bold uppercase tracking-widest text-purple-200">
-                                          Passagem Aérea • {item.variantName}
+                                          Serviço de Viagem • {item.variantName}
                                         </div>
                                         <h3 className="font-bold text-lg">{item.title}</h3>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button onClick={() => { clearCart(); navigate('/viagens'); }} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold transition-colors border border-white/30 shadow-sm whitespace-nowrap">
-                                        Alterar Voo
+                                        Alterar Viagem
                                     </button>
                                     <button onClick={() => removeItem(item._id, item.sku)} className="bg-purple-700 hover:bg-red-500 text-white p-1.5 md:p-2 rounded-lg transition-colors shadow-sm">
                                         <Trash2 size={18}/>
@@ -440,9 +464,9 @@ description: i.isTravel && i.flightDetails ? `Ida: ${i.flightDetails.ida.partida
                                             {item.flightDetails.volta && <div className="w-px h-full bg-purple-100 my-2"></div>}
                                         </div>
                                         <div>
-                                            <span className="text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 mb-1 inline-block">Voo de Ida</span>
+                                            <span className="text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 mb-1 inline-block">Ida</span>
                                             <p className="font-bold text-gray-900 text-sm">{item.flightDetails.ida.origem} ➔ {item.flightDetails.ida.destino}</p>
-                                            <p className="text-xs text-gray-500">{item.flightDetails.ida.partida} • Duração: {item.flightDetails.ida.duracao}</p>
+                                            <p className="text-xs text-gray-500">{item.flightDetails.ida.partida} • {item.flightDetails.ida.duracao}</p>
                                         </div>
                                     </div>
 
@@ -452,9 +476,9 @@ description: i.isTravel && i.flightDetails ? `Ida: ${i.flightDetails.ida.partida
                                                 <PlaneLanding size={24} className="text-orange-500"/>
                                             </div>
                                             <div>
-                                                <span className="text-[10px] font-black uppercase text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100 mb-1 inline-block">Voo de Volta</span>
+                                                <span className="text-[10px] font-black uppercase text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100 mb-1 inline-block">Volta</span>
                                                 <p className="font-bold text-gray-900 text-sm">{item.flightDetails.volta.origem} ➔ {item.flightDetails.volta.destino}</p>
-                                                <p className="text-xs text-gray-500">{item.flightDetails.volta.partida} • Duração: {item.flightDetails.volta.duracao}</p>
+                                                <p className="text-xs text-gray-500">{item.flightDetails.volta.partida} • {item.flightDetails.volta.duracao}</p>
                                             </div>
                                         </div>
                                     )}
@@ -464,12 +488,24 @@ description: i.isTravel && i.flightDetails ? `Ida: ${i.flightDetails.ida.partida
                                     <div>
                                         <h4 className="font-bold text-sm text-purple-900 mb-3 border-b border-purple-200 pb-2">Extrato do Carrinho</h4>
                                         <div className="space-y-2 text-xs text-purple-800">
-                                            <div className="flex justify-between"><span>Passageiros:</span> <span className="font-bold">{item.quantity}</span></div>
-                                            <div className="flex justify-between"><span>Tarifa Escolhida:</span> <span className="font-bold">{item.flightDetails.tier}</span></div>
+                                            <div className="flex justify-between">
+                                                <span>Passageiros:</span> 
+                                                <span className="font-bold">
+                                                    {item.transferPayload ? (item.transferPayload.adults + item.transferPayload.children) : item.quantity}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between"><span>Tarifa / Categoria:</span> <span className="font-bold text-right">{item.flightDetails.tier}</span></div>
+                                            
+                                            {/* CORREÇÃO 3: Especificação exata do peso e tipo das malas */}
                                             <div className="flex justify-between items-center pt-1 border-t border-purple-200 mt-2">
                                                 <span className="flex items-center gap-1"><Luggage size={12}/> Malas Inclusas:</span>
-                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsIda + item.flightDetails.holdBagsVolta}</span>
+                                                <div className="flex gap-1 text-[10px]">
+                                                    {item.flightDetails.holdBagsIda > 0 && <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsIda} G (23kg)</span>}
+                                                    {item.flightDetails.holdBagsVolta > 0 && <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsVolta} P (12kg)</span>}
+                                                    {item.flightDetails.holdBagsIda === 0 && item.flightDetails.holdBagsVolta === 0 && <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">Nenhuma</span>}
+                                                </div>
                                             </div>
+
                                         </div>
                                     </div>
                                     <div className="mt-4 pt-3 border-t border-purple-200 flex justify-between items-end">
@@ -566,18 +602,20 @@ description: i.isTravel && i.flightDetails ? `Ida: ${i.flightDetails.ida.partida
                                     <div className="flex items-center gap-2">
                                         <UserCheck size={16} className="text-blue-600" />
                                         <select 
-                                            className="text-xs border border-blue-200 bg-blue-50 text-blue-700 font-bold rounded-md p-1.5 outline-none cursor-pointer"
-                                            onChange={(e) => {
-                                                handleImportSavedPax(index, e.target.value);
-                                                e.target.value = '';
-                                            }}
-                                        >
-                                            <option value="">Preenchimento Rápido...</option>
-                                            <option value="me">Meus Dados (Titular)</option>
-                                            {customer?.passengers?.map((p, i) => (
-                                                <option key={i} value={i}>{p.name} ({p.relationship || 'Salvo'})</option>
-                                            ))}
-                                        </select>
+    className="text-xs border border-blue-200 bg-blue-50 text-blue-700 font-bold rounded-md p-1.5 outline-none cursor-pointer"
+    value=""
+    onChange={(e) => {
+        handleImportSavedPax(index, e.target.value);
+    }}
+>
+    <option value="" disabled>Preenchimento Rápido...</option>
+    <option value="me">Meus Dados (Titular)</option>
+    {customer?.passengers?.map((p, i) => (
+        <option key={p.id || i} value={p.id || i}>
+            {p.name || 'Sem Nome'} ({p.relationship || 'Salvo'})
+        </option>
+    ))}
+</select>
                                     </div>
                                  </h3>
 

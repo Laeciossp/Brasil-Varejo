@@ -10,6 +10,7 @@ import DestinosPopulares from '../components/DestinosPopulares';
 import PalastoreCruzeiros from './PalastoreCruzeiros';
 import CruzeirosTematicos from './CruzeirosTematicos'; // <-- IMPORTADO A NOVA PÁGINA
 import CruzeirosTematicosCarousel from '../components/CruzeirosTematicosCarousel';
+import PalastoreTransfers from '../components/PalastoreTransfers';
 
 import { 
   Plane, Bus, ShieldCheck, ArrowRight, ExternalLink, Briefcase, 
@@ -458,7 +459,8 @@ export default function ViagensPage() {
           {activeTab === 'ofertas_hoteis' && <PartnerIframe title="Ofertas Especiais de Hotéis no Brasil" url="https://br.trip.com/hotels/list?flexType=1&cityId=-1&provinceId=0&countryId=19&cityName=&destName=Brasil&searchWord=Brasil&searchType=C&searchValue=140|19**19&checkin=2026-08-17&checkout=2026-08-18&crn=1&adult=2&listFilters=29~1*29*1~2*2,17~3*17*3,80~2~1*80*2&curr=BRL&locale=pt-BR&old=1&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Aproveite tarifas reduzidas para hospedagens em todo o Brasil. Parceria oficial Trip.com." themeColor="indigo" />}
           {activeTab === 'rentcars' && <RentcarsWidget />}
           {activeTab === 'carros' && <PartnerIframe title="Aluguel de Carros" url="https://br.trip.com/carhire/?channelid=14409&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Alugue veículos com as melhores locadoras globais. Processado via Trip.com." themeColor="indigo" />}
-          {activeTab === 'translado' && <PartnerIframe title="Translado Aeroporto" url="https://br.trip.com/airport-transfers/?Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19413340&locale=pt_br" noticeText="Chegue ao seu destino sem preocupações. Veículos exclusivos Trip.com." themeColor="indigo" />}
+          {/* Apague o iframe de parceiros e insira a sua tecnologia própria: */}
+{activeTab === 'translado' && <PalastoreTransfers />}
           {activeTab === 'passeios' && <PartnerIframe title="Passeios e Ingressos (Trip.com)" url="https://br.trip.com/things-to-do/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Compre ingressos para atrações turísticas pelo mundo com nosso parceiro Trip.com." themeColor="indigo" />}
           {activeTab === 'viator' && (
             <PartnerWidgetViator 
