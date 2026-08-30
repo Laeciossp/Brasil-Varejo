@@ -76,14 +76,14 @@ export default function Cart() {
             clearInterval(interval);
             alert("Tempo esgotado! Os preços e a disponibilidade das passagens podem ter mudado. Por favor, busque novamente.");
             clearCart();
-            navigate('/viagens');
+            window.location.href = '/viagens'; 
         } else {
             setTimeLeft(diff);
         }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [flightItem, clearCart, navigate]);
+  }, [flightItem, clearCart]);
 
   const formatCountdown = (ms) => {
       if (!ms) return "10:00";
@@ -385,13 +385,31 @@ export default function Cart() {
       const data = await response.json();
       if (data.error || !data.url) throw new Error(JSON.stringify(data.details || data.error));
       
-      // O COMANDO QUE ESVAZIAVA O CARRINHO E TE PRENDIA FOI REMOVIDO DAQUI!
-      
+      // O MODAL FOI MANTIDO. 
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
         mp.checkout({ preference: { id: data.id_preferencia } }).open(); 
-      } else { window.location.href = data.url; }
-    } catch (error) { alert("Erro ao processar: " + error.message); } finally { setLoading(false); }
+        
+        // AÇÃO CONJUNTA: Vigia o modal e atualiza a página inteira quando o usuário fechar o pagamento
+        setTimeout(() => {
+            const watchModal = setInterval(() => {
+                const modalIsPresent = document.querySelector('iframe[src*="mercadopago"]');
+                if (!modalIsPresent) {
+                    clearInterval(watchModal);
+                    window.location.reload(); 
+                }
+            }, 1000);
+        }, 3000);
+
+      } else { 
+        window.location.href = data.url; 
+      }
+
+    } catch (error) { 
+        alert("Erro ao processar: " + error.message); 
+    } finally { 
+        setLoading(false); 
+    }
   };
 
   const canCheckout = isDigitalCart 
@@ -443,7 +461,7 @@ export default function Cart() {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button onClick={() => { clearCart(); navigate('/viagens'); }} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold transition-colors border border-white/30 shadow-sm whitespace-nowrap">
+                                    <button onClick={() => { clearCart(); window.location.href = '/viagens'; }} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold transition-colors border border-white/30 shadow-sm whitespace-nowrap">
                                         Alterar Viagem
                                     </button>
                                     <button onClick={() => removeItem(item._id, item.sku)} className="bg-purple-700 hover:bg-red-500 text-white p-1.5 md:p-2 rounded-lg transition-colors shadow-sm">
