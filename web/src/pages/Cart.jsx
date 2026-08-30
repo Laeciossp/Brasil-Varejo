@@ -47,7 +47,6 @@ export default function Cart() {
   
   const isDigitalCart = items.length > 0 && items.every(item => item.isTravel === true);
   
-  // CORREÇÃO 1: Cálculo inteligente de tickets (Aérea = quantity, Transfer = payload de passageiros)
   const totalTickets = items.filter(i => i.isTravel).reduce((acc, item) => {
     if (item.transferPayload) {
       return acc + (item.transferPayload.adults || 0) + (item.transferPayload.children || 0);
@@ -118,7 +117,6 @@ export default function Cart() {
     }
   }, [totalTickets, isDigitalCart]);
 
-  // CORREÇÃO: Atualização imutável do objeto para o React renderizar corretamente
   const handlePaxChange = (index, field, value) => {
      setPassengers(prev => {
         const newArr = [...prev];
@@ -127,7 +125,6 @@ export default function Cart() {
      });
   };
 
-  // CORREÇÃO 2: Atualização em massa (Batch Update) para a importação funcionar perfeitamente
   const handleImportSavedPax = (index, value) => {
     if (!value) return;
 
@@ -149,12 +146,9 @@ export default function Cart() {
           return newArr;
       });
     } else {
-      // Localiza o passageiro salvo no array do store
       const paxData = customer?.passengers?.find(p => String(p.id) === String(value)) || customer?.passengers?.[parseInt(value)];
       
       if (paxData) {
-        console.log("Dados do passageiro resgatados:", paxData); // Olhe no F12 do navegador o que aparece aqui
-
         setPassengers(prev => {
             const newArr = [...prev];
             newArr[index] = { 
@@ -390,7 +384,9 @@ export default function Cart() {
 
       const data = await response.json();
       if (data.error || !data.url) throw new Error(JSON.stringify(data.details || data.error));
-      clearCart();
+      
+      // O COMANDO QUE ESVAZIAVA O CARRINHO E TE PRENDIA FOI REMOVIDO DAQUI!
+      
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
         mp.checkout({ preference: { id: data.id_preferencia } }).open(); 
@@ -496,7 +492,6 @@ export default function Cart() {
                                             </div>
                                             <div className="flex justify-between"><span>Tarifa / Categoria:</span> <span className="font-bold text-right">{item.flightDetails.tier}</span></div>
                                             
-                                            {/* CORREÇÃO 3: Especificação exata do peso e tipo das malas */}
                                             <div className="flex justify-between items-center pt-1 border-t border-purple-200 mt-2">
                                                 <span className="flex items-center gap-1"><Luggage size={12}/> Malas Inclusas:</span>
                                                 <div className="flex gap-1 text-[10px]">
