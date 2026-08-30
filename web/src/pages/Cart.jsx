@@ -385,21 +385,33 @@ export default function Cart() {
       const data = await response.json();
       if (data.error || !data.url) throw new Error(JSON.stringify(data.details || data.error));
       
-      // O MODAL FOI MANTIDO. 
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
         mp.checkout({ preference: { id: data.id_preferencia } }).open(); 
         
-        // AÇÃO CONJUNTA: Vigia o modal e atualiza a página inteira quando o usuário fechar o pagamento
-        setTimeout(() => {
-            const watchModal = setInterval(() => {
-                const modalIsPresent = document.querySelector('iframe[src*="mercadopago"]');
-                if (!modalIsPresent) {
-                    clearInterval(watchModal);
-                    window.location.reload(); 
+        // AÇÃO CONJUNTA INFALÍVEL: Vigia o modal garantindo que a tela atualize ao fechar
+        let modalAppeared = false;
+        const watchModal = setInterval(() => {
+            const iframes = Array.from(document.querySelectorAll('iframe'));
+            const mpIframe = iframes.find(f => f.src.includes('mercadopago') || f.src.includes('mlstatic') || f.name.includes('mercadopago'));
+            
+            let isVisible = false;
+            if (mpIframe) {
+                // Checa se o iframe está fisicamente visível na tela (largura e altura > 0)
+                const rect = mpIframe.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    isVisible = true;
                 }
-            }, 1000);
-        }, 3000);
+            }
+
+            if (isVisible) {
+                modalAppeared = true; // Detectou que o modal abriu na tela
+            } else if (modalAppeared) {
+                // O modal estava na tela e agora sumiu (usuário clicou em 'Fechar e cancelar')
+                clearInterval(watchModal);
+                window.location.reload(); 
+            }
+        }, 1000);
 
       } else { 
         window.location.href = data.url; 
