@@ -6,7 +6,7 @@ export default {
   type: 'document',
   groups: [
     { name: 'details', title: '📝 Detalhes da Compra', default: true },
-    { name: 'passengers', title: '👥 Viajantes (Emissão)' }, // <-- NOVA ABA ESTRUTURADA
+    { name: 'passengers', title: '👥 Viajantes (Emissão)' }, 
     { name: 'logistics', title: '🚚 Frete / Logística' },
     { name: 'billing', title: '💲 Faturamento' },
     { name: 'admin', title: '⚙️ Admin & Chat' }
@@ -30,7 +30,6 @@ export default {
       initialValue: 'pending'
     },
     
-    // Campos Ocultos de Sistema
     { name: 'cpf', type: 'string', hidden: true },
     { name: 'customerEmail', type: 'string', hidden: true },
     { name: 'customerDocument', type: 'string', hidden: true },
@@ -64,19 +63,20 @@ export default {
           fields: [
             { name: 'product', title: 'Vínculo (Produto Físico)', type: 'reference', to: [{ type: 'product' }] },
             { name: 'productName', title: 'Serviço / Produto', type: 'string' },
+            { name: 'serviceType', title: 'Categoria do Serviço', type: 'string' }, // <-- NOVO CAMPO
             { name: 'variantName', title: 'Tarifa / Variação', type: 'string' },
-            { name: 'description', title: 'Detalhes da Reserva (Rota, Voo, Endereços)', type: 'text', rows: 5 },
+            { name: 'description', title: 'Roteiro & Horários Detalhados', type: 'text', rows: 6 }, // <-- AUMENTADO PARA CABER TUDO
             { name: 'quantity', title: 'Quantidade (Pax)', type: 'number' },
             { name: 'price', title: 'Preço Unitário', type: 'number' },
             { name: 'imageUrl', title: 'Imagem', type: 'string' }
           ],
           preview: {
-            select: { title: 'productName', subtitle: 'description', imageUrl: 'imageUrl' },
+            select: { title: 'productName', subtitle: 'serviceType', imageUrl: 'imageUrl' },
             prepare({ title, subtitle, imageUrl }) {
               return {
                 title: title,
-                subtitle: subtitle ? subtitle.substring(0, 80) + '...' : 'Sem detalhes adicionais',
-                media: imageUrl ? React.createElement('img', { src: imageUrl, style: { objectFit: 'cover' } }) : undefined
+                subtitle: subtitle || 'Sem Categoria',
+                media: imageUrl ? React.createElement('img', { src: imageUrl, style: { objectFit: 'cover', height: '100%', width: '100%' } }) : undefined
               }
             }
           }
@@ -84,7 +84,6 @@ export default {
       ]
     },
 
-    // --- NOVA SESSÃO: PASSAGEIROS ESTRUTURADOS ---
     {
       name: 'passengers',
       title: 'Dados para Emissão (Viajantes)',
@@ -119,7 +118,6 @@ export default {
       ]
     },
 
-    // Logística (Físico / Emissão)
     { name: 'carrier', title: 'Forma de Envio / Operadora', type: 'string', group: 'logistics' },
     { name: 'shippingCost', title: 'Custo de Emissão/Frete', type: 'number', group: 'logistics' },
     { name: 'trackingCode', title: 'Localizador (PNR) / Rastreio', type: 'string', group: 'logistics' },
@@ -127,6 +125,7 @@ export default {
     {
       name: 'shippingAddress', title: 'Endereço de Entrega (Físicos)', type: 'object', group: 'logistics',
       fields: [
+        { name: 'alias', type: 'string', title: 'Apelido (Casa/Trabalho)' }, { name: 'id', type: 'string', title: 'ID', hidden: true },
         { name: 'zip', type: 'string', title: 'CEP' }, { name: 'street', type: 'string', title: 'Rua' },
         { name: 'number', type: 'string', title: 'Número' }, { name: 'neighborhood', type: 'string', title: 'Bairro' },
         { name: 'city', type: 'string', title: 'Cidade' }, { name: 'state', type: 'string', title: 'UF' },
@@ -134,11 +133,22 @@ export default {
       ]
     },
 
-    // Faturamento
     { name: 'totalAmount', title: 'Valor Total Pago', type: 'number', group: 'billing' },
     { name: 'paymentMethod', title: 'Método de Pagamento', type: 'string', group: 'billing' },
+    {
+      name: 'billingAddress',
+      title: 'Endereço de Faturamento',
+      type: 'object',
+      group: 'billing',
+      fields: [
+        { name: 'alias', type: 'string', title: 'Apelido' }, { name: 'id', type: 'string', title: 'ID', hidden: true },
+        { name: 'zip', type: 'string', title: 'CEP' }, { name: 'street', type: 'string', title: 'Rua' },
+        { name: 'number', type: 'string', title: 'Número' }, { name: 'neighborhood', type: 'string', title: 'Bairro' },
+        { name: 'city', type: 'string', title: 'Cidade' }, { name: 'state', type: 'string', title: 'UF' },
+        { name: 'complement', type: 'string', title: 'Complemento' }
+      ]
+    },
 
-    // Admin & Chat
     { name: 'internalNotes', title: 'Notas Administrativas', type: 'text', rows: 3, group: 'admin' },
     {
       name: 'messages', title: '💬 Chat do Pedido', type: 'array', group: 'admin',

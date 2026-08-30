@@ -23,19 +23,16 @@ export default function PalastoreTransfers() {
   const { addItem } = useCartStore(); 
   const [tripType, setTripType] = useState('oneway'); 
 
-  // Autocomplete Origem
   const [pickupQuery, setPickupQuery] = useState('');
   const [pickupCoords, setPickupCoords] = useState(null);
   const [pickupSuggestions, setPickupSuggestions] = useState([]);
   const debouncedPickup = useDebounce(pickupQuery, 600);
 
-  // Autocomplete Destino
   const [dropoffQuery, setDropoffQuery] = useState('');
   const [dropoffCoords, setDropoffCoords] = useState(null);
   const [dropoffSuggestions, setDropoffSuggestions] = useState([]);
   const debouncedDropoff = useDebounce(dropoffQuery, 600);
 
-  // Regra de Validação: Mínimo 48h de antecedência
   const getMinDepartureDate = () => {
     const d = new Date();
     d.setDate(d.getDate() + 2);
@@ -43,7 +40,6 @@ export default function PalastoreTransfers() {
   };
   const minDepartureDate = getMinDepartureDate();
 
-  // Dados da Viagem e Opcionais
   const [date, setDate] = useState('');
   const [time, setTime] = useState('12:00');
   const [returnDate, setReturnDate] = useState('');
@@ -53,17 +49,15 @@ export default function PalastoreTransfers() {
   const [needsChildSeat, setNeedsChildSeat] = useState(false);
   const [hasBabyStroller, setHasBabyStroller] = useState(false);
   
-  // Cérebro Logístico (Agora definidos por Listas Suspensas HTML)
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
-  const [largeBags, setLargeBags] = useState(1); // 23kg
-  const [smallBags, setSmallBags] = useState(0); // 12kg
+  const [largeBags, setLargeBags] = useState(1); 
+  const [smallBags, setSmallBags] = useState(0); 
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchResult, setSearchResult] = useState(null);
 
-  // MATEMÁTICA LOGÍSTICA PALASTORE INTÁCTA
   const COTACAO_EURO = 6.00; 
   const TARIFA_EUR_KM = 1.0;
   const MINIMO_EUR = 25.0;
@@ -97,7 +91,6 @@ export default function PalastoreTransfers() {
     setError('');
     setSearchResult(null);
 
-    // Converte explicitamente para número para evitar erros de soma
     const totalPax = Number(adults) + Number(children);
     const pesoBagagemEquivalente = Number(largeBags) + (Number(smallBags) * 0.5) + (hasBabyStroller ? 1 : 0); 
 
@@ -151,6 +144,7 @@ export default function PalastoreTransfers() {
   const handleAddToCart = (veiculo) => {
     const totalPax = Number(adults) + Number(children);
     
+    // Constrói uma descrição local blindada
     let descriptionText = `TRANSFER ${tripType === 'roundtrip' ? 'IDA E VOLTA' : 'SÓ IDA'}\n`;
     descriptionText += `📍 De: ${searchResult.origemNome}\n`;
     descriptionText += `🏁 Para: ${searchResult.destinoNome}\n`;
@@ -163,46 +157,38 @@ export default function PalastoreTransfers() {
     descriptionText += `👶 Cadeirinha: ${needsChildSeat ? 'Sim' : 'Não'}\n`;
     descriptionText += `🍼 Carrinho de Bebê: ${hasBabyStroller ? 'Sim' : 'Não'}\n`;
     descriptionText += `👥 Passageiros: ${adults} Adultos, ${children} Crianças\n`;
-    descriptionText += `🧳 Malas: ${largeBags} G (23kg), ${smallBags} P (12kg)`;
+    descriptionText += `🧳 Malas do Cliente: ${largeBags} G (23kg), ${smallBags} P (12kg)`;
 
-    let customTier = `${veiculo.name} • ${tripType === 'roundtrip' ? 'Ida e Volta' : 'Só Ida'}`;
-    if (needsChildSeat || flightNumber || hasBabyStroller) {
-        let extras = [];
-        if (flightNumber) extras.push(`Voo ${flightNumber}`);
-        if (needsChildSeat) extras.push(`Cadeirinha`);
-        if (hasBabyStroller) extras.push(`Carrinho`);
-        customTier += ` [ + ${extras.join(' | ')} ]`;
-    }
+    // Constrói um Subtítulo para aparecer grandão no Carrinho
+    const bagsStr = (Number(largeBags) > 0 || Number(smallBags) > 0) ? ` • 🧳 ${largeBags}G, ${smallBags}P` : ' • Sem Bagagem';
+    const variantStr = `${tripType === 'roundtrip' ? 'Ida e Volta' : 'Só Ida'} • 👥 ${totalPax} Pax${bagsStr}`;
 
     const cartItem = {
       _id: `transfer-${veiculo.id}-${Date.now()}`,
       sku: `TRF-${veiculo.id}`,
       title: `Transfer VIP: ${veiculo.name}`,
-      variantName: `${tripType === 'roundtrip' ? 'Ida e Volta' : 'Só Ida'} • ${totalPax} Passageiros`,
+      variantName: variantStr, // Agora as malas que o cliente escolheu aparecem no carrinho!
       price: veiculo.precoFinal,
       quantity: 1, 
       image: veiculo.image,
       isTravel: true,
       description: descriptionText,
-      flightDetails: {
-          tier: customTier,
-          holdBagsIda: Number(largeBags), 
-          holdBagsVolta: Number(smallBags), 
-          ida: { 
-            origem: searchResult.origemNome, 
-            destino: searchResult.destinoNome, 
-            partida: `${date.split('-').reverse().join('/')} às ${time}h`, 
-            duracao: `~${searchResult.duracao} min (${searchResult.distancia} km)` 
-          },
-          volta: tripType === 'roundtrip' ? { 
-            origem: searchResult.destinoNome, 
-            destino: searchResult.origemNome, 
-            partida: `${returnDate.split('-').reverse().join('/')} às ${returnTime}h`, 
-            duracao: `~${searchResult.duracao} min (${searchResult.distancia} km)` 
-          } : null
-      },
+      // INJEÇÃO DA PAYLOAD COMPLETA PARA O CARRINHO LER
       transferPayload: {
-          tripType, adults, children, largeBags, smallBags, flightNumber, needsChildSeat, hasBabyStroller
+          tripType, 
+          adults: Number(adults), 
+          children: Number(children), 
+          largeBags: Number(largeBags), 
+          smallBags: Number(smallBags), 
+          flightNumber, 
+          needsChildSeat, 
+          hasBabyStroller,
+          pickupName: searchResult.origemNome,
+          dropoffName: searchResult.destinoNome,
+          date: date.split('-').reverse().join('/'),
+          time,
+          returnDate: returnDate ? returnDate.split('-').reverse().join('/') : null,
+          returnTime
       },
       addedAt: Date.now()
     };
@@ -402,11 +388,17 @@ export default function PalastoreTransfers() {
                   <div className="flex-1 flex flex-col justify-between">
                     <div>
                       <h4 className="text-xl font-black text-black mb-2">{v.name}</h4>
-                      <div className="flex flex-wrap gap-4 mb-3">
-                        <span className="flex items-center gap-1 text-sm font-bold text-black"><Users size={16} className="text-[#E65100]"/> {v.pax} lugares</span>
-                        <span className="flex items-center gap-1 text-sm font-bold text-black"><Briefcase size={16} className="text-[#E65100]"/> {v.bags} malas G</span>
+                      
+                      {/* CORREÇÃO NA INTERFACE: Selo de "Capacidade Máxima" adicionado para não confundir o cliente */}
+                      <div className="mb-4 bg-gray-50 border border-gray-100 p-2.5 rounded-lg inline-block w-full md:w-auto">
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">Capacidade Máxima do Veículo:</span>
+                        <div className="flex flex-wrap gap-4">
+                          <span className="flex items-center gap-1.5 text-sm font-bold text-gray-700" title="Capacidade do Veículo"><Users size={16} className="text-[#E65100]"/> Até {v.pax} passageiros</span>
+                          <span className="flex items-center gap-1.5 text-sm font-bold text-gray-700" title="Capacidade do Porta-malas"><Briefcase size={16} className="text-[#E65100]"/> Até {v.bags} malas</span>
+                        </div>
                       </div>
-                      <div className="space-y-1">
+
+                      <div className="space-y-1 mt-2">
                         <p className="flex items-center gap-2 text-sm font-bold text-[#008009]"><Check size={16}/> Cancelamento grátis até 24h antes</p>
                         <p className="flex items-center gap-2 text-sm font-bold text-[#008009]"><Check size={16}/> Motorista com placa de identificação</p>
                         {needsChildSeat && <p className="flex items-center gap-2 text-sm font-bold text-[#008009]"><Check size={16}/> Cadeirinha Inclusa</p>}
