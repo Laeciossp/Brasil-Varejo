@@ -347,11 +347,26 @@ export default function Cart() {
       const orderDoc = {
         _type: 'order', orderNumber, status: 'pending',
         customer: { name: finalCustomerName, email: user.primaryEmailAddress?.emailAddress, cpf: finalCustomerDoc, phone: "" },
+        
+        // AQUI: Injetamos o array estruturado de passageiros direto no Sanity
+        passengers: isDigitalCart ? passengers.map(p => ({
+            _key: Math.random().toString(36).substring(7),
+            name: p.name, cpf: p.cpf, rg: p.rg, rgIssuer: p.rgIssuer, 
+            dob: p.dob, gender: p.gender, nationality: p.nationality,
+            passport: p.passport, passportExpiry: p.passportExpiry,
+            email: p.email, phone: p.phone, seatPreference: p.seatPreference
+        })) : [],
+
         items: items.map(item => {
+            let desc = item.description;
+            if (item.isTravel && item.flightDetails && !desc) {
+                const numMalas = item.flightDetails.holdBagsIda + item.flightDetails.holdBagsVolta;
+                desc = `Tarifa: ${item.flightDetails.tier} | Malas Inclusas: Mochila, Mala de Cabine(10kg)${numMalas > 0 ? ` + ${numMalas} Mala(s) Despachada(s)` : ''}`;
+            }
             const baseItem = {
                 _key: Math.random().toString(36).substring(7),
                 productName: item.title || item.name, 
-                description: item.description,
+                description: desc,
                 variantName: item.variantName || "Padrão", 
                 quantity: item.quantity, 
                 price: item.price, 
@@ -362,7 +377,7 @@ export default function Cart() {
             }
             return baseItem;
         }),
-        shippingAddress: activeAddress, billingAddress: activeAddress, carrier: selectedShipping.name, shippingCost: parseFloat(selectedShipping.price), totalAmount: totalFinal, paymentMethod: tipoPagamento, internalNotes
+        shippingAddress: activeAddress, billingAddress: activeAddress, carrier: selectedShipping.name, shippingCost: parseFloat(selectedShipping.price), totalAmount: totalFinal, paymentMethod: tipoPagamento, internalNotes: `Venda Site. Is Digital: ${isDigitalCart}`
       };
       
       const createdOrder = await client.create(orderDoc);
