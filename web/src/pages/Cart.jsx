@@ -47,7 +47,6 @@ export default function Cart() {
   
   const isDigitalCart = items.length > 0 && items.every(item => item.isTravel === true);
   
-  // CORREÇÃO: Pega a MAIOR quantidade de passageiros entre os itens, e não a soma deles!
   const totalTickets = items.filter(i => i.isTravel).reduce((max, item) => {
     let itemPax = item.quantity || 1;
     if (item.transferPayload) {
@@ -444,11 +443,12 @@ export default function Cart() {
     <div className="bg-gray-50 min-h-screen py-10 font-sans">
       <div className="container mx-auto px-4 max-w-6xl">
         
-        <div className="flex justify-between items-center mb-8">
+        {/* BOTÃO DE VOLTAR - TOPO */}
+        <div className="flex justify-between items-center mb-6 border-b border-gray-200 pb-4">
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">Carrinho ({items.length})</h1>
           <button 
              onClick={() => navigate(-1)} 
-             className="text-gray-500 hover:text-orange-600 font-bold text-sm flex items-center gap-2 transition-colors"
+             className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm transition-all"
           >
              ← Continuar Comprando
           </button>
@@ -761,7 +761,16 @@ export default function Cart() {
                     </label>
                 </div>
                 <div className="flex justify-between items-end mb-6 pt-4 border-t"><span className="font-medium">Total Final</span><span className="text-3xl font-black text-gray-900">{formatCurrency(totalFinal)}</span></div>
-                <button onClick={handleCheckout} disabled={loading || !canCheckout} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-lg shadow-orange-200 transform active:scale-95">{loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/></button>
+                
+                {/* BOTÃO DE VOLTAR - RODAPÉ (Adicionado para não prender o usuário no fim da tela) */}
+                <div className="flex flex-col gap-3">
+                    <button onClick={handleCheckout} disabled={loading || !canCheckout} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-lg shadow-orange-200 transform active:scale-95">{loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/></button>
+                    
+                    <button onClick={() => navigate(-1)} className="w-full py-3 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 rounded-xl font-bold transition-all text-sm">
+                        ← Continuar Comprando
+                    </button>
+                </div>
+                
                 <MercadoPagoTrust />
             </div>
           </div>
