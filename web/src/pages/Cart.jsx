@@ -443,7 +443,6 @@ export default function Cart() {
     <div className="bg-gray-50 min-h-screen py-10 font-sans">
       <div className="container mx-auto px-4 max-w-6xl">
         
-        {/* BOTÃO DE VOLTAR - TOPO */}
         <div className="flex justify-between items-center mb-6 border-b border-gray-200 pb-4">
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">Carrinho ({items.length})</h1>
           <button 
@@ -533,12 +532,30 @@ export default function Cart() {
                                             </div>
                                             <div className="flex justify-between"><span>Tarifa / Categoria:</span> <span className="font-bold text-right">{item.flightDetails.tier}</span></div>
                                             
-                                            <div className="flex justify-between items-center pt-1 border-t border-purple-200 mt-2">
-                                                <span className="flex items-center gap-1"><Luggage size={12}/> Malas Inclusas:</span>
-                                                <div className="flex gap-1 text-[10px]">
-                                                    {item.flightDetails.holdBagsIda > 0 && <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsIda} G (23kg)</span>}
-                                                    {item.flightDetails.holdBagsVolta > 0 && <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsVolta} P (12kg)</span>}
-                                                    {item.flightDetails.holdBagsIda === 0 && item.flightDetails.holdBagsVolta === 0 && <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">Nenhuma</span>}
+                                            {/* CORREÇÃO AQUI: EXIBIÇÃO DETALHADA E ROBUSTA DAS MALAS */}
+                                            <div className="pt-2 border-t border-purple-200 mt-3">
+                                                <span className="flex items-center gap-1 font-bold text-purple-900 mb-2"><Luggage size={14}/> Franquia de Bagagem (Por Pax):</span>
+                                                <div className="flex flex-col gap-1.5 text-[10px]">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-purple-700">1x Mochila / Item Pessoal</span>
+                                                        <span className="font-bold text-green-800 bg-green-100 px-2 rounded-full">Incluso</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-purple-700">1x Mala de Cabine (10kg)</span>
+                                                        <span className="font-bold text-green-800 bg-green-100 px-2 rounded-full">Incluso</span>
+                                                    </div>
+                                                    {item.flightDetails.holdBagsIda > 0 && (
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-purple-700">Bagagem Despachada (Ida)</span>
+                                                            <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsIda}x de 23kg</span>
+                                                        </div>
+                                                    )}
+                                                    {item.flightDetails.holdBagsVolta > 0 && (
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-purple-700">Bagagem Despachada (Volta)</span>
+                                                            <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsVolta}x de 23kg</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -762,7 +779,6 @@ export default function Cart() {
                 </div>
                 <div className="flex justify-between items-end mb-6 pt-4 border-t"><span className="font-medium">Total Final</span><span className="text-3xl font-black text-gray-900">{formatCurrency(totalFinal)}</span></div>
                 
-                {/* BOTÃO DE VOLTAR - RODAPÉ (Adicionado para não prender o usuário no fim da tela) */}
                 <div className="flex flex-col gap-3">
                     <button onClick={handleCheckout} disabled={loading || !canCheckout} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-lg shadow-orange-200 transform active:scale-95">{loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/></button>
                     
