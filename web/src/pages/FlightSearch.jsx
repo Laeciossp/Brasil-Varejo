@@ -86,7 +86,8 @@ const FlightLegDetails = ({ trecho }) => (
 
 export default function FlightSearch({ prefilledData }) {
   const navigate = useNavigate();
-  const { addItem, clearCart } = useCartStore();
+  // CORREÇÃO: Adicionado updateQuantity na desestruturação da store
+  const { addItem, clearCart, updateQuantity } = useCartStore();
 
   const [tripType, setTripType] = useState('return');
   const [cabin, setCabin] = useState('M');
@@ -305,7 +306,15 @@ export default function FlightSearch({ prefilledData }) {
 
     clearCart();
     addItem(flightToCart);
-    navigate('/cart');
+    
+    // CORREÇÃO: Força o carrinho a aplicar a quantidade exata de passageiros 
+    // mesmo que ele tente resetar o valor para 1 automaticamente.
+    setTimeout(() => {
+        if (updateQuantity && lastSearchedPax > 1) {
+            updateQuantity(flightToCart._id, lastSearchedPax, flightToCart.sku);
+        }
+        navigate('/cart');
+    }, 50);
   };
 
   const totalPaxPreview = parseInt(adults, 10) + parseInt(children, 10) + parseInt(infants, 10);
@@ -317,7 +326,6 @@ export default function FlightSearch({ prefilledData }) {
   return (
     <div className="max-w-6xl mx-auto font-sans pb-10">
       
-      {/* CAMADA Z-50 ADICIONADA AQUI PARA BLINDAR A FOTO DE FUNDO */}
       <div className="relative z-50 rounded-3xl mb-8 shadow-xl">
         <div className="absolute inset-0 overflow-hidden rounded-3xl">
           <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2000&auto=format&fit=crop" alt="Voos" className="w-full h-full object-cover brightness-[0.55]" />
@@ -327,7 +335,6 @@ export default function FlightSearch({ prefilledData }) {
           <h2 className="text-3xl md:text-5xl font-black text-white mb-2 drop-shadow-lg">Para onde vamos hoje?</h2>
           <p className="text-white/90 font-medium text-sm md:text-lg mb-8 drop-shadow">Encontre as melhores passagens com segurança, rapidez e flexibilidade.</p>
           
-          {/* Z-40 APLICADO AQUI PARA CAIXA DE PESQUISA */}
           <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 p-5 relative z-40">
             <div className="flex flex-wrap items-center gap-4 mb-5 relative z-50">
               <div className="relative" ref={tripRef}>
@@ -376,7 +383,7 @@ export default function FlightSearch({ prefilledData }) {
                       <Counter label="Mala Porão - Ida" subLabel={`Máx ${maxHoldBagsAllowed}`} value={holdBagsIda} onChange={setHoldBagsIda} min={0} max={maxHoldBagsAllowed} icon="🛫" />
                       <Counter label="Mala Porão - Volta" subLabel={`Máx ${maxHoldBagsAllowed}`} value={holdBagsVolta} onChange={setHoldBagsVolta} min={0} max={maxHoldBagsAllowed} icon="🛬" />
                     </div>
-                    <button onClick={(e) => executeSearch(e)} className="w-full py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 cursor-pointer transition">Aplicar</button>
+                    <button onClick={(e) => executeSearch(e)} className="w-full py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 cursor-pointer transition">Aplicar Filtros</button>
                   </div>
                 )}
               </div>
@@ -398,7 +405,6 @@ export default function FlightSearch({ prefilledData }) {
               </div>
             </div>
 
-            {/* CONTAINER DO GRID COM Z-50 */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-auto md:h-[50px] relative z-40">
               
               <div className="relative col-span-1 md:col-span-3 flex items-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white z-50 h-12 md:h-full" ref={originRef}>
@@ -446,13 +452,11 @@ export default function FlightSearch({ prefilledData }) {
                 <div onClick={() => setShowDateMenu(!showDateMenu)} className="flex items-center justify-between border border-gray-300 rounded-md px-4 h-full cursor-pointer hover:border-purple-600 bg-white">
                   <div className="flex flex-col justify-center">
                     <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Partida</span>
-                    {/* USO DA FUNÇÃO BLINDADA AQUI */}
                     <span className="text-sm font-bold text-gray-900 leading-tight">{dateType==='specific' && dateFrom ? formatSafeDate(dateFrom) : 'A qualquer momento'}</span>
                   </div>
                   <div className="w-px h-6 bg-gray-200 mx-2"></div>
                   <div className={`flex flex-col justify-center ${tripType==='oneway'?'opacity-30':''}`}>
                     <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Regresso</span>
-                    {/* USO DA FUNÇÃO BLINDADA AQUI */}
                     <span className="text-sm font-bold text-gray-900 leading-tight">{tripType==='return' && dateType==='specific' && dateTo ? formatSafeDate(dateTo) : 'A qualquer momento'}</span>
                   </div>
                 </div>
@@ -482,7 +486,6 @@ export default function FlightSearch({ prefilledData }) {
                 )}
               </div>
 
-              {/* BOTAO DE PESQUISA REBAIXADO PARA Z-0 */}
               <div className="col-span-1 md:col-span-2 h-12 md:h-full relative z-0">
                 <button onClick={(e) => executeSearch(e)} disabled={loading} className="w-full h-full bg-[#00a698] hover:bg-[#008f82] text-white font-extrabold rounded-md shadow-md text-base uppercase tracking-wide transition">
                   {loading ? 'Buscando...' : 'Pesquisar'}
