@@ -170,9 +170,12 @@ export default function PalastoreTransfers() {
         customTier += ` [ + ${extras.join(' | ')} ]`;
     }
 
+    // CORREÇÃO: Gerador de Hash Único. Garante que cada reserva não se misture com a outra no carrinho!
+    const uniqueHash = `${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
     const cartItem = {
-      _id: `transfer-${veiculo.id}-${Date.now()}`,
-      sku: `TRF-${veiculo.id}`,
+      _id: `transfer-${veiculo.id}-${uniqueHash}`,
+      sku: `TRF-${veiculo.id}-${uniqueHash}`, // O Carrinho agora enxerga isso como um produto totalmente novo
       title: `Transfer VIP: ${veiculo.name}`,
       variantName: variantStr, 
       price: veiculo.precoFinal,
@@ -197,7 +200,6 @@ export default function PalastoreTransfers() {
             duracao: `~${searchResult.duracao} min (${searchResult.distancia} km)` 
           } : null
       },
-      // CORREÇÃO: O INJETOR AGORA LEVA AS DATAS E ENDEREÇOS COM ELE
       transferPayload: {
           tripType, 
           adults: Number(adults), 
