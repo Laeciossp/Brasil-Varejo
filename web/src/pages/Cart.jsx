@@ -348,7 +348,7 @@ export default function Cart() {
             const baseItem = {
                 _key: Math.random().toString(36).substring(7),
                 productName: item.title || item.name, 
-                description: item.description, // <-- ISSO ESTAVA FALTANDO E FOI ADICIONADO!
+                description: item.description,
                 variantName: item.variantName || "Padrão", 
                 quantity: item.quantity, 
                 price: item.price, 
@@ -390,7 +390,6 @@ export default function Cart() {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
         mp.checkout({ preference: { id: data.id_preferencia } }).open(); 
         
-        // AÇÃO CONJUNTA INFALÍVEL: Vigia o modal garantindo que a tela atualize ao fechar
         let modalAppeared = false;
         const watchModal = setInterval(() => {
             const iframes = Array.from(document.querySelectorAll('iframe'));
@@ -398,7 +397,6 @@ export default function Cart() {
             
             let isVisible = false;
             if (mpIframe) {
-                // Checa se o iframe está fisicamente visível na tela (largura e altura > 0)
                 const rect = mpIframe.getBoundingClientRect();
                 if (rect.width > 0 && rect.height > 0) {
                     isVisible = true;
@@ -406,9 +404,8 @@ export default function Cart() {
             }
 
             if (isVisible) {
-                modalAppeared = true; // Detectou que o modal abriu na tela
+                modalAppeared = true; 
             } else if (modalAppeared) {
-                // O modal estava na tela e agora sumiu (usuário clicou em 'Fechar e cancelar')
                 clearInterval(watchModal);
                 window.location.reload(); 
             }
@@ -442,7 +439,17 @@ export default function Cart() {
   return (
     <div className="bg-gray-50 min-h-screen py-10 font-sans">
       <div className="container mx-auto px-4 max-w-6xl">
-        <h1 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-2">Carrinho ({items.length})</h1>
+        
+        {/* CABEÇALHO DO CARRINHO COM NOVO BOTÃO DE VOLTAR */}
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">Carrinho ({items.length})</h1>
+          <button 
+             onClick={() => navigate(-1)} 
+             className="text-gray-500 hover:text-orange-600 font-bold text-sm flex items-center gap-2 transition-colors"
+          >
+             ← Continuar Comprando
+          </button>
+        </div>
         
         {flightItem && (
             <div className="bg-red-50 border border-red-200 p-3 md:p-4 rounded-xl mb-6 flex flex-col md:flex-row items-center justify-center gap-3 shadow-sm animate-in fade-in slide-in-from-top-4">
