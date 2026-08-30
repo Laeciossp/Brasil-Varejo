@@ -29,7 +29,6 @@ export default {
       initialValue: 'pending'
     },
     
-    // --- CAMPOS OCULTOS/LEGADO ---
     { name: 'cpf', type: 'string', hidden: true },
     { name: 'customerEmail', type: 'string', hidden: true },
     { name: 'customerDocument', type: 'string', hidden: true },
@@ -38,7 +37,6 @@ export default {
     { name: 'id', type: 'string', hidden: true },
     { name: 'hasUnreadMessage', type: 'boolean', title: 'Tem mensagem não lida?', hidden: true },
     
-    // --- DADOS DO CLIENTE ---
     {
       name: 'customer',
       title: 'Cliente',
@@ -52,7 +50,6 @@ export default {
       ]
     },
 
-    // --- ITENS DO PEDIDO ---
     {
       name: 'items',
       title: 'Itens',
@@ -70,6 +67,8 @@ export default {
               to: [{ type: 'product' }]
             },
             { name: 'productName', title: 'Nome', type: 'string' },
+            // AQUI ESTÁ A PORTA ABERTA PARA OS DETALHES ROBUSTOS
+            { name: 'description', title: 'Detalhes da Reserva (Transfer/Voos)', type: 'text', rows: 4 },
             { name: 'variantName', title: 'Variação', type: 'string' },
             { name: 'color', title: 'Cor', type: 'string' },
             { name: 'size', title: 'Tamanho', type: 'string' },
@@ -80,13 +79,13 @@ export default {
           preview: {
             select: {
               title: 'productName',
-              subtitle: 'variantName',
+              subtitle: 'description',
               imageUrl: 'imageUrl'
             },
             prepare({ title, subtitle, imageUrl }) {
               return {
                 title: title,
-                subtitle: subtitle,
+                subtitle: subtitle || 'Sem detalhes adicionais',
                 media: imageUrl ? React.createElement('img', { 
                   src: imageUrl, 
                   alt: title,
@@ -99,35 +98,12 @@ export default {
       ]
     },
 
-    // --- LOGÍSTICA E ENTREGA ---
-    {
-      name: 'carrier',
-      title: 'Transportadora',
-      type: 'string',
-      group: 'logistics'
-    },
-    {
-      name: 'shippingCost',
-      title: 'Custo do Frete',
-      type: 'number',
-      group: 'logistics'
-    },
-    // NOVOS CAMPOS AQUI:
-    {
-      name: 'trackingCode',
-      title: 'Código de Rastreamento',
-      type: 'string',
-      group: 'logistics'
-    },
-    {
-      name: 'trackingUrl',
-      title: 'Link de Rastreamento',
-      type: 'url',
-      group: 'logistics'
-    },
+    { name: 'carrier', title: 'Transportadora', type: 'string', group: 'logistics' },
+    { name: 'shippingCost', title: 'Custo do Frete', type: 'number', group: 'logistics' },
+    { name: 'trackingCode', title: 'Código de Rastreamento', type: 'string', group: 'logistics' },
+    { name: 'trackingUrl', title: 'Link de Rastreamento', type: 'url', group: 'logistics' },
     {
       name: 'shippingAddress',
-      // ... restante do código do endereço
       title: 'Endereço de Entrega',
       type: 'object',
       group: 'logistics',
@@ -144,19 +120,8 @@ export default {
       ]
     },
 
-    // --- FATURAMENTO ---
-    {
-      name: 'totalAmount', 
-      title: 'Valor Total', 
-      type: 'number', 
-      group: 'billing' 
-    },
-    { 
-      name: 'paymentMethod', 
-      title: 'Método de Pagamento', 
-      type: 'string', 
-      group: 'billing' 
-    },
+    { name: 'totalAmount', title: 'Valor Total', type: 'number', group: 'billing' },
+    { name: 'paymentMethod', title: 'Método de Pagamento', type: 'string', group: 'billing' },
     {
       name: 'billingAddress',
       title: 'Endereço de Faturamento',
@@ -175,16 +140,8 @@ export default {
       ]
     },
 
-    // --- ADMIN / NOTAS ---
-    { 
-      name: 'internalNotes', 
-      title: 'Notas Internas / Sistema', 
-      type: 'text', 
-      rows: 3,
-      group: 'admin' 
-    },
+    { name: 'internalNotes', title: 'Notas Internas / Dados dos Passageiros', type: 'text', rows: 4, group: 'admin' },
 
-    // --- CHAT / MENSAGENS ---
     {
       name: 'messages',
       title: '💬 Chat do Pedido',
@@ -195,80 +152,31 @@ export default {
           type: 'object',
           fields: [
             { 
-              name: 'user', 
-              title: 'Remetente', 
-              type: 'string',
-              options: {
-                list: [
-                  { title: '👤 Cliente', value: 'cliente' },
-                  { title: '🛡️ Equipe / Admin', value: 'admin' }
-                ],
-                layout: 'radio'
-              },
+              name: 'user', title: 'Remetente', type: 'string',
+              options: { list: [ { title: '👤 Cliente', value: 'cliente' }, { title: '🛡️ Equipe / Admin', value: 'admin' } ], layout: 'radio' },
               initialValue: 'admin'
             },
-            {
-              name: 'staff',
-              title: 'Atendente',
-              type: 'reference',
-              to: [{ type: 'staff' }],
-              hidden: ({ parent }) => parent?.user === 'cliente'
-            },
-            { 
-              name: 'text', 
-              title: 'Mensagem', 
-              type: 'text',
-              rows: 2
-            },
-            { 
-              name: 'date', 
-              title: 'Data/Hora', 
-              type: 'datetime', 
-              initialValue: () => new Date().toISOString(),
-              readOnly: true
-            }
+            { name: 'staff', title: 'Atendente', type: 'reference', to: [{ type: 'staff' }], hidden: ({ parent }) => parent?.user === 'cliente' },
+            { name: 'text', title: 'Mensagem', type: 'text', rows: 2 },
+            { name: 'date', title: 'Data/Hora', type: 'datetime', initialValue: () => new Date().toISOString(), readOnly: true }
           ],
           preview: {
-            select: {
-              title: 'text',
-              subtitle: 'user',
-              date: 'date',
-              staffName: 'staff.name',
-              staffImage: 'staff.avatar'
-            },
+            select: { title: 'text', subtitle: 'user', date: 'date', staffName: 'staff.name', staffImage: 'staff.avatar' },
             prepare({ title, subtitle, date, staffName, staffImage }) {
               const isClient = subtitle === 'cliente';
               const senderName = isClient ? '👤 Cliente' : (staffName || '🛡️ Admin');
-              
-              return {
-                title: title,
-                subtitle: `${senderName} - ${date ? new Date(date).toLocaleString('pt-BR') : ''}`,
-                media: staffImage
-              }
+              return { title: title, subtitle: `${senderName} - ${date ? new Date(date).toLocaleString('pt-BR') : ''}`, media: staffImage }
             }
           }
         }
       ]
     }
   ],
-  // --- PREVIEW PRINCIPAL DO PEDIDO (RESTAURADO) ---
   preview: {
-    select: {
-      orderNumber: 'orderNumber',
-      customerName: 'customer.name',
-      status: 'status'
-    },
+    select: { orderNumber: 'orderNumber', customerName: 'customer.name', status: 'status' },
     prepare({ orderNumber, customerName, status }) {
-      const statusIcons = {
-        pending: '🟡',
-        paid: '🟢',
-        shipped: '🚚',
-        cancelled: '❌'
-      }
-      return {
-        title: `${statusIcons[status] || '📦'} ${orderNumber || 'Novo Pedido'} - ${customerName || 'Cliente'}`,
-        subtitle: status === 'pending' ? 'Aguardando Pagamento' : (status === 'paid' ? 'Pago' : status)
-      }
+      const statusIcons = { pending: '🟡', paid: '🟢', shipped: '🚚', cancelled: '❌' }
+      return { title: `${statusIcons[status] || '📦'} ${orderNumber || 'Novo Pedido'} - ${customerName || 'Cliente'}`, subtitle: status === 'pending' ? 'Aguardando Pagamento' : (status === 'paid' ? 'Pago' : status) }
     }
   }
 }

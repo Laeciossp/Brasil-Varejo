@@ -31,7 +31,6 @@ export default function Profile() {
   const [activeChatOrder, setActiveChatOrder] = useState(null);
   const [processing, setProcessing] = useState(false);
 
-  // Estados Endereço
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [editingId, setEditingId] = useState(null); 
   const [newAddr, setNewAddr] = useState({ 
@@ -39,7 +38,6 @@ export default function Profile() {
     neighborhood: '', city: '', state: '', document: ''
   });
 
-  // Estados Passageiros
   const [showPaxForm, setShowPaxForm] = useState(false);
   const [editingPaxId, setEditingPaxId] = useState(null);
   const [newPax, setNewPax] = useState({
@@ -71,13 +69,14 @@ export default function Profile() {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
+    // CORREÇÃO: Adicionado 'description' na consulta dos itens
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, orderNumber, _createdAt, status, totalAmount, cancellationReason, paymentMethod, customer, customerEmail,
       "trackingCode": coalesce(trackingCode, logistics.trackingCode),
       "trackingUrl": coalesce(trackingUrl, logistics.trackingUrl),
       "carrier": coalesce(carrier, logistics.selectedCarrier, logistics.carrier),
       "items": items[]{ 
-        productName, quantity, price,
+        productName, description, quantity, price,
         "productSlug": coalesce(product->slug.current, *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].slug.current), 
         "imageUrl": coalesce(product->images[0].asset->url, *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].images[0].asset->url, imageUrl)
       },
@@ -116,7 +115,6 @@ export default function Profile() {
     finally { setProcessing(false); }
   };
 
-  // --- FUNÇÕES DE ENDEREÇO ---
   const handleEditAddress = (addr) => {
     setNewAddr(addr); setEditingId(addr.id); setShowAddressForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); 
   };
@@ -132,7 +130,6 @@ export default function Profile() {
     setNewAddr({ alias: '', zip: '', street: '', number: '', neighborhood: '', city: '', state: '', document: '' });
   };
 
-  // --- FUNÇÕES DE PASSAGEIROS ---
   const handleEditPax = (pax) => {
     setNewPax(pax); setEditingPaxId(pax.id); setShowPaxForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); 
   };
@@ -234,7 +231,6 @@ export default function Profile() {
                                 <p className="text-gray-500 text-sm mt-1">Aproveite nossas ofertas e faça sua primeira compra!</p>
                             </div>
                         ) : orders.map((order) => {
-                             // Tenta pegar o e-mail de entrega salvo no Sanity (customer.email, customerEmail ou fallback do Clerk)
                              const orderEmail = order.customer?.email || order.customerEmail || user.primaryEmailAddress.emailAddress;
 
                              return (
@@ -270,9 +266,17 @@ export default function Profile() {
                                                         </div>
                                                         <div className="flex-1 min-w-0">
                                                             <p className={`text-sm font-bold text-gray-800 leading-tight ${hasSlug ? 'group-hover/item:text-orange-600 transition-colors' : ''}`}>{item.productName}</p>
+                                                            
+                                                            {/* CORREÇÃO AQUI: EXIBINDO OS DETALHES ROBUSTOS NO PERFIL */}
+                                                            {item.description && (
+                                                                <p className="text-xs text-gray-500 mt-2 whitespace-pre-wrap leading-relaxed border-l-2 border-orange-200 pl-2">
+                                                                    {item.description}
+                                                                </p>
+                                                            )}
+
                                                             <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
-                                                                <span className="bg-gray-100 px-2 py-1 rounded">Qtd: {item.quantity}</span>
-                                                                {!hasSlug && <span className="text-orange-400 flex items-center gap-1"><AlertCircle size={10}/> Indisponível</span>}
+                                                                <span className="bg-gray-100 px-2 py-1 rounded font-bold">Qtd: {item.quantity}</span>
+                                                                {!hasSlug && !item.description && <span className="text-orange-400 flex items-center gap-1"><AlertCircle size={10}/> Produto Físico Oculto</span>}
                                                             </div>
                                                         </div>
                                                         <div className="flex flex-col items-end gap-1">
@@ -285,8 +289,6 @@ export default function Profile() {
                                         </div>
 
                                         <div className="lg:w-1/3 space-y-6 lg:border-l lg:border-gray-100 lg:pl-6">
-                                            
-                                            {/* SEÇÃO MODIFICADA: ENVIO DIGITAL */}
                                             <div>
                                                 <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2 flex items-center gap-1"><Mail size={12}/> Entrega Digital:</h4>
                                                 <div className="text-sm text-gray-600 leading-relaxed bg-blue-50/50 p-3 rounded-lg border border-blue-100">
@@ -301,12 +303,10 @@ export default function Profile() {
                                                     <p className="text-sm font-medium text-gray-800">{getPaymentLabel(order.paymentMethod)}</p>
                                                 </div>
                                                 <div>
-                                                    {/* SEÇÃO MODIFICADA: PRAZO ESTIMADO */}
                                                     <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-1 flex items-center gap-1"><Clock size={12}/> Prazo de Emissão:</h4>
                                                     <p className="text-[13px] font-bold text-green-700 leading-tight">Até 2 horas após a confirmação do pagamento</p>
                                                 </div>
                                                 
-                                                {/* Localizador/Rastreamento para Turismo (Opcional, caso a API devolva um código) */}
                                                 {order.trackingCode && (
                                                     <div className="bg-orange-50 border border-orange-100 p-3 rounded-lg mt-2">
                                                         <h4 className="text-xs font-black uppercase text-orange-800 tracking-wider mb-2 flex items-center gap-1"><CheckCircle2 size={12}/> Localizador (PNR):</h4>
@@ -424,7 +424,6 @@ export default function Profile() {
                     </div>
                 )}
 
-                {/* --- ABA DE PASSAGEIROS COM E-MAIL E TELEFONE --- */}
                 {activeTab === 'passengers' && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                          <div className="flex justify-between items-center mb-6">
@@ -469,7 +468,6 @@ export default function Profile() {
                                        <input placeholder="Órgão" value={newPax.rgIssuer} onChange={e => setNewPax({...newPax, rgIssuer: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-1/3"/>
                                     </div>
 
-                                    {/* CAMPOS DE E-MAIL E TELEFONE ADICIONADOS */}
                                     <input placeholder="E-mail do Passageiro" type="email" value={newPax.email} onChange={e => setNewPax({...newPax, email: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-full"/>
                                     <input placeholder="Telefone / WhatsApp" value={newPax.phone} onChange={e => setNewPax({...newPax, phone: e.target.value})} className="border-2 border-gray-100 p-3 rounded-xl focus:border-orange-500 outline-none w-full"/>
 
@@ -506,7 +504,6 @@ export default function Profile() {
                                         <span className="text-[10px] font-black text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full uppercase tracking-wide">{pax.relationship || 'Não informado'}</span>
                                     </div>
                                     
-                                    {/* EXIBIÇÃO DE E-MAIL E TELEFONE NO CARD */}
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm text-gray-600 border-t border-gray-50 pt-4 mt-2">
                                         <div><span className="block text-[10px] text-gray-400 font-bold uppercase">CPF</span> <span className="font-mono text-gray-800">{pax.cpf}</span></div>
                                         <div><span className="block text-[10px] text-gray-400 font-bold uppercase">Nascimento</span> <span className="text-gray-800">{pax.dob ? new Date(pax.dob).toLocaleDateString('pt-BR') : '-'}</span></div>

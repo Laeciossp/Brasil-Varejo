@@ -348,6 +348,7 @@ export default function Cart() {
             const baseItem = {
                 _key: Math.random().toString(36).substring(7),
                 productName: item.title || item.name, 
+                description: item.description, // <-- ISSO ESTAVA FALTANDO E FOI ADICIONADO!
                 variantName: item.variantName || "Padrão", 
                 quantity: item.quantity, 
                 price: item.price, 
