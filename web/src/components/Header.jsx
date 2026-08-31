@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Search, MapPin, ShoppingCart, Heart, User, Menu, 
-  Phone, X, ArrowRight, LogIn, ChevronRight, ShieldCheck, Compass // Adicionei Compass para dar um ar de viagem
+  Phone, X, ArrowRight, LogIn, ChevronRight, ShieldCheck, Compass 
 } from 'lucide-react';
 import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/clerk-react";
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,10 +24,11 @@ export default function Header() {
   const { globalCep, setGlobalCep } = useZipCode();
   const [tempCep, setTempCep] = useState('');
 
+  // CORREÇÃO: Direcionando a busca para a rota /viagens
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
-      navigate(`/busca?q=${encodeURIComponent(searchTerm)}`);
+      navigate(`/viagens?q=${encodeURIComponent(searchTerm)}`);
       setSearchTerm('');
       setIsMenuOpen(false);
     }

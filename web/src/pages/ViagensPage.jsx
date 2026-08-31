@@ -8,7 +8,7 @@ import HotelSearch from './HotelSearch';
 import FlightHotelPackage from './FlightHotelPackage'; 
 import DestinosPopulares from '../components/DestinosPopulares';
 import PalastoreCruzeiros from './PalastoreCruzeiros';
-import CruzeirosTematicos from './CruzeirosTematicos'; // <-- IMPORTADO A NOVA PÁGINA
+import CruzeirosTematicos from './CruzeirosTematicos';
 import CruzeirosTematicosCarousel from '../components/CruzeirosTematicosCarousel';
 import PalastoreTransfers from '../components/PalastoreTransfers';
 
@@ -37,6 +37,17 @@ const RoteirosExclusivos = () => {
   const [activeTheme, setActiveTheme] = useState('Todos');
   const [selectedCountries, setSelectedCountries] = useState([]);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  
+  const location = useLocation();
+
+  // INTELIGÊNCIA 2: Puxa o termo da URL e joga no campo de busca automaticamente
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const query = params.get('q');
+    if (query) {
+      setSearchTerm(query);
+    }
+  }, [location.search]);
 
   const themes = [
     { id: 'Todos', label: 'Todos os Roteiros', icon: Globe },
@@ -353,20 +364,24 @@ export default function ViagensPage() {
 
   const location = useLocation();
 
+  // INTELIGÊNCIA 1: Ativa a aba "roteiros" automaticamente se o cliente vier do Header pesquisando algo
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tabFromUrl = params.get('tab');
+    const searchFromUrl = params.get('q');
+    
     if (tabFromUrl) {
       setActiveTab(tabFromUrl);
+    } else if (searchFromUrl) {
+      setActiveTab('roteiros');
     }
-  }, [location]);
+  }, [location.search]);
   
-  // MENU ATUALIZADO COM CRUZEIROS TEMÁTICOS
   const menuItems = [
     { id: 'voos', label: 'Passagens Aéreas', icon: Plane },
     { id: 'roteiros', label: 'Roteiros Exclusivos', icon: Compass },
     { id: 'cruzeiros', label: 'Cruzeiros (Palastore)', icon: Ship },
-    { id: 'cruzeiros_tematicos', label: 'Cruzeiros Temáticos', icon: PartyPopper }, // <-- NOVO CARD NO MENU
+    { id: 'cruzeiros_tematicos', label: 'Cruzeiros Temáticos', icon: PartyPopper },
     { id: 'cruzeiros_ncl', label: 'Cruzeiros NCL', icon: Anchor },
     { id: 'hoteis', label: 'Hotéis', icon: Building },
     { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Star },
@@ -427,8 +442,6 @@ export default function ViagensPage() {
                <div className="mt-8 pt-8 border-t border-gray-200">
                   <DestinosPopulares onSelectDestination={handleDestinoClick} />
                </div>
-
-               {/* CARROSSEL MAGNÍFICO DE CRUZEIROS TEMÁTICOS ABAIXO DOS VOOS */}
                <div className="mt-12">
                   <CruzeirosTematicosCarousel />
                </div>
@@ -437,8 +450,6 @@ export default function ViagensPage() {
 
           {activeTab === 'roteiros' && <RoteirosExclusivos />}
           {activeTab === 'cruzeiros' && <PalastoreCruzeiros />} 
-          
-          {/* ABA DE CRUZEIROS TEMÁTICOS COM SUPORTE A STORIES E VÍDEOS */}
           {activeTab === 'cruzeiros_tematicos' && <CruzeirosTematicos />}
           
           {activeTab === 'cruzeiros_ncl' && (
@@ -459,8 +470,7 @@ export default function ViagensPage() {
           {activeTab === 'ofertas_hoteis' && <PartnerIframe title="Ofertas Especiais de Hotéis no Brasil" url="https://br.trip.com/hotels/list?flexType=1&cityId=-1&provinceId=0&countryId=19&cityName=&destName=Brasil&searchWord=Brasil&searchType=C&searchValue=140|19**19&checkin=2026-08-17&checkout=2026-08-18&crn=1&adult=2&listFilters=29~1*29*1~2*2,17~3*17*3,80~2~1*80*2&curr=BRL&locale=pt-BR&old=1&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Aproveite tarifas reduzidas para hospedagens em todo o Brasil. Parceria oficial Trip.com." themeColor="indigo" />}
           {activeTab === 'rentcars' && <RentcarsWidget />}
           {activeTab === 'carros' && <PartnerIframe title="Aluguel de Carros" url="https://br.trip.com/carhire/?channelid=14409&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Alugue veículos com as melhores locadoras globais. Processado via Trip.com." themeColor="indigo" />}
-          {/* Apague o iframe de parceiros e insira a sua tecnologia própria: */}
-{activeTab === 'translado' && <PalastoreTransfers />}
+          {activeTab === 'translado' && <PalastoreTransfers />}
           {activeTab === 'passeios' && <PartnerIframe title="Passeios e Ingressos (Trip.com)" url="https://br.trip.com/things-to-do/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Compre ingressos para atrações turísticas pelo mundo com nosso parceiro Trip.com." themeColor="indigo" />}
           {activeTab === 'viator' && (
             <PartnerWidgetViator 
