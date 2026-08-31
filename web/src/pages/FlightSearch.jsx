@@ -16,9 +16,6 @@ const formatDateBr = (dateStr) => {
   return `${dias[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 };
 
-// ==========================================
-// FUNÇÃO BLINDADA: IGNORA FUSO HORÁRIO (TIMEZONE)
-// ==========================================
 const formatSafeDate = (dateStr) => {
   if (!dateStr) return '';
   const parts = dateStr.split('-');
@@ -86,7 +83,6 @@ const FlightLegDetails = ({ trecho }) => (
 
 export default function FlightSearch({ prefilledData }) {
   const navigate = useNavigate();
-  // CORREÇÃO: Adicionado updateQuantity na desestruturação da store
   const { addItem, clearCart, updateQuantity } = useCartStore();
 
   const [tripType, setTripType] = useState('return');
@@ -292,6 +288,7 @@ export default function FlightSearch({ prefilledData }) {
     const flightToCart = {
         _id: voo.id,
         sku: voo.id + '-' + tierName.replace(/\s+/g, '-'),
+        fornecedor: voo.fornecedor, // <--- ADICIONADO PARA RECONHECER A DUFFEL OU KIWI
         title: `${voo.ida.origem} ➔ ${voo.ida.destino}`,
         variantName: `${tierName} (Incluso ${lastHoldIdaCount + lastHoldVoltaCount} Malas)`,
         price: unitPrice, 
@@ -307,8 +304,6 @@ export default function FlightSearch({ prefilledData }) {
     clearCart();
     addItem(flightToCart);
     
-    // CORREÇÃO: Força o carrinho a aplicar a quantidade exata de passageiros 
-    // mesmo que ele tente resetar o valor para 1 automaticamente.
     setTimeout(() => {
         if (updateQuantity && lastSearchedPax > 1) {
             updateQuantity(flightToCart._id, lastSearchedPax, flightToCart.sku);

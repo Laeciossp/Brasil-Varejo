@@ -7,6 +7,7 @@ import { useUser } from "@clerk/clerk-react";
 import { createClient } from "@sanity/client"; 
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
+import AirplaneSeatMap from './AirplaneSeatMap'; // <--- COMPONENTE DO MAPA DE ASSENTOS DA DUFFEL
 
 const client = createClient({
   projectId: 'o4upb251',
@@ -360,7 +361,6 @@ export default function Cart() {
             let sType = '📦 Produto Físico';
             let desc = item.description || '';
 
-            // LÓGICA DE DESCRIÇÃO ROBUSTA PARA O SANITY
             if (item.transferPayload) {
                 sType = '🚐 Transfer / Transporte';
                 const tp = item.transferPayload;
@@ -369,8 +369,6 @@ export default function Cart() {
                 if (tp.flightNumber) desc += `\n✈️ Voo Informado: ${tp.flightNumber}\n`;
                 desc += `\n👥 Passageiros: ${tp.adults} Adultos, ${tp.children} Crianças`;
                 desc += `\n🧳 Malas: ${tp.largeBags} G (23kg), ${tp.smallBags} P (12kg)`;
-                if (tp.needsChildSeat) desc += `\n👶 Cadeirinha Infantil Inclusa`;
-                if (tp.hasBabyStroller) desc += `\n🍼 Carrinho de Bebê Incluso`;
             }
             else if (item.flightDetails) {
                 sType = '✈️ Passagem Aérea';
@@ -585,7 +583,6 @@ export default function Cart() {
                                             </div>
                                             <div className="flex justify-between"><span>Tarifa / Categoria:</span> <span className="font-bold text-right">{item.flightDetails.tier}</span></div>
                                             
-                                            {/* SEPARAÇÃO INTELIGENTE DE MALAS (SEM MEXER NO SEU DESIGN TAILWIND) */}
                                             {item.transferPayload ? (
                                                 <div className="pt-2 border-t border-purple-200 mt-3">
                                                     <span className="flex items-center gap-1 font-bold text-purple-900 mb-2"><Luggage size={14}/> Bagagem do Veículo:</span>
@@ -602,36 +599,26 @@ export default function Cart() {
                                                                 <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.transferPayload.smallBags}x</span>
                                                             </div>
                                                         )}
-                                                        {item.transferPayload.largeBags === 0 && item.transferPayload.smallBags === 0 && (
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="text-purple-700">Malas Declaradas</span>
-                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">Nenhuma</span>
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 </div>
                                             ) : (
                                                 <div className="pt-2 border-t border-purple-200 mt-3">
-                                                    <span className="flex items-center gap-1 font-bold text-purple-900 mb-2"><Luggage size={14}/> Franquia de Bagagem (Por Pax):</span>
+                                                    <span className="flex items-center gap-1 font-bold text-purple-900 mb-2"><Luggage size={14}/> Franquia de Bagagem:</span>
                                                     <div className="flex flex-col gap-1.5 text-[10px]">
                                                         <div className="flex justify-between items-center">
-                                                            <span className="text-purple-700">1x Mochila / Item Pessoal</span>
-                                                            <span className="font-bold text-green-800 bg-green-100 px-2 rounded-full">Incluso</span>
-                                                        </div>
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-purple-700">1x Mala de Cabine (10kg)</span>
+                                                            <span className="text-purple-700">Mochila + Cabine 10kg</span>
                                                             <span className="font-bold text-green-800 bg-green-100 px-2 rounded-full">Incluso</span>
                                                         </div>
                                                         {item.flightDetails.holdBagsIda > 0 && (
                                                             <div className="flex justify-between items-center">
-                                                                <span className="text-purple-700">Bagagem Despachada (Ida)</span>
-                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsIda}x de 23kg</span>
+                                                                <span className="text-purple-700">Porão (Ida)</span>
+                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsIda}x</span>
                                                             </div>
                                                         )}
                                                         {item.flightDetails.holdBagsVolta > 0 && (
                                                             <div className="flex justify-between items-center">
-                                                                <span className="text-purple-700">Bagagem Despachada (Volta)</span>
-                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsVolta}x de 23kg</span>
+                                                                <span className="text-purple-700">Porão (Volta)</span>
+                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsVolta}x</span>
                                                             </div>
                                                         )}
                                                     </div>
@@ -688,7 +675,7 @@ export default function Cart() {
                 
                 {isOnlyDigital && (
                    <div className="bg-blue-50 border border-blue-100 text-blue-800 p-3 rounded-lg text-sm mb-4">
-                      Como este é um produto de viagem digital, não haverá entrega física. O endereço abaixo será usado apenas para a emissão da Nota Fiscal.
+                      Como este é um produto digital, o endereço abaixo será usado apenas para a emissão da Nota Fiscal.
                    </div>
                 )}
 
@@ -723,7 +710,7 @@ export default function Cart() {
                         </h2>
                         
                         <div className="bg-orange-50 border border-orange-100 p-3 rounded-lg text-sm text-orange-800 font-medium">
-                           A emissão do e-ticket depende da exatidão destes dados. Preencha conforme o seu documento oficial (RG ou Passaporte).
+                           A emissão do e-ticket depende da exatidão destes dados. Preencha conforme o documento oficial.
                         </div>
 
                         <div className="space-y-4">
@@ -738,20 +725,18 @@ export default function Cart() {
                                     <div className="flex items-center gap-2">
                                         <UserCheck size={16} className="text-blue-600" />
                                         <select 
-    className="text-xs border border-blue-200 bg-blue-50 text-blue-700 font-bold rounded-md p-1.5 outline-none cursor-pointer"
-    value=""
-    onChange={(e) => {
-        handleImportSavedPax(index, e.target.value);
-    }}
->
-    <option value="" disabled>Preenchimento Rápido...</option>
-    <option value="me">Meus Dados (Titular)</option>
-    {customer?.passengers?.map((p, i) => (
-        <option key={p.id || i} value={p.id || i}>
-            {p.name || 'Sem Nome'} ({p.relationship || 'Salvo'})
-        </option>
-    ))}
-</select>
+                                            className="text-xs border border-blue-200 bg-blue-50 text-blue-700 font-bold rounded-md p-1.5 outline-none cursor-pointer"
+                                            value=""
+                                            onChange={(e) => handleImportSavedPax(index, e.target.value)}
+                                        >
+                                            <option value="" disabled>Preenchimento Rápido...</option>
+                                            <option value="me">Meus Dados (Titular)</option>
+                                            {customer?.passengers?.map((p, i) => (
+                                                <option key={p.id || i} value={p.id || i}>
+                                                    {p.name || 'Sem Nome'} ({p.relationship || 'Salvo'})
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
                                  </h3>
 
@@ -776,15 +761,32 @@ export default function Cart() {
                                        <option value="Outro">Outro</option>
                                     </select>
                                     
-                                    <div className="md:col-span-2 bg-purple-50 p-3 rounded-lg border border-purple-100 flex flex-col md:flex-row items-center gap-3">
-                                       <span className="text-xs font-bold text-purple-800 w-full md:w-auto">Preferência de Assento:</span>
-                                       <select value={pax.seatPreference} onChange={e => handlePaxChange(index, 'seatPreference', e.target.value)} className="w-full flex-1 p-2 border border-purple-200 rounded-md text-sm text-purple-900 outline-none focus:border-purple-500 bg-white">
-                                          <option value="">Escolha seu assento...</option>
-                                          <option value="Janela">Janela</option>
-                                          <option value="Corredor">Corredor</option>
-                                          <option value="Qualquer">Qualquer (Sem preferência)</option>
-                                       </select>
-                                    </div>
+                                    {/* ========================================== */}
+                                    {/* RENDERIZAÇÃO CONDICIONAL: MAPA VS SELECT   */}
+                                    {/* ========================================== */}
+                                    {flightItem && flightItem.fornecedor === 'DUFFEL' ? (
+                                        <div className="md:col-span-2 bg-gray-50 border border-gray-200 rounded-xl p-4 mt-2">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <span className="text-sm font-bold text-gray-800">
+                                                   Poltrona Escolhida: <span className="text-orange-600 text-lg font-black ml-2">{pax.seatPreference || 'Nenhuma'}</span>
+                                                </span>
+                                            </div>
+                                            <AirplaneSeatMap 
+                                                offerId={flightItem._id} 
+                                                onSeatSelect={(seatInfo) => handlePaxChange(index, 'seatPreference', seatInfo ? seatInfo.designator : '')} 
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="md:col-span-2 bg-purple-50 p-3 rounded-lg border border-purple-100 flex flex-col md:flex-row items-center gap-3">
+                                           <span className="text-xs font-bold text-purple-800 w-full md:w-auto">Preferência de Assento:</span>
+                                           <select value={pax.seatPreference} onChange={e => handlePaxChange(index, 'seatPreference', e.target.value)} className="w-full flex-1 p-2 border border-purple-200 rounded-md text-sm text-purple-900 outline-none focus:border-purple-500 bg-white">
+                                              <option value="">Escolha seu assento...</option>
+                                              <option value="Janela">Janela</option>
+                                              <option value="Corredor">Corredor</option>
+                                              <option value="Qualquer">Qualquer (Sem preferência)</option>
+                                           </select>
+                                        </div>
+                                    )}
 
                                     <input placeholder="CPF" value={pax.cpf} onChange={e => handlePaxChange(index, 'cpf', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
                                     <div className="flex gap-2">
@@ -793,7 +795,7 @@ export default function Cart() {
                                     </div>
                                     <input placeholder="Nacionalidade" value={pax.nationality} onChange={e => handlePaxChange(index, 'nationality', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
                                     <div className="flex gap-2">
-                                       <input placeholder="Passaporte (Opc. voo nac.)" value={pax.passport} onChange={e => handlePaxChange(index, 'passport', e.target.value)} className="w-1/2 p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
+                                       <input placeholder="Passaporte (Opc.)" value={pax.passport} onChange={e => handlePaxChange(index, 'passport', e.target.value)} className="w-1/2 p-2.5 border border-gray-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"/>
                                        <div className="relative w-1/2">
                                           <label className="text-[10px] absolute -top-2 left-2 bg-white px-1 text-gray-500 font-bold">Validade</label>
                                           <input type="date" value={pax.passportExpiry} onChange={e => handlePaxChange(index, 'passportExpiry', e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-md text-sm text-gray-600 outline-none focus:border-blue-500 bg-white"/>
