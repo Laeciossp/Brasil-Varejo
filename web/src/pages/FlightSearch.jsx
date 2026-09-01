@@ -288,7 +288,7 @@ export default function FlightSearch({ prefilledData }) {
     const flightToCart = {
         _id: voo.id,
         sku: voo.id + '-' + tierName.replace(/\s+/g, '-'),
-        fornecedor: voo.fornecedor, // <--- ADICIONADO PARA RECONHECER A DUFFEL OU KIWI
+        fornecedor: voo.fornecedor,
         title: `${voo.ida.origem} ➔ ${voo.ida.destino}`,
         variantName: `${tierName} (Incluso ${lastHoldIdaCount + lastHoldVoltaCount} Malas)`,
         price: unitPrice, 
@@ -621,52 +621,109 @@ export default function FlightSearch({ prefilledData }) {
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl p-6 md:p-8 relative overflow-y-auto max-h-[95vh]">
             <button onClick={() => setCheckoutModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 font-bold text-2xl z-50">&times;</button>
+            
             <div className="bg-gradient-to-br from-purple-900 to-orange-600 rounded-2xl p-6 mb-8 text-center shadow-lg relative overflow-hidden">
               <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-xl"></div>
               <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-20 h-20 bg-white opacity-10 rounded-full blur-xl"></div>
               <ShieldCheck size={36} className="mx-auto text-orange-300 mb-2" />
-              <h2 className="text-2xl md:text-3xl font-black text-white mb-1 tracking-tight drop-shadow-md">Escolha sua Tarifa</h2>
-              <p className="text-purple-100 text-sm md:text-base font-medium drop-shadow">Personalize sua experiência de voo com as garantias de proteção Palastore.</p>
+              <h2 className="text-2xl md:text-3xl font-black text-white mb-1 tracking-tight drop-shadow-md">
+                 {checkoutModal.voo.fornecedor === 'DUFFEL' ? 'Confirmação de Tarifa' : 'Escolha sua Tarifa'}
+              </h2>
+              <p className="text-purple-100 text-sm md:text-base font-medium drop-shadow">
+                 {checkoutModal.voo.fornecedor === 'DUFFEL' 
+                    ? 'Condições oficiais fornecidas diretamente pela companhia aérea.' 
+                    : 'Personalize sua experiência de voo com as garantias de proteção Palastore.'}
+              </p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="border border-gray-200 rounded-xl p-6 flex flex-col hover:border-gray-400 transition-colors">
-                <h3 className="font-black text-lg text-gray-800">Basic</h3>
-                <p className="text-xs text-gray-500 mb-4 h-8">Sua configuração atual, ideal para quem quer economizar.</p>
-                <div className="text-3xl font-black text-gray-900 mb-6">R$ {checkoutModal.safeTotal}</div>
-                <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
-                  <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
-                  <li className="flex items-center gap-2">✔️ Assento Padrão Aleatório</li>
-                  <li className="flex items-center gap-2 text-red-500">❌ Sem reembolso no cancelamento</li>
-                </ul>
-                <button onClick={() => handleAddToCart('Basic', checkoutModal.safeTotal)} className="w-full py-3 bg-gray-900 text-white font-bold rounded-lg hover:bg-black transition-colors">Selecionar Basic</button>
-              </div>
+            {/* LÓGICA INTELIGENTE DO MODAL: DUFFEL vs KIWI */}
+            {checkoutModal.voo.fornecedor === 'DUFFEL' ? (
+               
+               <div className="max-w-lg mx-auto border-2 border-orange-500 bg-orange-50/30 rounded-xl p-6 md:p-8 flex flex-col shadow-xl">
+                 <div className="bg-orange-500 text-white text-[10px] font-bold uppercase tracking-widest text-center py-1.5 px-4 rounded-full self-center mb-4 shadow-sm">
+                   Tarifa Oficial • {checkoutModal.voo.ida.companhiaPrincipal}
+                 </div>
+                 <h3 className="font-black text-2xl text-center text-gray-900 capitalize">
+                    {checkoutModal.voo.tarifaReal?.familia || 'Tarifa Padrão'}
+                 </h3>
+                 <p className="text-sm text-center text-gray-500 mb-6">Regras atreladas ao bilhete selecionado.</p>
+                 
+                 <div className="text-4xl font-black text-center text-orange-600 mb-8">R$ {checkoutModal.safeTotal}</div>
+                 
+                 <ul className="space-y-4 mb-8 text-sm text-gray-700 flex-1 bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                   <li className="flex items-center gap-3">
+                     <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold">✔️</span> 
+                     <span className="font-medium">Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</span>
+                   </li>
+                   <li className="flex items-center gap-3">
+                     <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold">✔️</span> 
+                     <span className="font-medium">Acesso ao Mapa de Assentos</span>
+                   </li>
+                   <li className="flex items-center gap-3">
+                     {checkoutModal.voo.tarifaReal?.alteravel ? (
+                       <><span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold">✔️</span> <span className="font-medium">Permite Alteração (Ver regras da Cia)</span></>
+                     ) : (
+                       <><span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-bold">❌</span> <span className="font-medium">Não permite alteração grátis</span></>
+                     )}
+                   </li>
+                   <li className="flex items-center gap-3">
+                     {checkoutModal.voo.tarifaReal?.reembolsavel ? (
+                       <><span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold">✔️</span> <span className="font-medium text-green-700 font-bold">Passagem Reembolsável</span></>
+                     ) : (
+                       <><span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-bold">❌</span> <span className="font-medium">Sem reembolso no cancelamento</span></>
+                     )}
+                   </li>
+                 </ul>
+                 
+                 <button 
+                   onClick={() => handleAddToCart(checkoutModal.voo.tarifaReal?.familia || 'Padrão', checkoutModal.safeTotal)} 
+                   className="w-full py-4 bg-orange-600 text-white font-black text-lg rounded-xl hover:bg-orange-700 transition-colors shadow-lg shadow-orange-200 transform active:scale-95"
+                 >
+                   Confirmar Tarifa {checkoutModal.voo.tarifaReal?.familia || ''}
+                 </button>
+               </div>
 
-              <div className="border-2 border-purple-500 bg-purple-50 rounded-xl p-6 flex flex-col transform md:-translate-y-4 shadow-xl">
-                <div className="bg-purple-500 text-white text-[10px] font-bold uppercase tracking-widest text-center py-1 px-3 rounded-full self-center mb-2 -mt-10 shadow">Mais Escolhida</div>
-                <h3 className="font-black text-lg text-purple-900">Plus</h3>
-                <p className="text-xs text-purple-700 mb-4 h-8">Mais flexibilidade e a comodidade de sentar onde gosta.</p>
-                <div className="text-3xl font-black text-purple-700 mb-6">R$ {checkoutModal.safeTotal + (lastSearchedPax * 85)}</div>
-                <ul className="space-y-3 mb-8 text-sm text-purple-800 flex-1">
-                  <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
-                  <li className="flex items-center gap-2 font-bold">✔️ Escolha de Assento (Janela/Corredor)</li>
-                  <li className="flex items-center gap-2 font-bold">✔️ Remarcação flexível</li>
-                </ul>
-                <button onClick={() => handleAddToCart('Plus', checkoutModal.safeTotal + (lastSearchedPax * 85))} className="w-full py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-lg">Selecionar Plus</button>
-              </div>
+            ) : (
 
-              <div className="border border-gray-200 rounded-xl p-6 flex flex-col hover:border-orange-500 transition-colors">
-                <h3 className="font-black text-lg text-orange-600">Flex</h3>
-                <p className="text-xs text-gray-500 mb-4 h-8">Garantia total para imprevistos. Cancele e receba 100% de volta.</p>
-                <div className="text-3xl font-black text-gray-900 mb-6">R$ {Math.ceil(checkoutModal.safeTotal * 1.15)}</div>
-                <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
-                  <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
-                  <li className="flex items-center gap-2 font-bold">✔️ Escolha de Assento Premium</li>
-                  <li className="flex items-center gap-2 font-bold text-green-600">✔️ Cancelamento 100% Reembolsável</li>
-                </ul>
-                <button onClick={() => handleAddToCart('Flex', Math.ceil(checkoutModal.safeTotal * 1.15))} className="w-full py-3 bg-orange-100 text-orange-700 font-bold rounded-lg hover:bg-orange-200 transition-colors">Selecionar Flex</button>
-              </div>
-            </div>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 <div className="border border-gray-200 rounded-xl p-6 flex flex-col hover:border-gray-400 transition-colors">
+                   <h3 className="font-black text-lg text-gray-800">Basic</h3>
+                   <p className="text-xs text-gray-500 mb-4 h-8">Sua configuração atual, ideal para quem quer economizar.</p>
+                   <div className="text-3xl font-black text-gray-900 mb-6">R$ {checkoutModal.safeTotal}</div>
+                   <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
+                     <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
+                     <li className="flex items-center gap-2">✔️ Assento Padrão Aleatório</li>
+                     <li className="flex items-center gap-2 text-red-500">❌ Sem reembolso no cancelamento</li>
+                   </ul>
+                   <button onClick={() => handleAddToCart('Basic', checkoutModal.safeTotal)} className="w-full py-3 bg-gray-900 text-white font-bold rounded-lg hover:bg-black transition-colors">Selecionar Basic</button>
+                 </div>
+   
+                 <div className="border-2 border-purple-500 bg-purple-50 rounded-xl p-6 flex flex-col transform md:-translate-y-4 shadow-xl">
+                   <div className="bg-purple-500 text-white text-[10px] font-bold uppercase tracking-widest text-center py-1 px-3 rounded-full self-center mb-2 -mt-10 shadow">Mais Escolhida</div>
+                   <h3 className="font-black text-lg text-purple-900">Plus</h3>
+                   <p className="text-xs text-purple-700 mb-4 h-8">Mais flexibilidade e a comodidade de sentar onde gosta.</p>
+                   <div className="text-3xl font-black text-purple-700 mb-6">R$ {checkoutModal.safeTotal + (lastSearchedPax * 85)}</div>
+                   <ul className="space-y-3 mb-8 text-sm text-purple-800 flex-1">
+                     <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
+                     <li className="flex items-center gap-2 font-bold">✔️ Escolha de Assento (Janela/Corredor)</li>
+                     <li className="flex items-center gap-2 font-bold">✔️ Remarcação flexível</li>
+                   </ul>
+                   <button onClick={() => handleAddToCart('Plus', checkoutModal.safeTotal + (lastSearchedPax * 85))} className="w-full py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-lg">Selecionar Plus</button>
+                 </div>
+   
+                 <div className="border border-gray-200 rounded-xl p-6 flex flex-col hover:border-orange-500 transition-colors">
+                   <h3 className="font-black text-lg text-orange-600">Flex</h3>
+                   <p className="text-xs text-gray-500 mb-4 h-8">Garantia total para imprevistos. Cancele e receba 100% de volta.</p>
+                   <div className="text-3xl font-black text-gray-900 mb-6">R$ {Math.ceil(checkoutModal.safeTotal * 1.15)}</div>
+                   <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
+                     <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
+                     <li className="flex items-center gap-2 font-bold">✔️ Escolha de Assento Premium</li>
+                     <li className="flex items-center gap-2 font-bold text-green-600">✔️ Cancelamento 100% Reembolsável</li>
+                   </ul>
+                   <button onClick={() => handleAddToCart('Flex', Math.ceil(checkoutModal.safeTotal * 1.15))} className="w-full py-3 bg-orange-100 text-orange-700 font-bold rounded-lg hover:bg-orange-200 transition-colors">Selecionar Flex</button>
+                 </div>
+               </div>
+            )}
             
             <div className="mt-8 text-center">
               <button onClick={() => setCheckoutModal(null)} className="text-gray-500 font-bold hover:text-gray-800 transition-colors underline">
