@@ -658,19 +658,21 @@ export default function FlightSearch({ prefilledData }) {
                           R$ {Math.ceil((tarifa.preco + checkoutModal.totalBagsCost) / lastSearchedPax)}
                        </div>
                        
-                       {/* O CONTEÚDO AGORA É 100% REAL BASEADO NA API */}
+                       {/* CONTEÚDO REAL DA DUFFEL COM O TEXTO EXPLÍCITO DA MOCHILA E CABINE */}
                        <ul className={`space-y-3 mb-8 text-xs flex-1 ${isMiddle ? 'text-purple-800' : 'text-gray-600'}`}>
                          
-                         {/* BAGAGEM DE PORÃO */}
+                         <li className="flex items-center gap-2">
+                           <span className="text-green-600 font-bold">✔️</span> <span className="font-bold">Item pessoal (Bolsa) + Mala de mão (10kg)</span>
+                         </li>
+
                          <li className="flex items-center gap-2">
                            {tarifa.malasInclusas > 0 ? (
-                             <><span className="text-green-600 font-bold">✔️</span> <span className="font-bold text-gray-900">Inclui {tarifa.malasInclusas} mala(s) de porão</span></>
+                             <><span className="text-green-600 font-bold">✔️</span> <span className="font-bold text-gray-900">Inclui {tarifa.malasInclusas} mala(s) de porão grátis</span></>
                            ) : (
-                             <><span className="text-red-500 font-bold">❌</span> <span>Nenhuma mala despachada grátis</span></>
+                             <><span className="text-red-500 font-bold">❌</span> <span>Nenhuma mala de porão grátis</span></>
                            )}
                          </li>
                          
-                         {/* REGRA DE ALTERAÇÃO */}
                          <li className="flex items-center gap-2">
                            {tarifa.alteravel === true ? (
                              <><span className="text-green-600 font-bold">✔️</span> <span>Permite alteração {tarifa.taxaAlteracao ? `(Taxa: R$ ${tarifa.taxaAlteracao})` : ''}</span></>
@@ -681,7 +683,6 @@ export default function FlightSearch({ prefilledData }) {
                            )}
                          </li>
                          
-                         {/* REGRA DE REEMBOLSO */}
                          <li className="flex items-center gap-2">
                            {tarifa.reembolsavel === true ? (
                              <><span className="text-green-600 font-bold">✔️</span> <span className="font-bold">Reembolsável {tarifa.taxaReembolso ? `(Taxa: R$ ${tarifa.taxaReembolso})` : ''}</span></>
@@ -710,9 +711,12 @@ export default function FlightSearch({ prefilledData }) {
                    <h3 className="font-black text-lg text-gray-800">Basic</h3>
                    <p className="text-xs text-gray-500 mb-4 h-8">Sua configuração atual, ideal para quem quer economizar.</p>
                    <div className="text-3xl font-black text-gray-900 mb-6">R$ {checkoutModal.safeTotal}</div>
+                   
+                   {/* CONTEÚDO SIMULADO DA KIWI COM O TEXTO EXPLÍCITO DA MOCHILA E CABINE */}
                    <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
-                     <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
-                     <li className="flex items-center gap-2">✔️ Assento Padrão Aleatório</li>
+                     <li className="flex items-center gap-2">✔️ Item pessoal (Bolsa) + Mala de mão (10kg)</li>
+                     <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionadas</li>
+                     <li className="flex items-center gap-2">✔️ Assento Aleatório</li>
                      <li className="flex items-center gap-2 text-red-500">❌ Sem reembolso no cancelamento</li>
                    </ul>
                    <button onClick={() => handleAddToCart('Basic', checkoutModal.safeTotal)} className="w-full py-3 bg-gray-900 text-white font-bold rounded-lg hover:bg-black transition-colors">Selecionar Basic</button>
@@ -724,8 +728,9 @@ export default function FlightSearch({ prefilledData }) {
                    <p className="text-xs text-purple-700 mb-4 h-8">Mais flexibilidade e a comodidade de sentar onde gosta.</p>
                    <div className="text-3xl font-black text-purple-700 mb-6">R$ {checkoutModal.safeTotal + (lastSearchedPax * 85)}</div>
                    <ul className="space-y-3 mb-8 text-sm text-purple-800 flex-1">
-                     <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
-                     <li className="flex items-center gap-2 font-bold">✔️ Escolha de Assento (Janela/Corredor)</li>
+                     <li className="flex items-center gap-2">✔️ Item pessoal (Bolsa) + Mala de mão (10kg)</li>
+                     <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionadas</li>
+                     <li className="flex items-center gap-2 font-bold">✔️ Preferência: Janela ou Corredor</li>
                      <li className="flex items-center gap-2 font-bold">✔️ Remarcação flexível</li>
                    </ul>
                    <button onClick={() => handleAddToCart('Plus', checkoutModal.safeTotal + (lastSearchedPax * 85))} className="w-full py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-lg">Selecionar Plus</button>
@@ -736,8 +741,9 @@ export default function FlightSearch({ prefilledData }) {
                    <p className="text-xs text-gray-500 mb-4 h-8">Garantia total para imprevistos. Cancele e receba 100% de volta.</p>
                    <div className="text-3xl font-black text-gray-900 mb-6">R$ {Math.ceil(checkoutModal.safeTotal * 1.15)}</div>
                    <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
-                     <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
-                     <li className="flex items-center gap-2 font-bold">✔️ Escolha de Assento Premium</li>
+                     <li className="flex items-center gap-2">✔️ Item pessoal (Bolsa) + Mala de mão (10kg)</li>
+                     <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionadas</li>
+                     <li className="flex items-center gap-2 font-bold">✔️ Preferência: Janela ou Corredor</li>
                      <li className="flex items-center gap-2 font-bold text-green-600">✔️ Cancelamento 100% Reembolsável</li>
                    </ul>
                    <button onClick={() => handleAddToCart('Flex', Math.ceil(checkoutModal.safeTotal * 1.15))} className="w-full py-3 bg-orange-100 text-orange-700 font-bold rounded-lg hover:bg-orange-200 transition-colors">Selecionar Flex</button>
