@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useCartStore from '../store/useCartStore';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Info } from 'lucide-react';
 
 const WORKER_URL = "https://palastore-flights-api.laeciossp.workers.dev";
 
@@ -288,7 +288,7 @@ export default function FlightSearch({ prefilledData }) {
     const flightToCart = {
         _id: voo.id,
         sku: voo.id + '-' + tierName.replace(/\s+/g, '-'),
-        fornecedor: voo.fornecedor,
+        fornecedor: voo.fornecedor, 
         title: `${voo.ida.origem} ➔ ${voo.ida.destino}`,
         variantName: `${tierName} (Incluso ${lastHoldIdaCount + lastHoldVoltaCount} Malas)`,
         price: unitPrice, 
@@ -544,6 +544,27 @@ export default function FlightSearch({ prefilledData }) {
                       <span className="text-[10px] font-extrabold uppercase text-purple-600 block mb-0.5">Voo de Ida <span className="text-gray-500 ml-1 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">{voo.ida.trechos.map(t => t.vooNumero).join(' ➔ ')}</span></span>
                       <h3 className="font-bold text-gray-900 text-base">{voo.ida.origem} ➔ {voo.ida.destino}</h3>
                       <p className="text-xs text-gray-500 mt-0.5 font-medium">Partida: {formatDateBr(voo.ida.partida)} às {formatTime(voo.ida.partida)} • <span className="text-green-600 font-bold">{voo.ida.escalas === 0 ? 'Voo Direto' : `${voo.ida.escalas} Parada(s)`}</span></p>
+                      
+                      {/* ======================================================== */}
+                      {/* NOVA LÓGICA: ETIQUETAS DE TARIFA PARA A DUFFEL NA LISTA */}
+                      {/* ======================================================== */}
+                      {voo.fornecedor === 'DUFFEL' && voo.tarifaReal && (
+                        <div className="mt-3 flex gap-2">
+                           <span className="text-[10px] font-bold px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-widest">
+                              Tarifa {voo.tarifaReal.familia}
+                           </span>
+                           {voo.tarifaReal.reembolsavel ? (
+                              <span className="text-[10px] font-bold px-2 py-1 rounded bg-green-50 text-green-700 border border-green-100 flex items-center gap-1">
+                                 <ShieldCheck size={12}/> Reembolsável
+                              </span>
+                           ) : (
+                              <span className="text-[10px] font-bold px-2 py-1 rounded bg-gray-100 text-gray-500 border border-gray-200">
+                                 Não Reembolsável
+                              </span>
+                           )}
+                        </div>
+                      )}
+
                     </div>
                   </div>
                   <div className="text-right hidden sm:block">
@@ -644,9 +665,9 @@ export default function FlightSearch({ prefilledData }) {
                    Tarifa Oficial • {checkoutModal.voo.ida.companhiaPrincipal}
                  </div>
                  <h3 className="font-black text-2xl text-center text-gray-900 capitalize">
-                    {checkoutModal.voo.tarifaReal?.familia || 'Tarifa Padrão'}
+                    {checkoutModal.voo.tarifaReal?.familia ? `Tarifa ${checkoutModal.voo.tarifaReal.familia}` : 'Tarifa Padrão'}
                  </h3>
-                 <p className="text-sm text-center text-gray-500 mb-6">Regras atreladas ao bilhete selecionado.</p>
+                 <p className="text-sm text-center text-gray-500 mb-6">Regras atreladas ao bilhete que você selecionou na lista.</p>
                  
                  <div className="text-4xl font-black text-center text-orange-600 mb-8">R$ {checkoutModal.safeTotal}</div>
                  
@@ -679,7 +700,7 @@ export default function FlightSearch({ prefilledData }) {
                    onClick={() => handleAddToCart(checkoutModal.voo.tarifaReal?.familia || 'Padrão', checkoutModal.safeTotal)} 
                    className="w-full py-4 bg-orange-600 text-white font-black text-lg rounded-xl hover:bg-orange-700 transition-colors shadow-lg shadow-orange-200 transform active:scale-95"
                  >
-                   Confirmar Tarifa {checkoutModal.voo.tarifaReal?.familia || ''}
+                   Confirmar e Ir para o Carrinho
                  </button>
                </div>
 
