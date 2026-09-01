@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useCartStore from '../store/useCartStore';
-import { ShieldCheck, Info } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 const WORKER_URL = "https://palastore-flights-api.laeciossp.workers.dev";
 
@@ -145,7 +145,6 @@ export default function FlightSearch({ prefilledData }) {
       setDestinations([{ id: destId, name: destId }]);
 
       let customTripType = 'return';
-      
       if (prefilledData.dataIda) {
         setDateType('specific');
         setDateFrom(prefilledData.dataIda);
@@ -205,25 +204,8 @@ export default function FlightSearch({ prefilledData }) {
     return () => clearTimeout(timer);
   }, [destQuery]);
 
-  const hasOvernightLayover = (voo) => {
-    if (!voo || !voo.ida) return false;
-    const checkLegs = (trechos) => {
-      if (!trechos) return false;
-      for (let i = 0; i < trechos.length - 1; i++) {
-        const arrival = new Date(trechos[i].chegada);
-        const nextDeparture = new Date(trechos[i+1].partida);
-        if (arrival.getDate() !== nextDeparture.getDate()) return true;
-      }
-      return false;
-    };
-    if (checkLegs(voo.ida.trechos)) return true;
-    if (voo.volta && checkLegs(voo.volta.trechos)) return true;
-    return false;
-  };
-
   const executeSearch = async (e, overrideSort = sortConfig, overrideStops = stopsConfig, customDest = null, customIda = null, customVolta = null, customTripType = null) => {
     if(e) e.preventDefault();
-    
     const activeDestinations = customDest ? [{ id: customDest }] : destinations;
     if (!origin || activeDestinations.length === 0) { setError("Selecione Origem e Destino."); return; }
     
@@ -248,9 +230,7 @@ export default function FlightSearch({ prefilledData }) {
     try {
       let url = `${WORKER_URL}/search-flights?origin=${origin.id}&destination=${destIds}&dateFrom=${effectiveDateFrom}&dateToRange=${searchDateToRange}&adults=${a}&children=${c}&infants=${i}&cabin=${cabin}&sort=${overrideSort}&max_stopovers=${overrideStops}`;
       const activeTripType = customTripType || tripType;
-      const isReturn = customVolta ? true : (activeTripType === 'return');
-      
-      if (isReturn) {
+      if (customVolta || activeTripType === 'return') {
         const effectiveDateTo = customVolta || (dateType === 'specific' && dateTo ? dateTo : effectiveDateFrom);
         const searchRetToRange = customVolta || (dateType === 'specific' && dateTo ? dateTo : getSixMonthsStr());
         url += `&returnFrom=${effectiveDateTo}&returnToRange=${searchRetToRange}`;
@@ -259,9 +239,7 @@ export default function FlightSearch({ prefilledData }) {
       const res = await fetch(url);
       const data = await res.json();
       if (data.status === 'success' && Array.isArray(data.voos)) { 
-        let processed = data.voos;
-        if (!allowOvernight) processed = processed.filter(v => !hasOvernightLayover(v));
-        setRenderedFlights(processed); 
+        setRenderedFlights(data.voos); 
       } else { 
         setError(data.alerta || "Nenhum voo encontrado."); 
         setRenderedFlights([]); 
@@ -274,10 +252,12 @@ export default function FlightSearch({ prefilledData }) {
     }
   };
 
-  const handleAddToCart = (tierName, tierTotal) => {
+  // AGORA RECEBE O OFFER ID ESPECÍFICO DA TARIFA QUE O CLIENTE ESCOLHEU
+  const handleAddToCart = (tierName, tierTotal, specificOfferId = null) => {
     if (!checkoutModal) return;
     const { voo } = checkoutModal;
     const unitPrice = Math.ceil(tierTotal / lastSearchedPax);
+    const finalOfferId = specificOfferId || voo.id; 
 
     const flightDetails = {
       ida: voo.ida, volta: voo.volta, pax: lastSearchedPax, adults: lastAdultsCount,
@@ -286,8 +266,8 @@ export default function FlightSearch({ prefilledData }) {
     };
 
     const flightToCart = {
-        _id: voo.id,
-        sku: voo.id + '-' + tierName.replace(/\s+/g, '-'),
+        _id: finalOfferId, // ENVIANDO O ID CORRETO PARA O CARRINHO ABRIR O MAPA
+        sku: finalOfferId + '-' + tierName.replace(/\s+/g, '-'),
         fornecedor: voo.fornecedor, 
         title: `${voo.ida.origem} ➔ ${voo.ida.destino}`,
         variantName: `${tierName} (Incluso ${lastHoldIdaCount + lastHoldVoltaCount} Malas)`,
@@ -544,27 +524,6 @@ export default function FlightSearch({ prefilledData }) {
                       <span className="text-[10px] font-extrabold uppercase text-purple-600 block mb-0.5">Voo de Ida <span className="text-gray-500 ml-1 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">{voo.ida.trechos.map(t => t.vooNumero).join(' ➔ ')}</span></span>
                       <h3 className="font-bold text-gray-900 text-base">{voo.ida.origem} ➔ {voo.ida.destino}</h3>
                       <p className="text-xs text-gray-500 mt-0.5 font-medium">Partida: {formatDateBr(voo.ida.partida)} às {formatTime(voo.ida.partida)} • <span className="text-green-600 font-bold">{voo.ida.escalas === 0 ? 'Voo Direto' : `${voo.ida.escalas} Parada(s)`}</span></p>
-                      
-                      {/* ======================================================== */}
-                      {/* NOVA LÓGICA: ETIQUETAS DE TARIFA PARA A DUFFEL NA LISTA */}
-                      {/* ======================================================== */}
-                      {voo.fornecedor === 'DUFFEL' && voo.tarifaReal && (
-                        <div className="mt-3 flex gap-2">
-                           <span className="text-[10px] font-bold px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-widest">
-                              Tarifa {voo.tarifaReal.familia}
-                           </span>
-                           {voo.tarifaReal.reembolsavel ? (
-                              <span className="text-[10px] font-bold px-2 py-1 rounded bg-green-50 text-green-700 border border-green-100 flex items-center gap-1">
-                                 <ShieldCheck size={12}/> Reembolsável
-                              </span>
-                           ) : (
-                              <span className="text-[10px] font-bold px-2 py-1 rounded bg-gray-100 text-gray-500 border border-gray-200">
-                                 Não Reembolsável
-                              </span>
-                           )}
-                        </div>
-                      )}
-
                     </div>
                   </div>
                   <div className="text-right hidden sm:block">
@@ -626,9 +585,9 @@ export default function FlightSearch({ prefilledData }) {
                 </div>
 
                 <div className="text-center w-full mt-auto">
-                  <span className="text-[10px] uppercase font-bold text-gray-500 tracking-widest block mb-1">Total para {lastSearchedPax} passageiro(s)</span>
+                  <span className="text-[10px] uppercase font-bold text-gray-500 tracking-widest block mb-1">A partir de</span>
                   <span className="text-4xl font-black text-green-700 block mb-4">R$ {safeTotal}</span>
-                  <button onClick={() => setCheckoutModal({ voo, safeTotal })} className="bg-orange-600 text-white w-full py-4 rounded-xl font-black text-lg hover:bg-orange-700 transition-colors shadow-lg cursor-pointer">
+                  <button onClick={() => setCheckoutModal({ voo, safeTotal, totalBagsCost })} className="bg-orange-600 text-white w-full py-4 rounded-xl font-black text-lg hover:bg-orange-700 transition-colors shadow-lg cursor-pointer">
                     Comprar Passagem
                   </button>
                 </div>
@@ -640,68 +599,47 @@ export default function FlightSearch({ prefilledData }) {
 
       {checkoutModal && (
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl p-6 md:p-8 relative overflow-y-auto max-h-[95vh]">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl p-6 md:p-8 relative overflow-y-auto max-h-[95vh]">
             <button onClick={() => setCheckoutModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 font-bold text-2xl z-50">&times;</button>
-            
             <div className="bg-gradient-to-br from-purple-900 to-orange-600 rounded-2xl p-6 mb-8 text-center shadow-lg relative overflow-hidden">
               <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-xl"></div>
               <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-20 h-20 bg-white opacity-10 rounded-full blur-xl"></div>
               <ShieldCheck size={36} className="mx-auto text-orange-300 mb-2" />
-              <h2 className="text-2xl md:text-3xl font-black text-white mb-1 tracking-tight drop-shadow-md">
-                 {checkoutModal.voo.fornecedor === 'DUFFEL' ? 'Confirmação de Tarifa' : 'Escolha sua Tarifa'}
-              </h2>
+              <h2 className="text-2xl md:text-3xl font-black text-white mb-1 tracking-tight drop-shadow-md">Escolha sua Tarifa</h2>
               <p className="text-purple-100 text-sm md:text-base font-medium drop-shadow">
-                 {checkoutModal.voo.fornecedor === 'DUFFEL' 
-                    ? 'Condições oficiais fornecidas diretamente pela companhia aérea.' 
-                    : 'Personalize sua experiência de voo com as garantias de proteção Palastore.'}
+                  {checkoutModal.voo.fornecedor === 'DUFFEL' ? 'Selecionamos as melhores tarifas oficiais da companhia aérea para você.' : 'Personalize sua experiência de voo com as garantias de proteção Palastore.'}
               </p>
             </div>
             
-            {/* LÓGICA INTELIGENTE DO MODAL: DUFFEL vs KIWI */}
-            {checkoutModal.voo.fornecedor === 'DUFFEL' ? (
+            {/* LÓGICA INTELIGENTE DO MODAL: DUFFEL COM VÁRIAS TARIFAS REAIS vs KIWI SIMULADO */}
+            {checkoutModal.voo.fornecedor === 'DUFFEL' && checkoutModal.voo.tarifasReais ? (
                
-               <div className="max-w-lg mx-auto border-2 border-orange-500 bg-orange-50/30 rounded-xl p-6 md:p-8 flex flex-col shadow-xl">
-                 <div className="bg-orange-500 text-white text-[10px] font-bold uppercase tracking-widest text-center py-1.5 px-4 rounded-full self-center mb-4 shadow-sm">
-                   Tarifa Oficial • {checkoutModal.voo.ida.companhiaPrincipal}
-                 </div>
-                 <h3 className="font-black text-2xl text-center text-gray-900 capitalize">
-                    {checkoutModal.voo.tarifaReal?.familia ? `Tarifa ${checkoutModal.voo.tarifaReal.familia}` : 'Tarifa Padrão'}
-                 </h3>
-                 <p className="text-sm text-center text-gray-500 mb-6">Regras atreladas ao bilhete que você selecionou na lista.</p>
-                 
-                 <div className="text-4xl font-black text-center text-orange-600 mb-8">R$ {checkoutModal.safeTotal}</div>
-                 
-                 <ul className="space-y-4 mb-8 text-sm text-gray-700 flex-1 bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-                   <li className="flex items-center gap-3">
-                     <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold">✔️</span> 
-                     <span className="font-medium">Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</span>
-                   </li>
-                   <li className="flex items-center gap-3">
-                     <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold">✔️</span> 
-                     <span className="font-medium">Acesso ao Mapa de Assentos</span>
-                   </li>
-                   <li className="flex items-center gap-3">
-                     {checkoutModal.voo.tarifaReal?.alteravel ? (
-                       <><span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold">✔️</span> <span className="font-medium">Permite Alteração (Ver regras da Cia)</span></>
-                     ) : (
-                       <><span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-bold">❌</span> <span className="font-medium">Não permite alteração grátis</span></>
-                     )}
-                   </li>
-                   <li className="flex items-center gap-3">
-                     {checkoutModal.voo.tarifaReal?.reembolsavel ? (
-                       <><span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold">✔️</span> <span className="font-medium text-green-700 font-bold">Passagem Reembolsável</span></>
-                     ) : (
-                       <><span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-bold">❌</span> <span className="font-medium">Sem reembolso no cancelamento</span></>
-                     )}
-                   </li>
-                 </ul>
-                 
-                 <button 
-                   onClick={() => handleAddToCart(checkoutModal.voo.tarifaReal?.familia || 'Padrão', checkoutModal.safeTotal)} 
-                   className="w-full py-4 bg-orange-600 text-white font-black text-lg rounded-xl hover:bg-orange-700 transition-colors shadow-lg shadow-orange-200 transform active:scale-95"
-                 >
-                   Confirmar e Ir para o Carrinho
-                 </button>
+               <div className={`grid grid-cols-1 md:grid-cols-${Math.min(checkoutModal.voo.tarifasReais.length, 3)} gap-6 justify-center`}>
+                 {checkoutModal.voo.tarifasReais.map((tarifa, index) => (
+                     <div key={tarifa.offer_id} className={`border rounded-xl p-6 flex flex-col transition-colors ${index === 1 ? 'border-purple-500 bg-purple-50 transform md:-translate-y-4 shadow-xl' : 'border-gray-200 hover:border-orange-500'}`}>
+                       {index === 1 && <div className="bg-purple-500 text-white text-[10px] font-bold uppercase tracking-widest text-center py-1 px-3 rounded-full self-center mb-2 -mt-10 shadow">Opção Balanceada</div>}
+                       <h3 className={`font-black text-xl capitalize ${index === 1 ? 'text-purple-900' : 'text-gray-800'}`}>
+                           Tarifa {tarifa.familia}
+                       </h3>
+                       <p className={`text-xs mb-4 h-8 ${index === 1 ? 'text-purple-700' : 'text-gray-500'}`}>Regras oficiais da {checkoutModal.voo.ida.companhiaPrincipal}.</p>
+                       
+                       <div className={`text-3xl font-black mb-6 ${index === 1 ? 'text-purple-700' : 'text-gray-900'}`}>
+                          R$ {Math.ceil((tarifa.preco + checkoutModal.totalBagsCost) / lastSearchedPax)}
+                       </div>
+                       
+                       <ul className={`space-y-3 mb-8 text-sm flex-1 ${index === 1 ? 'text-purple-800' : 'text-gray-600'}`}>
+                         <li className="flex items-center gap-2">✔️ Acesso ao Mapa de Assentos</li>
+                         <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) de porão</li>
+                         <li className="flex items-center gap-2">
+                           {tarifa.alteravel ? <><span className="text-green-600">✔️</span> Permite remarcação (ver regras)</> : <><span className="text-red-500">❌</span> Não permite alteração</>}
+                         </li>
+                         <li className="flex items-center gap-2">
+                           {tarifa.reembolsavel ? <><span className="text-green-600 font-bold">✔️ Passagem Reembolsável</span></> : <><span className="text-red-500">❌</span> Sem reembolso</>}
+                         </li>
+                       </ul>
+                       <button onClick={() => handleAddToCart(tarifa.familia, tarifa.preco + checkoutModal.totalBagsCost, tarifa.offer_id)} className={`w-full py-3 font-bold rounded-lg transition-colors ${index === 1 ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-900 text-white hover:bg-black'}`}>Selecionar {tarifa.familia}</button>
+                     </div>
+                 ))}
                </div>
 
             ) : (
