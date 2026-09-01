@@ -283,11 +283,11 @@ export default function FlightSearch({ prefilledData }) {
     };
 
     const flightToCart = {
-        _id: finalOfferId,
+        _id: finalOfferId, 
         sku: finalOfferId + '-' + tierName.replace(/\s+/g, '-'),
         fornecedor: voo.fornecedor, 
         title: `${voo.ida.origem} ➔ ${voo.ida.destino}`,
-        variantName: `${tierName} (Incluso ${lastHoldIdaCount + lastHoldVoltaCount} Malas Adicionais)`,
+        variantName: `${tierName}`, 
         price: unitPrice, 
         quantity: lastSearchedPax, 
         image: `https://images.kiwi.com/airlines/64x64/${voo.ida.companhiaPrincipal}.png`,
@@ -597,7 +597,7 @@ export default function FlightSearch({ prefilledData }) {
                     <div><p className="text-xs font-bold text-gray-800">{lastSearchedPax}x Mala de cabine</p></div><span className="text-[10px] font-black uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded">Incluído</span>
                   </div>
                   <div className="flex justify-between items-center mb-2 pb-3 border-b border-gray-100">
-                    <div><p className="text-xs font-bold text-gray-800">{(lastHoldIdaCount + lastHoldVoltaCount)}x Mala(s) adicionais selecionadas</p></div><span className="text-xs font-extrabold text-gray-700">{(lastHoldIdaCount + lastHoldVoltaCount) > 0 ? 'Selecionada' : '0 Adicionada'}</span>
+                    <div><p className="text-xs font-bold text-gray-800">{(lastHoldIdaCount + lastHoldVoltaCount)}x Extras (Opcional)</p></div><span className="text-xs font-extrabold text-gray-700">{(lastHoldIdaCount + lastHoldVoltaCount) > 0 ? 'Selecionada' : '0 Adicionada'}</span>
                   </div>
                 </div>
 
@@ -637,48 +637,70 @@ export default function FlightSearch({ prefilledData }) {
               </p>
             </div>
             
-            {/* LÓGICA INTELIGENTE DO MODAL: DUFFEL COM VÁRIAS TARIFAS REAIS vs KIWI SIMULADO */}
+            {/* DUFFEL COM VÁRIAS TARIFAS REAIS */}
             {checkoutModal.voo.fornecedor === 'DUFFEL' && checkoutModal.voo.tarifasReais ? (
                
                <div className={`grid grid-cols-1 md:grid-cols-${Math.min(checkoutModal.voo.tarifasReais.length, 3)} gap-6 justify-center`}>
-                 {checkoutModal.voo.tarifasReais.map((tarifa, index) => (
-                     <div key={tarifa.offer_id} className={`border rounded-xl p-6 flex flex-col transition-colors ${index === 1 ? 'border-purple-500 bg-purple-50 transform md:-translate-y-4 shadow-xl' : 'border-gray-200 hover:border-orange-500'}`}>
-                       {index === 1 && <div className="bg-purple-500 text-white text-[10px] font-bold uppercase tracking-widest text-center py-1 px-3 rounded-full self-center mb-2 -mt-10 shadow">Opção Balanceada</div>}
-                       <h3 className={`font-black text-xl capitalize ${index === 1 ? 'text-purple-900' : 'text-gray-800'}`}>
-                           Tarifa {tarifa.familia}
-                       </h3>
-                       <p className={`text-xs mb-4 h-8 ${index === 1 ? 'text-purple-700' : 'text-gray-500'}`}>Regras oficiais da {checkoutModal.voo.ida.companhiaPrincipal}.</p>
+                 {checkoutModal.voo.tarifasReais.map((tarifa, index) => {
+                     const isMiddle = index === 1 && checkoutModal.voo.tarifasReais.length === 3;
+                     const displayNome = tarifa.familia.toLowerCase().includes('tarifa') ? tarifa.familia : `Tarifa ${tarifa.familia}`;
+
+                     return (
+                     <div key={tarifa.offer_id} className={`border rounded-xl p-6 flex flex-col transition-colors ${isMiddle ? 'border-purple-500 bg-purple-50 transform md:-translate-y-4 shadow-xl' : 'border-gray-200 hover:border-orange-500'}`}>
+                       {isMiddle && <div className="bg-purple-500 text-white text-[10px] font-bold uppercase tracking-widest text-center py-1 px-3 rounded-full self-center mb-2 -mt-10 shadow">Opção Balanceada</div>}
                        
-                       <div className={`text-3xl font-black mb-6 ${index === 1 ? 'text-purple-700' : 'text-gray-900'}`}>
+                       <h3 className={`font-black text-xl capitalize ${isMiddle ? 'text-purple-900' : 'text-gray-800'}`}>
+                           {displayNome}
+                       </h3>
+                       <p className={`text-[10px] mb-4 h-8 ${isMiddle ? 'text-purple-700' : 'text-gray-500'}`}>Regras oficiais da {checkoutModal.voo.ida.companhiaPrincipal}.</p>
+                       
+                       <div className={`text-3xl font-black mb-6 ${isMiddle ? 'text-purple-700' : 'text-gray-900'}`}>
                           R$ {Math.ceil((tarifa.preco + checkoutModal.totalBagsCost) / lastSearchedPax)}
                        </div>
                        
-                       <ul className={`space-y-3 mb-8 text-sm flex-1 ${index === 1 ? 'text-purple-800' : 'text-gray-600'}`}>
-                         <li className="flex items-center gap-2">✔️ Acesso ao Mapa de Assentos</li>
+                       {/* O CONTEÚDO AGORA É 100% REAL BASEADO NA API */}
+                       <ul className={`space-y-3 mb-8 text-xs flex-1 ${isMiddle ? 'text-purple-800' : 'text-gray-600'}`}>
                          
-                         {/* NOVA EXIBIÇÃO DE BAGAGEM REAL */}
+                         {/* BAGAGEM DE PORÃO */}
                          <li className="flex items-center gap-2">
                            {tarifa.malasInclusas > 0 ? (
-                             <><span className="text-green-600">✔️</span> Inclui {tarifa.malasInclusas} mala(s) de porão grátis</>
+                             <><span className="text-green-600 font-bold">✔️</span> <span className="font-bold text-gray-900">Inclui {tarifa.malasInclusas} mala(s) de porão</span></>
                            ) : (
-                             <><span className="text-red-500">❌</span> Apenas mala de mão (10kg)</>
+                             <><span className="text-red-500 font-bold">❌</span> <span>Nenhuma mala despachada grátis</span></>
                            )}
                          </li>
                          
-                         {/* NOVA EXIBIÇÃO DE REGRAS DE ALTERAÇÃO */}
+                         {/* REGRA DE ALTERAÇÃO */}
                          <li className="flex items-center gap-2">
-                           {tarifa.alteravel ? <><span className="text-green-600">✔️</span> Permite remarcação (ver regras)</> : <><span className="text-red-500">❌</span> Não permite alteração grátis</>}
+                           {tarifa.alteravel === true ? (
+                             <><span className="text-green-600 font-bold">✔️</span> <span>Permite alteração {tarifa.taxaAlteracao ? `(Taxa: R$ ${tarifa.taxaAlteracao})` : ''}</span></>
+                           ) : tarifa.alteravel === false ? (
+                             <><span className="text-red-500 font-bold">❌</span> <span>Não permite alteração grátis</span></>
+                           ) : (
+                             <><span className="text-gray-400 font-bold">⚠️</span> <span>Alteração sob consulta</span></>
+                           )}
                          </li>
                          
-                         {/* NOVA EXIBIÇÃO DE REGRAS DE REEMBOLSO */}
+                         {/* REGRA DE REEMBOLSO */}
                          <li className="flex items-center gap-2">
-                           {tarifa.reembolsavel ? <><span className="text-green-600 font-bold">✔️ Passagem Reembolsável</span></> : <><span className="text-red-500">❌</span> Sem reembolso</>}
+                           {tarifa.reembolsavel === true ? (
+                             <><span className="text-green-600 font-bold">✔️</span> <span className="font-bold">Reembolsável {tarifa.taxaReembolso ? `(Taxa: R$ ${tarifa.taxaReembolso})` : ''}</span></>
+                           ) : tarifa.reembolsavel === false ? (
+                             <><span className="text-red-500 font-bold">❌</span> <span>Sem reembolso (Não cancelável)</span></>
+                           ) : (
+                             <><span className="text-gray-400 font-bold">⚠️</span> <span>Reembolso sob consulta</span></>
+                           )}
+                         </li>
+
+                         <li className="flex items-center gap-2">
+                           <span className="text-blue-600 font-bold">✔️</span> Acesso ao Mapa de Assentos
                          </li>
                        </ul>
 
-                       <button onClick={() => handleAddToCart(tarifa.familia, tarifa.preco + checkoutModal.totalBagsCost, tarifa.offer_id)} className={`w-full py-3 font-bold rounded-lg transition-colors ${index === 1 ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-900 text-white hover:bg-black'}`}>Selecionar {tarifa.familia}</button>
+                       <button onClick={() => handleAddToCart(displayNome, tarifa.preco + checkoutModal.totalBagsCost, tarifa.offer_id)} className={`w-full py-3 font-bold rounded-lg transition-colors ${isMiddle ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-900 text-white hover:bg-black'}`}>Selecionar {tarifa.familia}</button>
                      </div>
-                 ))}
+                     );
+                 })}
                </div>
 
             ) : (
@@ -689,7 +711,7 @@ export default function FlightSearch({ prefilledData }) {
                    <p className="text-xs text-gray-500 mb-4 h-8">Sua configuração atual, ideal para quem quer economizar.</p>
                    <div className="text-3xl font-black text-gray-900 mb-6">R$ {checkoutModal.safeTotal}</div>
                    <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
-                     <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionais</li>
+                     <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
                      <li className="flex items-center gap-2">✔️ Assento Padrão Aleatório</li>
                      <li className="flex items-center gap-2 text-red-500">❌ Sem reembolso no cancelamento</li>
                    </ul>
@@ -702,7 +724,7 @@ export default function FlightSearch({ prefilledData }) {
                    <p className="text-xs text-purple-700 mb-4 h-8">Mais flexibilidade e a comodidade de sentar onde gosta.</p>
                    <div className="text-3xl font-black text-purple-700 mb-6">R$ {checkoutModal.safeTotal + (lastSearchedPax * 85)}</div>
                    <ul className="space-y-3 mb-8 text-sm text-purple-800 flex-1">
-                     <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionais</li>
+                     <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
                      <li className="flex items-center gap-2 font-bold">✔️ Escolha de Assento (Janela/Corredor)</li>
                      <li className="flex items-center gap-2 font-bold">✔️ Remarcação flexível</li>
                    </ul>
@@ -714,7 +736,7 @@ export default function FlightSearch({ prefilledData }) {
                    <p className="text-xs text-gray-500 mb-4 h-8">Garantia total para imprevistos. Cancele e receba 100% de volta.</p>
                    <div className="text-3xl font-black text-gray-900 mb-6">R$ {Math.ceil(checkoutModal.safeTotal * 1.15)}</div>
                    <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
-                     <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionais</li>
+                     <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
                      <li className="flex items-center gap-2 font-bold">✔️ Escolha de Assento Premium</li>
                      <li className="flex items-center gap-2 font-bold text-green-600">✔️ Cancelamento 100% Reembolsável</li>
                    </ul>
