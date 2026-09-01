@@ -204,6 +204,22 @@ export default function FlightSearch({ prefilledData }) {
     return () => clearTimeout(timer);
   }, [destQuery]);
 
+  const hasOvernightLayover = (voo) => {
+    if (!voo || !voo.ida) return false;
+    const checkLegs = (trechos) => {
+      if (!trechos) return false;
+      for (let i = 0; i < trechos.length - 1; i++) {
+        const arrival = new Date(trechos[i].chegada);
+        const nextDeparture = new Date(trechos[i+1].partida);
+        if (arrival.getDate() !== nextDeparture.getDate()) return true;
+      }
+      return false;
+    };
+    if (checkLegs(voo.ida.trechos)) return true;
+    if (voo.volta && checkLegs(voo.volta.trechos)) return true;
+    return false;
+  };
+
   const executeSearch = async (e, overrideSort = sortConfig, overrideStops = stopsConfig, customDest = null, customIda = null, customVolta = null, customTripType = null) => {
     if(e) e.preventDefault();
     const activeDestinations = customDest ? [{ id: customDest }] : destinations;
@@ -239,7 +255,9 @@ export default function FlightSearch({ prefilledData }) {
       const res = await fetch(url);
       const data = await res.json();
       if (data.status === 'success' && Array.isArray(data.voos)) { 
-        setRenderedFlights(data.voos); 
+        let processed = data.voos;
+        if (!allowOvernight) processed = processed.filter(v => !hasOvernightLayover(v));
+        setRenderedFlights(processed); 
       } else { 
         setError(data.alerta || "Nenhum voo encontrado."); 
         setRenderedFlights([]); 
@@ -252,7 +270,6 @@ export default function FlightSearch({ prefilledData }) {
     }
   };
 
-  // AGORA RECEBE O OFFER ID ESPECÍFICO DA TARIFA QUE O CLIENTE ESCOLHEU
   const handleAddToCart = (tierName, tierTotal, specificOfferId = null) => {
     if (!checkoutModal) return;
     const { voo } = checkoutModal;
@@ -266,11 +283,11 @@ export default function FlightSearch({ prefilledData }) {
     };
 
     const flightToCart = {
-        _id: finalOfferId, // ENVIANDO O ID CORRETO PARA O CARRINHO ABRIR O MAPA
+        _id: finalOfferId,
         sku: finalOfferId + '-' + tierName.replace(/\s+/g, '-'),
         fornecedor: voo.fornecedor, 
         title: `${voo.ida.origem} ➔ ${voo.ida.destino}`,
-        variantName: `${tierName} (Incluso ${lastHoldIdaCount + lastHoldVoltaCount} Malas)`,
+        variantName: `${tierName} (Incluso ${lastHoldIdaCount + lastHoldVoltaCount} Malas Adicionais)`,
         price: unitPrice, 
         quantity: lastSearchedPax, 
         image: `https://images.kiwi.com/airlines/64x64/${voo.ida.companhiaPrincipal}.png`,
@@ -346,12 +363,12 @@ export default function FlightSearch({ prefilledData }) {
                       <Counter label="Crianças" subLabel="2 - 11 anos" value={children} onChange={setChildren} icon="👦" />
                       <Counter label="Bebês" subLabel="Abaixo de 2 anos" value={infants} onChange={setInfants} icon="👶" />
                     </div>
-                    <h4 className="font-black text-[10px] uppercase tracking-wider text-purple-900 mb-1 border-b border-gray-100 pb-1.5">Bagagens</h4>
+                    <h4 className="font-black text-[10px] uppercase tracking-wider text-purple-900 mb-1 border-b border-gray-100 pb-1.5">Bagagens extras</h4>
                     <div className="mb-4">
                       <div className="flex justify-between items-center py-1.5 border-b border-gray-50">
                         <div className="flex items-center gap-2">
                           <span className="text-gray-400 text-sm">🎒</span>
-                          <span className="text-xs font-bold text-gray-800">Mala de Cabine (Ida/Volta)</span>
+                          <span className="text-xs font-bold text-gray-800">Mala de Cabine (10kg)</span>
                         </div>
                         <span className="font-bold text-gray-800 text-[10px]">{totalPaxPreview} Fixa</span>
                       </div>
@@ -524,6 +541,15 @@ export default function FlightSearch({ prefilledData }) {
                       <span className="text-[10px] font-extrabold uppercase text-purple-600 block mb-0.5">Voo de Ida <span className="text-gray-500 ml-1 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">{voo.ida.trechos.map(t => t.vooNumero).join(' ➔ ')}</span></span>
                       <h3 className="font-bold text-gray-900 text-base">{voo.ida.origem} ➔ {voo.ida.destino}</h3>
                       <p className="text-xs text-gray-500 mt-0.5 font-medium">Partida: {formatDateBr(voo.ida.partida)} às {formatTime(voo.ida.partida)} • <span className="text-green-600 font-bold">{voo.ida.escalas === 0 ? 'Voo Direto' : `${voo.ida.escalas} Parada(s)`}</span></p>
+                      
+                      {voo.fornecedor === 'DUFFEL' && voo.tarifasReais && (
+                        <div className="mt-3 flex gap-2">
+                           <span className="text-[10px] font-bold px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1">
+                              <ShieldCheck size={12}/> Tarifas Oficiais (Agrupadas)
+                           </span>
+                        </div>
+                      )}
+
                     </div>
                   </div>
                   <div className="text-right hidden sm:block">
@@ -571,24 +597,24 @@ export default function FlightSearch({ prefilledData }) {
                     <div><p className="text-xs font-bold text-gray-800">{lastSearchedPax}x Mala de cabine</p></div><span className="text-[10px] font-black uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded">Incluído</span>
                   </div>
                   <div className="flex justify-between items-center mb-2 pb-3 border-b border-gray-100">
-                    <div><p className="text-xs font-bold text-gray-800">{(lastHoldIdaCount + lastHoldVoltaCount)}x Mala(s) porão (Ida/Volta)</p></div><span className="text-xs font-extrabold text-gray-700">{(lastHoldIdaCount + lastHoldVoltaCount) > 0 ? 'Selecionada' : '0 Adicionada'}</span>
+                    <div><p className="text-xs font-bold text-gray-800">{(lastHoldIdaCount + lastHoldVoltaCount)}x Mala(s) adicionais selecionadas</p></div><span className="text-xs font-extrabold text-gray-700">{(lastHoldIdaCount + lastHoldVoltaCount) > 0 ? 'Selecionada' : '0 Adicionada'}</span>
                   </div>
                 </div>
 
                 <div className="bg-purple-50 border border-purple-100 p-3 rounded-xl mb-4 text-xs text-purple-900 space-y-1.5">
-                  <p className="font-bold text-purple-950 border-b border-purple-200 pb-1 mb-1">Extrato de Valores:</p>
+                  <p className="font-bold text-purple-950 border-b border-purple-200 pb-1 mb-1">Extrato Base:</p>
                   {lastAdultsCount > 0 && <div className="flex justify-between"><span>{lastAdultsCount}x Adulto(s)</span><span>R$ {adultSubtotal || 0}</span></div>}
                   {lastChildrenCount > 0 && <div className="flex justify-between"><span>{lastChildrenCount}x Criança(s)</span><span>R$ {childSubtotal || 0}</span></div>}
                   {lastInfantsCount > 0 && <div className="flex justify-between"><span>{lastInfantsCount}x Bebê(s)</span><span>Incluso</span></div>}
-                  {lastHoldIdaCount > 0 && <div className="flex justify-between text-purple-700 font-semibold"><span>{lastHoldIdaCount}x Mala Porão (Ida)</span><span>R$ {bagIdaSubtotal || 0}</span></div>}
-                  {lastHoldVoltaCount > 0 && <div className="flex justify-between text-purple-700 font-semibold"><span>{lastHoldVoltaCount}x Mala Porão (Volta)</span><span>R$ {bagVoltaSubtotal || 0}</span></div>}
+                  {lastHoldIdaCount > 0 && <div className="flex justify-between text-purple-700 font-semibold"><span>{lastHoldIdaCount}x Extra Porão (Ida)</span><span>R$ {bagIdaSubtotal || 0}</span></div>}
+                  {lastHoldVoltaCount > 0 && <div className="flex justify-between text-purple-700 font-semibold"><span>{lastHoldVoltaCount}x Extra Porão (Volta)</span><span>R$ {bagVoltaSubtotal || 0}</span></div>}
                 </div>
 
                 <div className="text-center w-full mt-auto">
-                  <span className="text-[10px] uppercase font-bold text-gray-500 tracking-widest block mb-1">A partir de</span>
+                  <span className="text-[10px] uppercase font-bold text-gray-500 tracking-widest block mb-1">Total a partir de</span>
                   <span className="text-4xl font-black text-green-700 block mb-4">R$ {safeTotal}</span>
                   <button onClick={() => setCheckoutModal({ voo, safeTotal, totalBagsCost })} className="bg-orange-600 text-white w-full py-4 rounded-xl font-black text-lg hover:bg-orange-700 transition-colors shadow-lg cursor-pointer">
-                    Comprar Passagem
+                    Ver Tarifas
                   </button>
                 </div>
               </div>
@@ -629,14 +655,27 @@ export default function FlightSearch({ prefilledData }) {
                        
                        <ul className={`space-y-3 mb-8 text-sm flex-1 ${index === 1 ? 'text-purple-800' : 'text-gray-600'}`}>
                          <li className="flex items-center gap-2">✔️ Acesso ao Mapa de Assentos</li>
-                         <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) de porão</li>
+                         
+                         {/* NOVA EXIBIÇÃO DE BAGAGEM REAL */}
                          <li className="flex items-center gap-2">
-                           {tarifa.alteravel ? <><span className="text-green-600">✔️</span> Permite remarcação (ver regras)</> : <><span className="text-red-500">❌</span> Não permite alteração</>}
+                           {tarifa.malasInclusas > 0 ? (
+                             <><span className="text-green-600">✔️</span> Inclui {tarifa.malasInclusas} mala(s) de porão grátis</>
+                           ) : (
+                             <><span className="text-red-500">❌</span> Apenas mala de mão (10kg)</>
+                           )}
                          </li>
+                         
+                         {/* NOVA EXIBIÇÃO DE REGRAS DE ALTERAÇÃO */}
+                         <li className="flex items-center gap-2">
+                           {tarifa.alteravel ? <><span className="text-green-600">✔️</span> Permite remarcação (ver regras)</> : <><span className="text-red-500">❌</span> Não permite alteração grátis</>}
+                         </li>
+                         
+                         {/* NOVA EXIBIÇÃO DE REGRAS DE REEMBOLSO */}
                          <li className="flex items-center gap-2">
                            {tarifa.reembolsavel ? <><span className="text-green-600 font-bold">✔️ Passagem Reembolsável</span></> : <><span className="text-red-500">❌</span> Sem reembolso</>}
                          </li>
                        </ul>
+
                        <button onClick={() => handleAddToCart(tarifa.familia, tarifa.preco + checkoutModal.totalBagsCost, tarifa.offer_id)} className={`w-full py-3 font-bold rounded-lg transition-colors ${index === 1 ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-900 text-white hover:bg-black'}`}>Selecionar {tarifa.familia}</button>
                      </div>
                  ))}
@@ -650,7 +689,7 @@ export default function FlightSearch({ prefilledData }) {
                    <p className="text-xs text-gray-500 mb-4 h-8">Sua configuração atual, ideal para quem quer economizar.</p>
                    <div className="text-3xl font-black text-gray-900 mb-6">R$ {checkoutModal.safeTotal}</div>
                    <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
-                     <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
+                     <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionais</li>
                      <li className="flex items-center gap-2">✔️ Assento Padrão Aleatório</li>
                      <li className="flex items-center gap-2 text-red-500">❌ Sem reembolso no cancelamento</li>
                    </ul>
@@ -663,7 +702,7 @@ export default function FlightSearch({ prefilledData }) {
                    <p className="text-xs text-purple-700 mb-4 h-8">Mais flexibilidade e a comodidade de sentar onde gosta.</p>
                    <div className="text-3xl font-black text-purple-700 mb-6">R$ {checkoutModal.safeTotal + (lastSearchedPax * 85)}</div>
                    <ul className="space-y-3 mb-8 text-sm text-purple-800 flex-1">
-                     <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
+                     <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionais</li>
                      <li className="flex items-center gap-2 font-bold">✔️ Escolha de Assento (Janela/Corredor)</li>
                      <li className="flex items-center gap-2 font-bold">✔️ Remarcação flexível</li>
                    </ul>
@@ -675,7 +714,7 @@ export default function FlightSearch({ prefilledData }) {
                    <p className="text-xs text-gray-500 mb-4 h-8">Garantia total para imprevistos. Cancele e receba 100% de volta.</p>
                    <div className="text-3xl font-black text-gray-900 mb-6">R$ {Math.ceil(checkoutModal.safeTotal * 1.15)}</div>
                    <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
-                     <li className="flex items-center gap-2">✔️ Inclui suas {lastHoldIdaCount + lastHoldVoltaCount} mala(s) atuais</li>
+                     <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionais</li>
                      <li className="flex items-center gap-2 font-bold">✔️ Escolha de Assento Premium</li>
                      <li className="flex items-center gap-2 font-bold text-green-600">✔️ Cancelamento 100% Reembolsável</li>
                    </ul>
