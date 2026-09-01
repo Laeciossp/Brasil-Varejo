@@ -10,7 +10,8 @@ import customer from './customer'
 import staff from './staff'
 import tour from './tour' 
 import navio from './navio' 
-import ofertaMarketing from './ofertaMarketing' // 👈 Nova importação dos Cruzeiros Temáticos
+import ofertaMarketing from './ofertaMarketing' 
+import apiConfig from './apiConfig' // 👈 Nova importação do Painel de APIs
 
 // --- Schemas da Home / Page Builder ---
 import hero from './hero'
@@ -30,7 +31,8 @@ export const schemaTypes = [
   staff,
   tour,
   navio, 
-  ofertaMarketing, // 👈 Declare a ofertaMarketing aqui para aparecer no painel do Sanity
+  ofertaMarketing, 
+  apiConfig, // 👈 Declare aqui para aparecer no menu do Sanity
 
   // Page Builder da Home
   hero,

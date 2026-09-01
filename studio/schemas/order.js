@@ -9,10 +9,20 @@ export default {
     { name: 'passengers', title: '👥 Viajantes (Emissão)' }, 
     { name: 'logistics', title: '🚚 Frete / Logística' },
     { name: 'billing', title: '💲 Faturamento' },
-    { name: 'admin', title: '⚙️ Admin & Chat' }
+    { name: 'admin', title: '⚙️ Admin & Fornecedores' } // <- Atualizado o nome do grupo
   ],
   fields: [
     { name: 'orderNumber', title: 'Número do Pedido', type: 'string', readOnly: true, group: 'details' },
+    
+    // NOVO: O Localizador Exclusivo Palastore (Gerado no seu Firebase)
+    { 
+      name: 'locator', 
+      title: 'Localizador Palastore (Código da Reserva)', 
+      type: 'string', 
+      group: 'details',
+      description: 'Código de 6 letras gerado no momento da compra (Ex: A7X9P2)'
+    },
+
     {
       name: 'status',
       title: 'Status',
@@ -62,6 +72,33 @@ export default {
           type: 'object',
           title: 'Item',
           fields: [
+            // ==============================================================
+            // CHAVE SELETORA DOS FORNECEDORES
+            // ==============================================================
+            {
+              name: 'fornecedor',
+              title: 'Fornecedor (Origem do Serviço)',
+              type: 'string',
+              options: {
+                list: [
+                  { title: '✈️ Duffel (Voos Oficiais/NDC)', value: 'DUFFEL' },
+                  { title: '✈️ Kiwi (Voos GDS/OTAs)', value: 'KIWI' },
+                  { title: '🏨 Restel (Hotéis B2B)', value: 'RESTEL' },
+                  { title: '🎟️ Viator (Passeios/Transfers)', value: 'VIATOR' },
+                  { title: '📦 Estoque Próprio (Produtos Físicos)', value: 'PROPRIO' }
+                ],
+                layout: 'dropdown'
+              },
+              initialValue: 'PROPRIO'
+            },
+            { 
+              name: 'externalId', 
+              title: 'ID Externo (Offer ID / Booking Ref)', 
+              type: 'string',
+              description: 'O ID gerado pela Duffel, Kiwi ou Viator (Essencial para emissão no painel deles).'
+            },
+            // ==============================================================
+
             { name: 'product', title: 'Vínculo (Produto Físico)', type: 'reference', to: [{ type: 'product' }] },
             { name: 'productName', title: 'Serviço / Produto', type: 'string' },
             { name: 'serviceType', title: 'Categoria do Serviço', type: 'string' },
@@ -72,11 +109,15 @@ export default {
             { name: 'imageUrl', title: 'Imagem', type: 'string' }
           ],
           preview: {
-            select: { title: 'productName', subtitle: 'description', imageUrl: 'imageUrl' },
+            select: { 
+              title: 'productName', 
+              subtitle: 'fornecedor', // Mostra o fornecedor no card do Sanity
+              imageUrl: 'imageUrl' 
+            },
             prepare({ title, subtitle, imageUrl }) {
               return {
                 title: title,
-                subtitle: subtitle || 'Sem detalhes adicionais',
+                subtitle: subtitle ? `Fornecedor: ${subtitle}` : 'Sem detalhes adicionais',
                 media: imageUrl ? React.createElement('img', { src: imageUrl, style: { objectFit: 'cover' } }) : undefined
               }
             }
@@ -105,14 +146,14 @@ export default {
             { name: 'nationality', title: 'Nacionalidade', type: 'string' },
             { name: 'passport', title: 'Passaporte', type: 'string' },
             { name: 'passportExpiry', title: 'Validade Passaporte', type: 'string' },
-            { name: 'seatPreference', title: 'Preferência de Assento', type: 'string' },
+            { name: 'seatPreference', title: 'Poltrona / Preferência', type: 'string' },
             { name: 'email', title: 'E-mail do Passageiro', type: 'string' },
             { name: 'phone', title: 'Telefone do Passageiro', type: 'string' }
           ],
           preview: {
             select: { title: 'name', subtitle: 'cpf', seat: 'seatPreference' },
             prepare({ title, subtitle, seat }) {
-              return { title: `👤 ${title || 'Sem Nome'}`, subtitle: `CPF: ${subtitle || '-'} | Assento: ${seat || 'Qualquer'}` }
+              return { title: `👤 ${title || 'Sem Nome'}`, subtitle: `CPF: ${subtitle || '-'} | Assento: ${seat || 'Não definido'}` }
             }
           }
         }
@@ -121,8 +162,8 @@ export default {
 
     { name: 'carrier', title: 'Forma de Envio / Operadora', type: 'string', group: 'logistics' },
     { name: 'shippingCost', title: 'Custo de Emissão/Frete', type: 'number', group: 'logistics' },
-    { name: 'trackingCode', title: 'Localizador (PNR) / Rastreio', type: 'string', group: 'logistics' },
-    { name: 'trackingUrl', title: 'Link de Rastreamento', type: 'url', group: 'logistics' },
+    { name: 'trackingCode', title: 'Código da Cia Aérea (PNR Oficial)', type: 'string', group: 'logistics' },
+    { name: 'trackingUrl', title: 'Link de Rastreamento (Correios/Transportadora)', type: 'url', group: 'logistics' },
     {
       name: 'shippingAddress', title: 'Endereço de Entrega (Físicos)', type: 'object', group: 'logistics',
       fields: [
@@ -150,6 +191,16 @@ export default {
       ]
     },
 
+    // ==============================================================
+    // LINKS E FERRAMENTAS DE ADMINISTRAÇÃO (GDS / OTAs)
+    // ==============================================================
+    { 
+      name: 'providerAdminLink', 
+      title: 'Link de Emissão do Fornecedor (Deep Link)', 
+      type: 'url', 
+      group: 'admin',
+      description: 'O link gerado pelo Firebase para você clicar e abrir direto o painel da Kiwi, Duffel ou Viator.' 
+    },
     { name: 'internalNotes', title: 'Notas Administrativas', type: 'text', rows: 3, group: 'admin' },
     {
       name: 'messages', title: '💬 Chat do Pedido', type: 'array', group: 'admin',
@@ -167,10 +218,20 @@ export default {
     }
   ],
   preview: {
-    select: { orderNumber: 'orderNumber', customerName: 'customer.name', status: 'status' },
-    prepare({ orderNumber, customerName, status }) {
+    select: { 
+      orderNumber: 'orderNumber', 
+      locator: 'locator',
+      customerName: 'customer.name', 
+      status: 'status' 
+    },
+    prepare({ orderNumber, locator, customerName, status }) {
       const statusIcons = { pending: '🟡', paid: '🟢', shipped: '🎫', cancelled: '❌' }
-      return { title: `${statusIcons[status] || '📦'} ${orderNumber || 'Novo Pedido'} - ${customerName || 'Cliente'}`, subtitle: status === 'pending' ? 'Aguardando Pagamento' : (status === 'paid' ? 'Pago - Pronto para Emitir' : status) }
+      const displayId = locator ? `[${locator}]` : (orderNumber || 'Novo Pedido')
+      
+      return { 
+        title: `${statusIcons[status] || '📦'} ${displayId} - ${customerName || 'Cliente'}`, 
+        subtitle: status === 'pending' ? 'Aguardando Pagamento' : (status === 'paid' ? 'Pago - Pronto para Emitir' : status) 
+      }
     }
   }
 }

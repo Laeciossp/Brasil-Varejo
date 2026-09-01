@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Globe, Award, TrendingUp, ArrowRight, Calendar, PlaneTakeoff } from 'lucide-react';
 
-// Mapeamento Inteligente: Nome Turístico -> Código IATA
+// Mapeamento Inteligente Atualizado com Hubs de Conexão
 const IATA_MAP = {
   "Rio de Janeiro": "RIO", "Fernando de Noronha": "FEN", "Foz do Iguaçu": "IGU", "Salvador": "SSA",
   "Lençóis Maranhenses": "SLZ", "Gramado": "POA", "Bonito": "BYO", "Porto de Galinhas": "REC",
   "Paraty": "RIO", "Chapada dos Veadeiros": "BSB", "Jericoacoara": "JJD", "Ouro Preto": "CNF",
   "Búzios": "BZC", "Florianópolis": "FLN", "Maragogi": "MCZ", "Jalapão": "PMW",
   "Campos do Jordão": "GRU", "Praia da Pipa": "NAT", "Pantanal": "CGB", "Manaus": "MAO",
-  "Morro de São Paulo": "SSA", "Chapada Diamantina": "LEC", "Ilhabela": "SJK", "Petrópolis": "RIO",
+  "Morro de São Paulo": "SSA", "Chapada Diamantina": "LEC", "Ilhabela": "GRU", "Petrópolis": "RIO",
   "Canela": "POA", "João Pessoa": "JPA", "Angra dos Reis": "RIO", "Arraial do Cabo": "CFB",
   "Maceió": "MCZ", "Curitiba": "CWB", "São Paulo": "SAO", "Brasilia": "BSB", "Fortaleza": "FOR",
   "Belo Horizonte": "BHZ", "Recife": "REC", "Porto Alegre": "POA", "Goiânia": "GYN",
@@ -32,7 +32,6 @@ export default function DestinosPopulares({ onSelectDestination }) {
   const [ofertasAoVivo, setOfertasAoVivo] = useState({});
   const [carregando, setCarregando] = useState(true);
 
-  // Listas Oficiais
   const dadosDestinos = {
     nacional: {
       relevancia: [
@@ -57,7 +56,6 @@ export default function DestinosPopulares({ onSelectDestination }) {
 
   const slugify = (text) => text.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9 -]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
 
-  // FORMATADOR DE DATA PARA O CARD
   const formatarData = (dataString) => {
     if (!dataString) return '';
     const date = new Date(dataString);
@@ -65,7 +63,6 @@ export default function DestinosPopulares({ onSelectDestination }) {
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
   };
 
-  // FETCH DIRETO NA SUA URL OFICIAL
   useEffect(() => {
     setCarregando(true);
     fetch('https://ratehawkapi-pamd2cm4wa-uc.a.run.app/ofertas/vitrine')
@@ -95,7 +92,6 @@ export default function DestinosPopulares({ onSelectDestination }) {
         </p>
       </div>
 
-      {/* BOTÕES DE FILTRO */}
       <div className="flex justify-center gap-3 mb-6">
         <button 
           onClick={() => setTipoDestino('nacional')}
@@ -120,7 +116,6 @@ export default function DestinosPopulares({ onSelectDestination }) {
         </button>
       </div>
 
-      {/* GRID DOS DESTINOS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-[220px]">
         {listaAtual.map((destino, index) => {
           if(IATA_MAP[destino] === "SAO" || IATA_MAP[destino] === "GRU") return null;
@@ -140,7 +135,6 @@ export default function DestinosPopulares({ onSelectDestination }) {
               key={index}
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
-                
                 if(onSelectDestination) {
                    onSelectDestination({
                       iata: codigoIata,
@@ -156,7 +150,7 @@ export default function DestinosPopulares({ onSelectDestination }) {
                 src={imgUrl} 
                 alt={destino} 
                 onError={(e) => { 
-                    e.target.onerror = null; // Impede loop caso o fallback também falhe
+                    e.target.onerror = null;
                     e.target.src = `https://images.kiwi.com/photos/600x330/${codigoIata.toLowerCase()}.jpg`; 
                 }} 
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 brightness-90 group-hover:brightness-100"
@@ -164,7 +158,6 @@ export default function DestinosPopulares({ onSelectDestination }) {
               
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent group-hover:from-black/90 transition-colors"></div>
 
-              {/* DADOS DA OFERTA (TOPO DO CARD) */}
               <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
                  {carregando ? (
                     <span className="bg-black/40 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1 border border-white/10">
@@ -183,11 +176,9 @@ export default function DestinosPopulares({ onSelectDestination }) {
                  )}
               </div>
 
-              {/* INFORMAÇÕES DE DESTINO E PREÇO (RODAPÉ DO CARD) */}
               <div className="absolute bottom-0 left-0 right-0 p-5 flex justify-between items-end text-white">
                  <div>
                     <h3 className="text-xl md:text-2xl font-black tracking-tight drop-shadow-md leading-none mb-1">{destino}</h3>
-                    
                     <div className="mt-1 min-h-[20px]">
                         {!carregando && oferta ? (
                             <p className="text-[12px] font-bold text-gray-200 drop-shadow mt-1">

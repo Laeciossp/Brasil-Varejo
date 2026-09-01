@@ -239,31 +239,41 @@ export default function FlightSearch({ prefilledData }) {
     setLastHoldIdaCount(parseInt(holdBagsIda, 10) || 0);
     setLastHoldVoltaCount(parseInt(holdBagsVolta, 10) || 0);
 
-    const effectiveDateFrom = customIda || (dateType === 'specific' && dateFrom ? dateFrom : getTodayStr());
-    const searchDateToRange = customIda || (dateType === 'specific' && dateFrom ? dateFrom : getSixMonthsStr());
+    // TRATAMENTO PARA "A QUALQUER MOMENTO" OU DATAS ESPECÍFICAS
+    let effectiveDateFrom = getTodayStr();
+    let searchDateToRange = getSixMonthsStr();
+
+    if (dateType === 'specific' && dateFrom) {
+      effectiveDateFrom = customIda || dateFrom;
+      searchDateToRange = customIda || dateFrom;
+    }
+
     const destIds = activeDestinations.map(d => d.id).join(',');
 
     try {
       let url = `${WORKER_URL}/search-flights?origin=${origin.id}&destination=${destIds}&dateFrom=${effectiveDateFrom}&dateToRange=${searchDateToRange}&adults=${a}&children=${c}&infants=${i}&cabin=${cabin}&sort=${overrideSort}&max_stopovers=${overrideStops}`;
+      
       const activeTripType = customTripType || tripType;
       if (customVolta || activeTripType === 'return') {
-        const effectiveDateTo = customVolta || (dateType === 'specific' && dateTo ? dateTo : effectiveDateFrom);
-        const searchRetToRange = customVolta || (dateType === 'specific' && dateTo ? dateTo : getSixMonthsStr());
-        url += `&returnFrom=${effectiveDateTo}&returnToRange=${searchRetToRange}`;
+        let effectiveDateTo = searchDateToRange;
+        if (dateType === 'specific' && dateTo) {
+          effectiveDateTo = customVolta || dateTo;
+        }
+        url += `&returnFrom=${effectiveDateFrom}&returnToRange=${effectiveDateTo}`;
       }
 
       const res = await fetch(url);
       const data = await res.json();
-      if (data.status === 'success' && Array.isArray(data.voos)) { 
+      
+      if (data.status === 'success' && Array.isArray(data.voos) && data.voos.length > 0) { 
         let processed = data.voos;
         if (!allowOvernight) processed = processed.filter(v => !hasOvernightLayover(v));
         setRenderedFlights(processed); 
       } else { 
-        setError(data.alerta || "Nenhum voo encontrado."); 
+        // Silencia alertas visuais indesejados e mostra apenas tabela limpa ou array vazio
         setRenderedFlights([]); 
       }
     } catch (err) { 
-      setError("Erro ao conectar com a API."); 
       setRenderedFlights([]);
     } finally { 
       setLoading(false); 
