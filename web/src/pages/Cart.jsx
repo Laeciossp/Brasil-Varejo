@@ -7,7 +7,7 @@ import { useUser } from "@clerk/clerk-react";
 import { createClient } from "@sanity/client"; 
 import useCartStore from '../store/useCartStore';
 import { formatCurrency } from '../lib/utils';
-import AirplaneSeatMap from './AirplaneSeatMap'; // <--- COMPONENTE DO MAPA DE ASSENTOS DA DUFFEL
+import AirplaneSeatMap from './AirplaneSeatMap';
 
 const client = createClient({
   projectId: 'o4upb251',
@@ -71,6 +71,8 @@ export default function Cart() {
 
   const flightItem = items.find(i => i.flightDetails && !i.transferPayload);
   const [timeLeft, setTimeLeft] = useState(null);
+
+  const isDuffelFlight = flightItem && (flightItem.fornecedor === 'DUFFEL' || String(flightItem._id).startsWith('off_'));
 
   useEffect(() => {
     if (!flightItem || !flightItem.addedAt) return;
@@ -149,7 +151,8 @@ export default function Cart() {
             email: email, 
             cpf: cpf, 
             relationship: 'Titular',
-            nationality: 'Brasileira'
+            nationality: 'Brasileira',
+            seatPreference: isDuffelFlight ? '' : newArr[index].seatPreference // TRAVA 1
           };
           return newArr;
       });
@@ -173,7 +176,7 @@ export default function Cart() {
                 passportExpiry: paxData.passportExpiry || paxData.validadePassaporte || '',
                 email: paxData.email || paxData.correo || '',
                 phone: paxData.phone || paxData.telefone || paxData.celular || '',
-                seatPreference: paxData.seatPreference || paxData.assento || paxData.preferenciaAssento || ''
+                seatPreference: isDuffelFlight ? '' : (paxData.seatPreference || paxData.assento || paxData.preferenciaAssento || '') // TRAVA 2
             };
             return newArr;
         });
@@ -762,25 +765,26 @@ export default function Cart() {
                                     </select>
                                     
                                     {/* ========================================== */}
-                                    {/* RENDERIZAÇÃO CONDICIONAL: MAPA VS SELECT   */}
+                                    {/* LÓGICA BLINDADA DO ASSENTO DUFFEL VS KIWI  */}
                                     {/* ========================================== */}
-                                    {flightItem && flightItem.fornecedor === 'DUFFEL' ? (
-                                        <div className="md:col-span-2 bg-gray-50 border border-gray-200 rounded-xl p-4 mt-2">
-                                            <div className="flex justify-between items-center mb-4">
-                                                <span className="text-sm font-bold text-gray-800">
-                                                   Poltrona Escolhida: <span className="text-orange-600 text-lg font-black ml-2">{pax.seatPreference || 'Nenhuma'}</span>
-                                                </span>
-                                            </div>
+                                    {isDuffelFlight ? (
+                                        <div className="md:col-span-2 mt-2">
                                             <AirplaneSeatMap 
                                                 offerId={flightItem._id} 
                                                 onSeatSelect={(seatInfo) => handlePaxChange(index, 'seatPreference', seatInfo ? seatInfo.designator : '')} 
                                             />
+                                            {pax.seatPreference && !['Janela', 'Corredor', 'Qualquer'].includes(pax.seatPreference) && (
+                                                <div className="mt-3 bg-green-50 border border-green-200 p-3 rounded-lg text-sm font-bold text-green-800 flex items-center justify-between">
+                                                    <span>Poltrona Confirmada:</span>
+                                                    <span className="text-xl font-black text-green-700">{pax.seatPreference}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="md:col-span-2 bg-purple-50 p-3 rounded-lg border border-purple-100 flex flex-col md:flex-row items-center gap-3">
                                            <span className="text-xs font-bold text-purple-800 w-full md:w-auto">Preferência de Assento:</span>
                                            <select value={pax.seatPreference} onChange={e => handlePaxChange(index, 'seatPreference', e.target.value)} className="w-full flex-1 p-2 border border-purple-200 rounded-md text-sm text-purple-900 outline-none focus:border-purple-500 bg-white">
-                                              <option value="">Escolha seu assento...</option>
+                                              <option value="">Escolha sua preferência...</option>
                                               <option value="Janela">Janela</option>
                                               <option value="Corredor">Corredor</option>
                                               <option value="Qualquer">Qualquer (Sem preferência)</option>
