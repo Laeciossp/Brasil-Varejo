@@ -247,6 +247,7 @@ export default function HotelSearch() {
               tipoQuarto: r.room_name || 'Standard', 
               codigoRegime: r.meal || 'Sem Refeição', 
               precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0),
+              paymentTypeObj: r.payment_options?.payment_types?.[0], // Guardando o objeto de pagamento necessário para o Finish
               bookHash: r.book_hash
             }))
           }));
@@ -291,10 +292,27 @@ export default function HotelSearch() {
         setBookingError("Tarifa esgotada ou indisponível (no_available_rates).");
         return;
       }
+
+      // CAPTURA CORRETA DO HASH "p-" DO PREBOOK CONFORME DOCUMENTAÇÃO
+      const novoBookHashP = data.data?.hotels?.[0]?.rates?.[0]?.book_hash;
+      const infoPagamentoAtualizada = data.data?.hotels?.[0]?.rates?.[0]?.payment_options?.payment_types?.[0];
+
+      if (!novoBookHashP || !novoBookHashP.startsWith('p-')) {
+        throw new Error("O Prebook não retornou um hash de reserva válido (p-...).");
+      }
+
+      setSelectedOffer({ 
+        ...oferta, 
+        bookHash: novoBookHashP, 
+        paymentTypeObj: infoPagamentoAtualizada || oferta.paymentTypeObj,
+        hotelNome: hotel.nome, 
+        hotelId: hotel.hotelId 
+      });
+
       setBookingStep('details');
     } catch (err) {
       setBookingStep('error');
-      setBookingError("Erro ao validar tarifa no fornecedor.");
+      setBookingError(err.message || "Erro ao validar tarifa no fornecedor.");
     }
   };
 
@@ -308,7 +326,7 @@ export default function HotelSearch() {
     setFinalPartnerOrderId(partnerOrderId);
 
     try {
-      // OPÇÃO 1 DA ETG: Apenas 1 adulto real por quarto, sem dados falsos para crianças ou outros adultos.
+      // REGRA OFICIAL DA ETG (Opção 1): Apenas 1 adulto real por quarto
       const roomsFormatados = rooms.map(() => {
         return {
           guests: [
@@ -324,7 +342,7 @@ export default function HotelSearch() {
       const orderPayload = {
         partner_order_id: partnerOrderId,
         book_hash: selectedOffer.bookHash,
-        language: "pt",
+        language: "en",
         user: { 
           email: guestEmail, 
           phone: guestPhone || "+5571999999999", 
@@ -343,9 +361,23 @@ export default function HotelSearch() {
         throw new Error(`Erro API Form: ${JSON.stringify(formData.error || formData.message || "Desconhecido")}`);
       }
 
+      // Envia o objeto de pagamento completo (deposit + amount e currency) conforme o script de referência
+      const paymentTypeData = selectedOffer.paymentTypeObj ? {
+        type: selectedOffer.paymentTypeObj.type || "deposit",
+        amount: selectedOffer.paymentTypeObj.amount,
+        currency_code: selectedOffer.paymentTypeObj.currency_code
+      } : { type: "deposit" };
+
       const finishRes = await fetch('https://palastore-flights-api.laeciossp.workers.dev/hotel-booking-finish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ ...orderPayload, payment_type: { type: "deposit" } })
+        body: JSON.stringify({ 
+          partner_order_id: partnerOrderId,
+          payment_type: paymentTypeData,
+          user_ip: "8.8.8.8",
+          language: "en",
+          user: orderPayload.user,
+          rooms: roomsFormatados 
+        })
       });
       const finishData = await finishRes.json();
       
@@ -381,7 +413,7 @@ export default function HotelSearch() {
           setBookingError(`Reserva falhou. Motivo: ${data.error}`);
         }
 
-        if (attempts >= 15) {
+        if (attempts >= 20) {
           clearInterval(interval);
           setBookingStep('error');
           setBookingError("Tempo limite excedido aguardando o fornecedor.");
