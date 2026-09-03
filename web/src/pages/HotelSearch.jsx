@@ -5,7 +5,8 @@ import { app } from '../firebase';
 export default function HotelSearch() {
   const [destinationQuery, setDestinationQuery] = useState('');
   const [regionId, setRegionId] = useState('');
-  const [autocompleteResults, setAutocompleteResults] = useState([]);
+  const [regionsResults, setRegionsResults] = useState([]);
+  const [hotelsResults, setHotelsResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
 
   const [checkInDate, setCheckInDate] = useState('');
@@ -40,11 +41,12 @@ export default function HotelSearch() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // AUTOCOMPLETAR 100% VIA API RATEHAWK (Sem listas estáticas)
+  // AUTOCOMPLETAR SEPARANDO REGIÕES E HOTÉIS DA API RATEHAWK
   useEffect(() => {
     const fetchAutocompleteFromAPI = async () => {
       if (!destinationQuery || destinationQuery.length < 2) {
-        setAutocompleteResults([]);
+        setRegionsResults([]);
+        setHotelsResults([]);
         setShowDropdown(false);
         return;
       }
@@ -54,16 +56,17 @@ export default function HotelSearch() {
         const res = await fetch(workerUrl);
         const data = await res.json();
         
-        // Mapeia os dados retornados pela API da RateHawk (regiões e hotéis)
+        // Separa corretamente o que é região/cidade do que é hotel específico
         const regions = data.regions || data.data?.regions || [];
         const hotels = data.hotels || data.data?.hotels || [];
-        const combined = [...regions, ...hotels];
 
-        setAutocompleteResults(combined);
-        setShowDropdown(combined.length > 0);
+        setRegionsResults(regions);
+        setHotelsResults(hotels);
+        setShowDropdown(regions.length > 0 || hotels.length > 0);
       } catch (err) {
         console.error("Erro ao buscar autocompletar na API RateHawk:", err);
-        setAutocompleteResults([]);
+        setRegionsResults([]);
+        setHotelsResults([]);
         setShowDropdown(false);
       }
     };
@@ -115,7 +118,6 @@ export default function HotelSearch() {
 
     try {
       if (supplier === 'RATEHAWK') {
-        // Se for o teste de Los Angeles, busca os HIDs específicos exigidos pela ETG
         const hidsToSearch = (targetDest === 'US-LAX' || destinationQuery.toLowerCase().includes('los angeles')) 
           ? [10004834, 8819557] 
           : [10004834];
@@ -229,7 +231,7 @@ export default function HotelSearch() {
 
             <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-12 gap-2 relative z-40">
               
-              {/* DESTINO CONSUMINDO DIRETAMENTE A API DE AUTOCOMPLETE DA RATEHAWK */}
+              {/* DESTINO COM DROPDOWN ORGANIZADO EM SEÇÕES */}
               <div className="col-span-1 md:col-span-4 relative" ref={dropdownRef}>
                 <div className="flex items-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white h-12">
                   <span className="text-gray-400 text-lg mr-2">📍</span>
@@ -241,30 +243,63 @@ export default function HotelSearch() {
                       setRegionId('');
                     }}
                     onFocus={() => {
-                      if (autocompleteResults.length > 0) setShowDropdown(true);
+                      if (regionsResults.length > 0 || hotelsResults.length > 0) setShowDropdown(true);
                     }}
                     className="flex-1 outline-none text-sm font-bold text-gray-800 bg-transparent w-full" 
                     placeholder="Digite destino ou hotel..." 
                   />
                 </div>
 
-                {/* DROPDOWN ALIMENTADO EXCLUSIVAMENTE PELA API */}
-                {showDropdown && autocompleteResults.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-2xl max-h-60 overflow-y-auto z-50">
-                    {autocompleteResults.map((item, idx) => (
-                      <div 
-                        key={idx}
-                        onClick={() => {
-                          setDestinationQuery(item.name || item.full_name || item.title);
-                          setRegionId(item.id);
-                          setShowDropdown(false);
-                        }}
-                        className="px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-purple-50 hover:text-purple-700 cursor-pointer border-b border-gray-100 flex items-center justify-between"
-                      >
-                        <span>{item.name || item.full_name || item.title}</span>
-                        <span className="text-[10px] text-gray-400 uppercase">{item.type || 'Região'}</span>
+                {/* DROPDOWN CATEGORIZADO */}
+                {showDropdown && (regionsResults.length > 0 || hotelsResults.length > 0) && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-2xl max-h-72 overflow-y-auto z-50">
+                    
+                    {/* SEÇÃO 1: REGIÕES E CIDADES */}
+                    {regionsResults.length > 0 && (
+                      <div>
+                        <div className="bg-gray-100 px-3 py-1 text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                          🌍 Cidades e Destinos
+                        </div>
+                        {regionsResults.map((item, idx) => (
+                          <div 
+                            key={`reg-${idx}`}
+                            onClick={() => {
+                              setDestinationQuery(item.name || item.full_name || item.title);
+                              setRegionId(item.id);
+                              setShowDropdown(false);
+                            }}
+                            className="px-4 py-2.5 text-xs font-bold text-gray-800 hover:bg-purple-50 hover:text-purple-700 cursor-pointer border-b border-gray-100 flex items-center justify-between"
+                          >
+                            <span>{item.name || item.full_name || item.title}</span>
+                            <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded uppercase font-semibold">{item.type || 'Região'}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
+
+                    {/* SEÇÃO 2: HOTÉIS ESPECÍFICOS */}
+                    {hotelsResults.length > 0 && (
+                      <div>
+                        <div className="bg-gray-100 px-3 py-1 text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                          🏨 Hotéis e Acomodações
+                        </div>
+                        {hotelsResults.map((item, idx) => (
+                          <div 
+                            key={`hot-${idx}`}
+                            onClick={() => {
+                              setDestinationQuery(item.name || item.title);
+                              setRegionId(item.id);
+                              setShowDropdown(false);
+                            }}
+                            className="px-4 py-2.5 text-xs font-bold text-gray-800 hover:bg-blue-50 hover:text-blue-700 cursor-pointer border-b border-gray-100 flex items-center justify-between"
+                          >
+                            <span>{item.name || item.title}</span>
+                            <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded uppercase font-semibold">Hotel</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                   </div>
                 )}
               </div>
