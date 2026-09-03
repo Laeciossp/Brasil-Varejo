@@ -247,7 +247,7 @@ export default function HotelSearch() {
               tipoQuarto: r.room_name || 'Standard', 
               codigoRegime: r.meal || 'Sem Refeição', 
               precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0),
-              paymentTypeObj: r.payment_options?.payment_types?.[0], // Guardando o objeto de pagamento necessário para o Finish
+              paymentTypeObj: r.payment_options?.payment_types?.[0],
               bookHash: r.book_hash
             }))
           }));
@@ -293,7 +293,6 @@ export default function HotelSearch() {
         return;
       }
 
-      // CAPTURA CORRETA DO HASH "p-" DO PREBOOK CONFORME DOCUMENTAÇÃO
       const novoBookHashP = data.data?.hotels?.[0]?.rates?.[0]?.book_hash;
       const infoPagamentoAtualizada = data.data?.hotels?.[0]?.rates?.[0]?.payment_options?.payment_types?.[0];
 
@@ -326,7 +325,6 @@ export default function HotelSearch() {
     setFinalPartnerOrderId(partnerOrderId);
 
     try {
-      // REGRA OFICIAL DA ETG (Opção 1): Apenas 1 adulto real por quarto
       const roomsFormatados = rooms.map(() => {
         return {
           guests: [
@@ -341,8 +339,8 @@ export default function HotelSearch() {
 
       const orderPayload = {
         partner_order_id: partnerOrderId,
-        hash: selectedOffer.bookHash, // <-- CORRIGIDO: A API exige "hash" aqui
-        language: "en",                // Recomendado "en" conforme os testes oficiais
+        hash: selectedOffer.bookHash, // Utilizando a chave "hash" correta
+        language: "en",
         user: { 
           email: guestEmail, 
           phone: guestPhone || "+5571999999999", 
@@ -361,7 +359,6 @@ export default function HotelSearch() {
         throw new Error(`Erro API Form: ${JSON.stringify(formData.error || formData.message || "Desconhecido")}`);
       }
 
-      // Envia o objeto de pagamento completo (deposit + amount e currency) conforme o script de referência
       const paymentTypeData = selectedOffer.paymentTypeObj ? {
         type: selectedOffer.paymentTypeObj.type || "deposit",
         amount: selectedOffer.paymentTypeObj.amount,
