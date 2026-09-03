@@ -67,7 +67,8 @@ export default function HotelSearch() {
       if (supplier === 'RATEHAWK') {
         
         // URL da sua Cloud Function HTTP (Express)
-        const firebaseUrl = `https://us-central1-palastore-turismo.cloudfunctions.net/ratehawkApi/search-hotels`; 
+        // COLOQUE ESTA LINHA NO LUGAR:
+        const firebaseUrl = `https://palastore-flights-api.laeciossp.workers.dev/search-hotels`; 
 
         const resRateHawk = await fetch(`${firebaseUrl}?region_id=${destinationCode}&checkin=${checkInDate}&checkout=${checkOutDate}&adults=${adults}`);
         
