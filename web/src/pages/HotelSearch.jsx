@@ -410,7 +410,8 @@ export default function HotelSearch() {
           setBookingError(`Reserva falhou. Motivo: ${data.error}`);
         }
 
-        if (attempts >= 20) {
+        // Aumentado para 60 tentativas (3 minutos) conforme o padrão do script de homologação
+        if (attempts >= 60) {
           clearInterval(interval);
           setBookingStep('error');
           setBookingError("Tempo limite excedido aguardando o fornecedor.");
