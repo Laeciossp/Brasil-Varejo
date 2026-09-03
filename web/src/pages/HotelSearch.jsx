@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../firebase'; 
 
-// Lista completa de Países mapeada para o ISO 3166-1 alpha-2 (Exigência RateHawk)
 const COUNTRIES = [
   { code: 'br', name: 'Brasil' }, { code: 'aw', name: 'Aruba' }, { code: 'af', name: 'Afeganistão' },
   { code: 'ao', name: 'Angola' }, { code: 'ai', name: 'Anguilla' }, { code: 'ax', name: 'Ilhas Alanda' },
@@ -91,9 +90,6 @@ const COUNTRIES = [
 ];
 
 export default function HotelSearch() {
-  // =========================================================
-  // ESTADOS DA BUSCA PRINCIPAL E MULTI-ROOM
-  // =========================================================
   const [destinationQuery, setDestinationQuery] = useState('');
   const [regionId, setRegionId] = useState('');
   const [regionsResults, setRegionsResults] = useState([]);
@@ -106,9 +102,6 @@ export default function HotelSearch() {
   const [rooms, setRooms] = useState([{ adults: 1, childrenAges: [] }]);
   const [showGuestDropdown, setShowGuestDropdown] = useState(false);
   
-  // =========================================================
-  // ESTADOS DOS "PARÂMETROS ADICIONAIS"
-  // =========================================================
   const [residency, setResidency] = useState('br'); 
   const [stars, setStars] = useState([]); 
   const [meals, setMeals] = useState([]); 
@@ -116,11 +109,8 @@ export default function HotelSearch() {
   const [lateCheckout, setLateCheckout] = useState('');
   const [freeCancellation, setFreeCancellation] = useState(false);
 
-  // =========================================================
-  // ESTADOS DO FLUXO DE RESERVA (END-TO-END)
-  // =========================================================
   const [selectedOffer, setSelectedOffer] = useState(null);
-  const [bookingStep, setBookingStep] = useState('idle'); // idle, prebooking, details, booking, success, error
+  const [bookingStep, setBookingStep] = useState('idle'); 
   const [bookingError, setBookingError] = useState(null);
   const [guestFirstName, setGuestFirstName] = useState('');
   const [guestLastName, setGuestLastName] = useState('');
@@ -150,37 +140,27 @@ export default function HotelSearch() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // AUTOCOMPLETAR RATEHAWK
-// =========================================================
-  // AUTOCOMPLETAR (100% DINÂMICO VIA API)
-  // =========================================================
   useEffect(() => {
     const fetchAutocompleteFromAPI = async () => {
       if (!destinationQuery || destinationQuery.length < 2) {
         setRegionsResults([]); setHotelsResults([]); setShowDropdown(false); return;
       }
-
       try {
         const workerUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-autocomplete?query=${encodeURIComponent(destinationQuery)}`;
         const res = await fetch(workerUrl);
         const data = await res.json();
-        
         const regions = data.regions || data.data?.regions || [];
         const hotels = data.hotels || data.data?.hotels || [];
-        
-        setRegionsResults(regions); 
-        setHotelsResults(hotels);
+        setRegionsResults(regions); setHotelsResults(hotels);
         setShowDropdown(regions.length > 0 || hotels.length > 0);
       } catch (err) {
         console.error("Erro no autocompletar:", err);
       }
     };
-    
     const timer = setTimeout(fetchAutocompleteFromAPI, 350);
     return () => clearTimeout(timer);
   }, [destinationQuery]);
 
-  // CONTROLES DE HÓSPEDES MULTI-ROOM
   const updateAdults = (roomIndex, delta) => {
     const newRooms = [...rooms];
     newRooms[roomIndex].adults = Math.max(1, Math.min(6, newRooms[roomIndex].adults + delta)); 
@@ -217,9 +197,6 @@ export default function HotelSearch() {
     setMeals(prev => prev.includes(meal) ? prev.filter(m => m !== meal) : [...prev, meal]);
   };
 
-  // =========================================================
-  // MOTOR DE BUSCA (AWAIT CORRIGIDO NA FUNÇÃO ASYNC)
-  // =========================================================
   const handleSearch = async (e) => {
     e.preventDefault();
     const targetDest = regionId || destinationQuery;
@@ -235,7 +212,6 @@ export default function HotelSearch() {
 
         const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-page`; 
         
-        // Estrutura exigida para o novo POST do Cloudflare Worker (Array de Quartos)
         const guestsPayload = rooms.map(room => ({
           adults: room.adults,
           children: room.childrenAges
@@ -271,7 +247,7 @@ export default function HotelSearch() {
               tipoQuarto: r.room_name || 'Standard', 
               codigoRegime: r.meal || 'Sem Refeição', 
               precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0),
-              bookHash: r.book_hash // OBRIGATÓRIO PARA O PREBOOK FUNCIONAR
+              bookHash: r.book_hash
             }))
           }));
           setResults(hoteisMapeados);
@@ -295,9 +271,6 @@ export default function HotelSearch() {
     }
   };
 
-  // =========================================================
-  // MOTOR E2E RESERVA (PREBOOK -> FORM -> FINISH -> POLLING)
-  // =========================================================
   const handleSelectOffer = async (oferta, hotel) => {
     if (supplier !== 'RATEHAWK') return alert("O fluxo de reserva Restel será implementado posteriormente.");
     
@@ -335,8 +308,7 @@ export default function HotelSearch() {
     setFinalPartnerOrderId(partnerOrderId);
 
     try {
-      // REGRA OFICIAL DA RATEHAWK (Opção 1):
-      // Apenas 1 adulto real por quarto. Os demais são omitidos totalmente para não acionar antifraude.
+      // OPÇÃO 1 DA ETG: Apenas 1 adulto real por quarto, sem dados falsos para crianças ou outros adultos.
       const roomsFormatados = rooms.map(() => {
         return {
           guests: [
@@ -351,7 +323,7 @@ export default function HotelSearch() {
 
       const orderPayload = {
         partner_order_id: partnerOrderId,
-        book_hash: selectedOffer.bookHash, 
+        book_hash: selectedOffer.bookHash,
         language: "pt",
         user: { 
           email: guestEmail, 
@@ -361,17 +333,16 @@ export default function HotelSearch() {
         rooms: roomsFormatados
       };
 
-      // PASSO A: Booking Form
       const formRes = await fetch('https://palastore-flights-api.laeciossp.workers.dev/hotel-booking-form', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(orderPayload)
       });
       const formData = await formRes.json();
       
       if (formData.status !== 'ok') {
+        console.error("Erro API Form:", formData);
         throw new Error(`Erro API Form: ${JSON.stringify(formData.error || formData.message || "Desconhecido")}`);
       }
 
-      // PASSO B: Booking Finish
       const finishRes = await fetch('https://palastore-flights-api.laeciossp.workers.dev/hotel-booking-finish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ ...orderPayload, payment_type: { type: "deposit" } })
@@ -379,10 +350,10 @@ export default function HotelSearch() {
       const finishData = await finishRes.json();
       
       if (finishData.status !== 'ok' && finishData.error !== 'timeout' && finishData.error !== 'unknown') {
+        console.error("Erro API Finish:", finishData);
         throw new Error(`Erro API Finish: ${JSON.stringify(finishData.error || finishData.message || "Desconhecido")}`);
       }
 
-      // PASSO C: Polling
       pollBookingStatus(partnerOrderId);
     } catch (err) {
       setBookingStep('error');
@@ -425,7 +396,6 @@ export default function HotelSearch() {
     <div className="w-full bg-orange-500 p-4 md:p-6 font-sans min-h-screen">
       <div className="max-w-[1200px] mx-auto space-y-3">
         
-        {/* CAIXA BRANCA PRINCIPAL DO BUSCADOR */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
           
           <div className="flex overflow-x-auto bg-gray-50 border-b border-gray-200 scrollbar-hide">
@@ -437,10 +407,7 @@ export default function HotelSearch() {
           <div className="p-5 md:p-6 bg-white">
             <form onSubmit={handleSearch}>
               
-              {/* LINHA 1: BUSCA PRINCIPAL */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4">
-                
-                {/* DESTINO */}
                 <div className="col-span-1 md:col-span-4 relative border border-gray-300 rounded-md bg-white hover:border-gray-400 transition" ref={dropdownRef}>
                   <label className="block text-[10px] text-gray-400 uppercase pt-1.5 px-3">Destino</label>
                   <div className="flex items-center px-3 pb-1.5">
@@ -472,7 +439,6 @@ export default function HotelSearch() {
                   )}
                 </div>
 
-                {/* DATAS */}
                 <div className="col-span-1 md:col-span-4 flex">
                   <div className="flex-1 border border-gray-300 rounded-l-md bg-white px-3 hover:border-gray-400 transition flex flex-col justify-center">
                     <label className="block text-[10px] text-gray-400 uppercase pt-1">Check-in</label>
@@ -484,7 +450,6 @@ export default function HotelSearch() {
                   </div>
                 </div>
 
-                {/* HÓSPEDES POPOVER */}
                 <div className="col-span-1 md:col-span-2 relative" ref={guestDropdownRef}>
                   <div onClick={() => setShowGuestDropdown(!showGuestDropdown)} className="border border-gray-300 rounded-md bg-white px-3 py-1.5 h-full cursor-pointer hover:border-gray-400 transition flex flex-col justify-center">
                     <span className="block text-[10px] text-gray-400 uppercase">{rooms.length} quarto{rooms.length > 1 ? 's' : ''} para</span>
@@ -540,7 +505,6 @@ export default function HotelSearch() {
                   )}
                 </div>
 
-                {/* BOTÃO BUSCAR PRINCIPAL */}
                 <div className="col-span-1 md:col-span-2">
                   <button type="submit" disabled={loading} className="w-full h-full bg-[#00a698] hover:bg-[#008f82] text-white font-bold rounded-md shadow-sm text-sm transition">
                     {loading ? '...' : 'Buscar'}
@@ -548,16 +512,11 @@ export default function HotelSearch() {
                 </div>
               </div>
 
-              {/* ======================================================= */}
-              {/* LINHA 2: PARÂMETROS ADICIONAIS (Nacionalidade, Estrelas) */}
-              {/* ======================================================= */}
               <div className="mt-6 mb-2">
                 <span className="text-sm text-gray-500 font-medium">Parâmetros adicionais</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-3">
-                
-                {/* NACIONALIDADE COM LISTA ISO DE PAÍSES */}
                 <div className="col-span-1 md:col-span-3 border border-gray-300 rounded-md bg-white px-3 flex flex-col justify-center h-11 relative">
                   <label className="block text-[9px] text-gray-400 uppercase pt-1">Nacionalidade dos hóspedes</label>
                   <div className="flex items-center justify-between pb-1">
@@ -575,7 +534,6 @@ export default function HotelSearch() {
                   </div>
                 </div>
 
-                {/* ESTRELAS */}
                 <div className="col-span-1 md:col-span-9 flex border border-gray-300 rounded-md divide-x divide-gray-300 overflow-hidden text-sm text-gray-700 bg-white h-11">
                   <button type="button" onClick={() => toggleStar(0)} className={`flex-1 px-2 py-1 transition ${stars.length === 0 ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>Sem estrelas</button>
                   <button type="button" onClick={() => toggleStar(2)} className={`flex-1 px-2 py-1 transition ${stars.includes(2) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>2 estrelas</button>
@@ -585,12 +543,7 @@ export default function HotelSearch() {
                 </div>
               </div>
 
-              {/* ======================================================= */}
-              {/* LINHA 3: REGIMES DE ALIMENTAÇÃO E CHECK-IN/OUT TARDIO */}
-              {/* ======================================================= */}
               <div className="flex flex-col xl:flex-row gap-3 items-start xl:items-center">
-                
-                {/* REGIMES COM TOOLTIPS E ÍCONES */}
                 <div className="flex border border-gray-300 rounded-md divide-x divide-gray-300 overflow-hidden text-sm font-medium text-gray-700 bg-white h-11">
                   <button type="button" title="Somente quarto" onClick={() => toggleMeal('RO')} className={`px-5 relative group transition ${meals.includes('RO') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>
                     RO
@@ -614,7 +567,6 @@ export default function HotelSearch() {
                   </button>
                 </div>
 
-                {/* CHECK-IN ANTECIPADO */}
                 <div className="flex border border-gray-300 rounded-md px-3 min-w-[200px] cursor-pointer hover:border-gray-400 transition-all items-center justify-between bg-white h-11">
                   <div className="flex flex-col w-full">
                     <label className="text-[9px] text-gray-400 uppercase pt-1">Check-in antecipado</label>
@@ -637,7 +589,6 @@ export default function HotelSearch() {
                   </div>
                 </div>
 
-                {/* CHECK-OUT TARDIO */}
                 <div className="flex border border-gray-300 rounded-md px-3 min-w-[200px] cursor-pointer hover:border-gray-400 transition-all items-center justify-between bg-white h-11">
                   <div className="flex flex-col w-full">
                     <label className="text-[9px] text-gray-400 uppercase pt-1">Check-out tardio</label>
@@ -658,7 +609,6 @@ export default function HotelSearch() {
                   </div>
                 </div>
 
-                {/* CHECKBOX CANCELAMENTO GRATUITO */}
                 <label className="flex items-center gap-2 cursor-pointer ml-1 xl:ml-4 group h-11">
                   <input 
                     type="checkbox" 
@@ -676,7 +626,6 @@ export default function HotelSearch() {
 
         {error && <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm mt-6 font-medium text-sm">{error}</div>}
 
-        {/* RESULTADOS DA BUSCA */}
         {results.length > 0 && (
           <div className="mt-8 space-y-6">
             {results.map((hotel, index) => (
@@ -708,9 +657,6 @@ export default function HotelSearch() {
 
       </div>
 
-      {/* ======================================================= */}
-      {/* MODAL DE CHECKOUT (PREBOOK E RESERVA END-TO-END) */}
-      {/* ======================================================= */}
       {bookingStep !== 'idle' && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] px-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
@@ -746,7 +692,7 @@ export default function HotelSearch() {
                     <input type="text" placeholder="Sobrenome" required value={guestLastName} onChange={e => setGuestLastName(e.target.value)} className="border border-gray-300 rounded p-2 text-sm outline-none focus:border-orange-500" />
                   </div>
                   <input type="email" placeholder="E-mail" required value={guestEmail} onChange={e => setGuestEmail(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mb-3 outline-none focus:border-orange-500" />
-                  <input type="text" placeholder="Telefone (Opcional)" value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mb-6 outline-none focus:border-orange-500" />
+                  <input type="text" placeholder="Telefone" required value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mb-6 outline-none focus:border-orange-500" />
 
                   <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition uppercase text-sm">
                     Confirmar Reserva B2B
