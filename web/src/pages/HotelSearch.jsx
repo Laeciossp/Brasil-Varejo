@@ -40,13 +40,10 @@ export default function HotelSearch() {
   // Botão de segurança para teste em Los Angeles exigido pela RateHawk/ETG
   const fillRateHawkTestData = () => {
     setSupplier('RATEHAWK');
-    setDestinationCode('US-LAX'); // Deixando US-LAX apenas visualmente, a busca forçará os HIDs corretos
-    setCheckInDate(getTomorrowStr());
-    
-    const nextWeek = new Date();
-    nextWeek.setDate(nextWeek.getDate() + 4);
-    setCheckOutDate(nextWeek.toISOString().split('T')[0]);
-    
+    setDestinationCode('US-LAX'); 
+    // Datas fixas de 2027 exigidas pelo ambiente Sandbox da ETG para retornar tarifas
+    setCheckInDate('2027-02-22');
+    setCheckOutDate('2027-02-24');
     setAdults(2);
     setChildren(0);
   };
@@ -69,10 +66,12 @@ export default function HotelSearch() {
         // Usando a sua rota de Hotel Page (HP) do Cloudflare para buscar os HIDs específicos
         const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-page`; 
 
-        // Dispara as buscas simultâneas para os dois hotéis exigidos na certificação
+        // Dispara as buscas simultâneas forçando as regras de residência do Checklist de Certificação
         const [res1, res2] = await Promise.all([
-          fetch(`${baseUrl}?hid=10004834&checkin=${checkInDate}&checkout=${checkOutDate}&adults=${adults}`),
-          fetch(`${baseUrl}?hid=8819557&checkin=${checkInDate}&checkout=${checkOutDate}&adults=${adults}`)
+          // Hotel 1: Exigência do checklist -> 2 adultos, Residência Uzbequistão (uz)
+          fetch(`${baseUrl}?hid=10004834&checkin=${checkInDate}&checkout=${checkOutDate}&adults=${adults}&residency=uz`),
+          // Hotel 2: Teste padrão de tarifa (usaremos gb como nos exemplos da documentação)
+          fetch(`${baseUrl}?hid=8819557&checkin=${checkInDate}&checkout=${checkOutDate}&adults=${adults}&residency=gb`)
         ]);
 
         const data1 = await res1.json();
@@ -108,7 +107,7 @@ export default function HotelSearch() {
 
           setResults(hoteisMapeados);
         } else {
-          setError(`Nenhum hotel de teste RateHawk retornou inventário. Veja a aba 'Preview' no Console.`);
+          setError(`Nenhum hotel de teste RateHawk retornou inventário para essas datas.`);
         }
 
       } else {
