@@ -341,8 +341,8 @@ export default function HotelSearch() {
 
       const orderPayload = {
         partner_order_id: partnerOrderId,
-        book_hash: selectedOffer.bookHash,
-        language: "en",
+        hash: selectedOffer.bookHash, // <-- CORRIGIDO: A API exige "hash" aqui
+        language: "en",                // Recomendado "en" conforme os testes oficiais
         user: { 
           email: guestEmail, 
           phone: guestPhone || "+5571999999999", 
