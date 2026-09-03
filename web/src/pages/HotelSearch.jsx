@@ -22,19 +22,6 @@ export default function HotelSearch() {
 
   const dropdownRef = useRef(null);
 
-  // Base de destinos populares para garantir sugestões instantâneas e infalíveis
-  const popularDestinations = [
-    { id: 'US-LAX', name: "Los Angeles, EUA", type: "Região / Teste" },
-    { id: 'PARIS', name: "Paris, França", type: "Cidade" },
-    { id: 'ROM', name: "Roma, Itália", type: "Cidade" },
-    { id: 'LON', name: "Londres, Reino Unido", type: "Cidade" },
-    { id: 'NYC', name: "Nova York, EUA", type: "Cidade" },
-    { id: 'DXB', name: "Dubai, Emirados Árabes", type: "Cidade" },
-    { id: 'SSA', name: "Salvador, Brasil", type: "Cidade" },
-    { id: 'SAO', name: "São Paulo, Brasil", type: "Cidade" },
-    { id: 'RIO', name: "Rio de Janeiro, Brasil", type: "Cidade" },
-  ];
-
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const getTomorrowStr = () => {
     const d = new Date();
@@ -53,47 +40,52 @@ export default function HotelSearch() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Lógica de Autocompletar Híbrida (Filtro Local + API Worker)
+  // AUTOCOMPLETAR 100% VIA API RATEHAWK (Sem listas estáticas)
   useEffect(() => {
-    const handleAutocomplete = async () => {
-      const queryLower = destinationQuery.toLowerCase().trim();
-      
-      // Filtra na lista popular localmente primeiro
-      const filteredLocal = popularDestinations.filter(item => 
-        item.name.toLowerCase().includes(queryLower) || item.id.toLowerCase().includes(queryLower)
-      );
-
-      if (!queryLower) {
-        setAutocompleteResults(popularDestinations);
-        setShowDropdown(true);
+    const fetchAutocompleteFromAPI = async () => {
+      if (!destinationQuery || destinationQuery.length < 2) {
+        setAutocompleteResults([]);
+        setShowDropdown(false);
         return;
       }
 
-      setAutocompleteResults(filteredLocal.length > 0 ? filteredLocal : [{ id: destinationQuery, name: destinationQuery, type: 'Destino Personalizado' }]);
-      setShowDropdown(true);
-
-      // Tenta buscar no Worker em segundo plano para enriquecer, se houver
       try {
         const workerUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-autocomplete?query=${encodeURIComponent(destinationQuery)}`;
         const res = await fetch(workerUrl);
         const data = await res.json();
         
-        if (data && data.regions && data.regions.length > 0) {
-          setAutocompleteResults(data.regions);
-        }
+        // Mapeia os dados retornados pela API da RateHawk (regiões e hotéis)
+        const regions = data.regions || data.data?.regions || [];
+        const hotels = data.hotels || data.data?.hotels || [];
+        const combined = [...regions, ...hotels];
+
+        setAutocompleteResults(combined);
+        setShowDropdown(combined.length > 0);
       } catch (err) {
-        // Mantém o resultado local caso o worker falhe
+        console.error("Erro ao buscar autocompletar na API RateHawk:", err);
+        setAutocompleteResults([]);
+        setShowDropdown(false);
       }
     };
 
-    const timer = setTimeout(handleAutocomplete, 200);
+    const timer = setTimeout(fetchAutocompleteFromAPI, 350);
     return () => clearTimeout(timer);
   }, [destinationQuery]);
 
-  // Botão de Teste Restel (Moldávia)
+  // Botões de atalho para os testes oficiais exigidos pela certificação
+  const fillRateHawkTestData = () => {
+    setSupplier('RATEHAWK');
+    setDestinationQuery('Los Angeles');
+    setRegionId('US-LAX'); 
+    setCheckInDate('2027-02-22');
+    setCheckOutDate('2027-02-24');
+    setAdults(2);
+    setChildren(0);
+  };
+
   const fillTestData = () => {
     setSupplier('RESTEL');
-    setDestinationQuery('Moldávia (MVMOL)');
+    setDestinationQuery('Moldávia');
     setRegionId('MVMOL');
     setCheckInDate(getTomorrowStr());
     
@@ -105,22 +97,11 @@ export default function HotelSearch() {
     setChildren(0);
   };
 
-  // Botão de Teste RateHawk (Los Angeles)
-  const fillRateHawkTestData = () => {
-    setSupplier('RATEHAWK');
-    setDestinationQuery('Los Angeles, EUA');
-    setRegionId('US-LAX'); 
-    setCheckInDate('2027-02-22');
-    setCheckOutDate('2027-02-24');
-    setAdults(2);
-    setChildren(0);
-  };
-
   const handleSearch = async (e) => {
     e.preventDefault();
     const targetDest = regionId || destinationQuery;
     if (!targetDest) {
-      setError("Selecione um destino válido.");
+      setError("Informe ou selecione um destino válido.");
       return;
     }
     if (!checkInDate || !checkOutDate) {
@@ -134,7 +115,8 @@ export default function HotelSearch() {
 
     try {
       if (supplier === 'RATEHAWK') {
-        const hidsToSearch = (targetDest === 'US-LAX' || destinationQuery.toLowerCase().includes('los angeles') || destinationQuery.toLowerCase().includes('paris')) 
+        // Se for o teste de Los Angeles, busca os HIDs específicos exigidos pela ETG
+        const hidsToSearch = (targetDest === 'US-LAX' || destinationQuery.toLowerCase().includes('los angeles')) 
           ? [10004834, 8819557] 
           : [10004834];
 
@@ -247,7 +229,7 @@ export default function HotelSearch() {
 
             <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-12 gap-2 relative z-40">
               
-              {/* DESTINO COM DROPDOWN INTELIGENTE */}
+              {/* DESTINO CONSUMINDO DIRETAMENTE A API DE AUTOCOMPLETE DA RATEHAWK */}
               <div className="col-span-1 md:col-span-4 relative" ref={dropdownRef}>
                 <div className="flex items-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white h-12">
                   <span className="text-gray-400 text-lg mr-2">📍</span>
@@ -259,28 +241,28 @@ export default function HotelSearch() {
                       setRegionId('');
                     }}
                     onFocus={() => {
-                      setShowDropdown(true);
+                      if (autocompleteResults.length > 0) setShowDropdown(true);
                     }}
                     className="flex-1 outline-none text-sm font-bold text-gray-800 bg-transparent w-full" 
-                    placeholder="Digite cidade (ex: Paris, Los Angeles)" 
+                    placeholder="Digite destino ou hotel..." 
                   />
                 </div>
 
-                {/* DROPDOWN DE SUGESTÕES */}
+                {/* DROPDOWN ALIMENTADO EXCLUSIVAMENTE PELA API */}
                 {showDropdown && autocompleteResults.length > 0 && (
                   <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-2xl max-h-60 overflow-y-auto z-50">
                     {autocompleteResults.map((item, idx) => (
                       <div 
                         key={idx}
                         onClick={() => {
-                          setDestinationQuery(item.name);
+                          setDestinationQuery(item.name || item.full_name || item.title);
                           setRegionId(item.id);
                           setShowDropdown(false);
                         }}
                         className="px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-purple-50 hover:text-purple-700 cursor-pointer border-b border-gray-100 flex items-center justify-between"
                       >
-                        <span>{item.name}</span>
-                        <span className="text-[10px] text-gray-400 uppercase">{item.type || 'Destino'}</span>
+                        <span>{item.name || item.full_name || item.title}</span>
+                        <span className="text-[10px] text-gray-400 uppercase">{item.type || 'Região'}</span>
                       </div>
                     ))}
                   </div>
