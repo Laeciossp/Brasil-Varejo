@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '../firebase'; // <-- DESCOMENTE E IMPORTE O APP AQUI
-// import { app } from '../firebase'; // Ajuste o caminho conforme seu projeto
+import { app } from '../firebase'; // Importação mantida conforme seu projeto
 
 export default function HotelSearch() {
   const [destinationCode, setDestinationCode] = useState('');
@@ -9,6 +8,9 @@ export default function HotelSearch() {
   const [checkOutDate, setCheckOutDate] = useState('');
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
+  
+  // Estado para alternar entre os fornecedores durante a busca
+  const [supplier, setSupplier] = useState('RESTEL');
 
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -23,7 +25,22 @@ export default function HotelSearch() {
 
   // Botão de segurança para teste na Moldávia exigido pela Restel
   const fillTestData = () => {
+    setSupplier('RESTEL');
     setDestinationCode('MVMOL');
+    setCheckInDate(getTomorrowStr());
+    
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 4);
+    setCheckOutDate(nextWeek.toISOString().split('T')[0]);
+    
+    setAdults(2);
+    setChildren(0);
+  };
+
+  // Botão de segurança para teste em Los Angeles exigido pela RateHawk/ETG
+  const fillRateHawkTestData = () => {
+    setSupplier('RATEHAWK');
+    setDestinationCode('9872'); // ID numérico correspondente à região de Los Angeles na RateHawk
     setCheckInDate(getTomorrowStr());
     
     const nextWeek = new Date();
@@ -46,27 +63,74 @@ export default function HotelSearch() {
     setResults([]);
 
     try {
-      // INICIALIZAÇÃO DO FIREBASE FUNCTIONS
-      const functions = getFunctions(app); // Se precisar passar o app: getFunctions(app)
-      const searchRestelHotels = httpsCallable(functions, 'searchRestelHotels');
+      // Divisão de lógica de chamada dependendo do fornecedor selecionado
+      if (supplier === 'RATEHAWK') {
+        
+        // URL da sua Cloud Function HTTP (Express)
+        const firebaseUrl = `https://us-central1-palastore-turismo.cloudfunctions.net/ratehawkApi/search-hotels`; 
 
-      const response = await searchRestelHotels({
-        destinationCode,
-        checkInDate,
-        checkOutDate,
-        adults: parseInt(adults),
-        children: parseInt(children),
-        childrenAges: '' // Deixando vazio por enquanto para simplificar
-      });
+        const resRateHawk = await fetch(`${firebaseUrl}?region_id=${destinationCode}&checkin=${checkInDate}&checkout=${checkOutDate}&adults=${adults}`);
+        
+        if (!resRateHawk.ok) {
+           throw new Error('Falha na resposta do servidor da RateHawk');
+        }
 
-      if (response.data.status === 'success' && response.data.hoteis.length > 0) {
-        setResults(response.data.hoteis);
+        const dataRateHawk = await resRateHawk.json();
+
+        // Mapeando a estrutura da RateHawk para o seu front-end
+        if (dataRateHawk.data && dataRateHawk.data.hotels && dataRateHawk.data.hotels.length > 0) {
+          
+          const hoteisMapeados = dataRateHawk.data.hotels.map(h => ({
+            hotelId: h.id,
+            nome: h.id === '10004834' || h.id === '8819557' ? `Hotel Los Angeles Teste (${h.id})` : `Hotel ETG ${h.id}`, 
+            categoria: 4, 
+            taxasLocais: null,
+            ofertas: h.rates.map(r => {
+              // Ratehawk retorna o valor em payment_options, ou calcula pelo preço diário
+              let precoFinal = 0;
+              if (r.payment_options && r.payment_options.payment_types && r.payment_options.payment_types[0]) {
+                 precoFinal = parseFloat(r.payment_options.payment_types[0].amount);
+              } else if (r.daily_prices && r.daily_prices.length > 0) {
+                 precoFinal = parseFloat(r.daily_prices[0]) * r.daily_prices.length;
+              }
+
+              return {
+                tipoQuarto: r.room_name || 'Quarto Standard',
+                codigoRegime: r.meal || 'Sem Refeição',
+                precoVenda: precoFinal
+              };
+            })
+          }));
+
+          setResults(hoteisMapeados);
+        } else {
+          setError(`Nenhum hotel RateHawk encontrado na região pesquisada.`);
+        }
+
       } else {
-        setError("Nenhum hotel encontrado para esta busca.");
+        // LÓGICA ESTÁVEL DA RESTEL - INTACTA
+        const functions = getFunctions(app);
+        const searchRestelHotels = httpsCallable(functions, 'searchRestelHotels');
+        
+        const response = await searchRestelHotels({
+          destinationCode,
+          checkInDate,
+          checkOutDate,
+          adults: parseInt(adults),
+          children: parseInt(children),
+          childrenAges: '' 
+        });
+
+        if (response.data.status === 'success' && response.data.hoteis.length > 0) {
+          setResults(response.data.hoteis);
+        } else {
+          setError(`Nenhum hotel encontrado para esta busca via ${supplier}.`);
+        }
       }
+
     } catch (err) {
-      console.error("Erro na busca B2B:", err);
-      setError("Falha ao conectar com os fornecedores de hotéis.");
+      console.error(`Erro na busca B2B (${supplier}):`, err);
+      setError(`Falha ao conectar com o fornecedor ${supplier}.`);
     } finally {
       setLoading(false);
     }
@@ -88,10 +152,23 @@ export default function HotelSearch() {
           {/* CAIXA DE PESQUISA B2B */}
           <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 p-5 relative z-40">
             
-            {/* BOTÃO MODO DESENVOLVEDOR (Remover em Produção) */}
-            <div className="mb-4">
-               <button onClick={fillTestData} type="button" className="text-xs bg-orange-100 text-orange-700 font-bold px-3 py-1 rounded shadow hover:bg-orange-200 transition">
+            {/* BOTÕES MODO DESENVOLVEDOR E SELETOR DE API */}
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+               <select 
+                 value={supplier} 
+                 onChange={(e) => setSupplier(e.target.value)} 
+                 className="text-xs bg-gray-100 border border-gray-300 text-gray-700 font-bold px-2 py-1.5 rounded shadow-sm outline-none cursor-pointer"
+               >
+                 <option value="RESTEL">API: Restel</option>
+                 <option value="RATEHAWK">API: RateHawk / ETG</option>
+               </select>
+
+               <button onClick={fillTestData} type="button" className="text-xs bg-orange-100 text-orange-700 font-bold px-3 py-1.5 rounded shadow hover:bg-orange-200 transition">
                  🛠️ Preencher Teste Restel (Moldávia)
+               </button>
+
+               <button onClick={fillRateHawkTestData} type="button" className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow hover:bg-blue-200 transition">
+                 🛠️ Preencher Teste RateHawk (Los Angeles)
                </button>
             </div>
 
@@ -105,7 +182,7 @@ export default function HotelSearch() {
                   value={destinationCode} 
                   onChange={(e) => setDestinationCode(e.target.value.toUpperCase())} 
                   className="flex-1 outline-none text-sm font-bold text-gray-800 bg-transparent w-full uppercase" 
-                  placeholder="Código do Destino (Ex: SSA)" 
+                  placeholder="Código do Destino (Ex: SSA ou ID)" 
                 />
               </div>
 
@@ -158,7 +235,9 @@ export default function HotelSearch() {
                   <div className="flex text-orange-400 text-sm my-1">
                     {'⭐'.repeat(parseInt(hotel.categoria) || 3)}
                   </div>
-                  <p className="text-xs font-bold text-gray-500">ID Restel: {hotel.hotelId}</p>
+                  <p className="text-xs font-bold text-gray-500">
+                    ID {supplier === 'RATEHAWK' ? 'RateHawk' : 'Restel'}: {hotel.hotelId}
+                  </p>
                 </div>
                 {hotel.taxasLocais && (
                   <span className="bg-red-50 text-red-600 text-[10px] font-bold px-2 py-1 rounded border border-red-100 uppercase">
