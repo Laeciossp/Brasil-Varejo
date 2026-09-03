@@ -40,7 +40,7 @@ export default function HotelSearch() {
   // Botão de segurança para teste em Los Angeles exigido pela RateHawk/ETG
   const fillRateHawkTestData = () => {
     setSupplier('RATEHAWK');
-    setDestinationCode('9872'); // ID numérico correspondente à região de Los Angeles na RateHawk
+    setDestinationCode('US-LAX'); // Deixando US-LAX apenas visualmente, a busca forçará os HIDs corretos
     setCheckInDate(getTomorrowStr());
     
     const nextWeek = new Date();
@@ -66,28 +66,31 @@ export default function HotelSearch() {
       // Divisão de lógica de chamada dependendo do fornecedor selecionado
       if (supplier === 'RATEHAWK') {
         
-        // URL da sua Cloud Function HTTP (Express)
-        // COLOQUE ESTA LINHA NO LUGAR:
-        const firebaseUrl = `https://palastore-flights-api.laeciossp.workers.dev/search-hotels`; 
+        // Usando a sua rota de Hotel Page (HP) do Cloudflare para buscar os HIDs específicos
+        const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-page`; 
 
-        const resRateHawk = await fetch(`${firebaseUrl}?region_id=${destinationCode}&checkin=${checkInDate}&checkout=${checkOutDate}&adults=${adults}`);
-        
-        if (!resRateHawk.ok) {
-           throw new Error('Falha na resposta do servidor da RateHawk');
-        }
+        // Dispara as buscas simultâneas para os dois hotéis exigidos na certificação
+        const [res1, res2] = await Promise.all([
+          fetch(`${baseUrl}?hid=10004834&checkin=${checkInDate}&checkout=${checkOutDate}&adults=${adults}`),
+          fetch(`${baseUrl}?hid=8819557&checkin=${checkInDate}&checkout=${checkOutDate}&adults=${adults}`)
+        ]);
 
-        const dataRateHawk = await resRateHawk.json();
+        const data1 = await res1.json();
+        const data2 = await res2.json();
 
-        // Mapeando a estrutura da RateHawk para o seu front-end
-        if (dataRateHawk.data && dataRateHawk.data.hotels && dataRateHawk.data.hotels.length > 0) {
-          
-          const hoteisMapeados = dataRateHawk.data.hotels.map(h => ({
+        // Agrupa os hotéis encontrados
+        const combinados = [];
+        if (data1.data && data1.data.hotels) combinados.push(...data1.data.hotels);
+        if (data2.data && data2.data.hotels) combinados.push(...data2.data.hotels);
+
+        // Mapeando a estrutura para o front-end
+        if (combinados.length > 0) {
+          const hoteisMapeados = combinados.map(h => ({
             hotelId: h.id,
-            nome: h.id === '10004834' || h.id === '8819557' ? `Hotel Los Angeles Teste (${h.id})` : `Hotel ETG ${h.id}`, 
+            nome: `Hotel RateHawk Teste (${h.id})`, 
             categoria: 4, 
             taxasLocais: null,
             ofertas: h.rates.map(r => {
-              // Ratehawk retorna o valor em payment_options, ou calcula pelo preço diário
               let precoFinal = 0;
               if (r.payment_options && r.payment_options.payment_types && r.payment_options.payment_types[0]) {
                  precoFinal = parseFloat(r.payment_options.payment_types[0].amount);
@@ -96,7 +99,7 @@ export default function HotelSearch() {
               }
 
               return {
-                tipoQuarto: r.room_name || 'Quarto Standard',
+                tipoQuarto: r.room_name || 'Quarto Standard RateHawk',
                 codigoRegime: r.meal || 'Sem Refeição',
                 precoVenda: precoFinal
               };
@@ -105,7 +108,7 @@ export default function HotelSearch() {
 
           setResults(hoteisMapeados);
         } else {
-          setError(`Nenhum hotel RateHawk encontrado na região pesquisada.`);
+          setError(`Nenhum hotel de teste RateHawk retornou inventário. Veja a aba 'Preview' no Console.`);
         }
 
       } else {
