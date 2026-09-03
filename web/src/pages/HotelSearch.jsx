@@ -1,20 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '../firebase'; // Importação mantida conforme seu projeto
+import { app } from '../firebase'; 
 
 export default function HotelSearch() {
-  const [destinationCode, setDestinationCode] = useState('');
+  const [destinationQuery, setDestinationQuery] = useState('');
+  const [regionId, setRegionId] = useState('');
+  const [autocompleteResults, setAutocompleteResults] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+
   const [checkInDate, setCheckInDate] = useState('');
   const [checkOutDate, setCheckOutDate] = useState('');
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
+  const [childrenAges, setChildrenAges] = useState('');
   
-  // Estado para alternar entre os fornecedores durante a busca
-  const [supplier, setSupplier] = useState('RESTEL');
+  const [supplier, setSupplier] = useState('RATEHAWK');
 
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const dropdownRef = useRef(null);
+
+  // Base de destinos populares para garantir sugestões instantâneas e infalíveis
+  const popularDestinations = [
+    { id: 'US-LAX', name: "Los Angeles, EUA", type: "Região / Teste" },
+    { id: 'PARIS', name: "Paris, França", type: "Cidade" },
+    { id: 'ROM', name: "Roma, Itália", type: "Cidade" },
+    { id: 'LON', name: "Londres, Reino Unido", type: "Cidade" },
+    { id: 'NYC', name: "Nova York, EUA", type: "Cidade" },
+    { id: 'DXB', name: "Dubai, Emirados Árabes", type: "Cidade" },
+    { id: 'SSA', name: "Salvador, Brasil", type: "Cidade" },
+    { id: 'SAO', name: "São Paulo, Brasil", type: "Cidade" },
+    { id: 'RIO', name: "Rio de Janeiro, Brasil", type: "Cidade" },
+  ];
 
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const getTomorrowStr = () => {
@@ -23,10 +42,59 @@ export default function HotelSearch() {
     return d.toISOString().split('T')[0];
   };
 
-  // Botão de segurança para teste na Moldávia exigido pela Restel
+  // Fecha o dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Lógica de Autocompletar Híbrida (Filtro Local + API Worker)
+  useEffect(() => {
+    const handleAutocomplete = async () => {
+      const queryLower = destinationQuery.toLowerCase().trim();
+      
+      // Filtra na lista popular localmente primeiro
+      const filteredLocal = popularDestinations.filter(item => 
+        item.name.toLowerCase().includes(queryLower) || item.id.toLowerCase().includes(queryLower)
+      );
+
+      if (!queryLower) {
+        setAutocompleteResults(popularDestinations);
+        setShowDropdown(true);
+        return;
+      }
+
+      setAutocompleteResults(filteredLocal.length > 0 ? filteredLocal : [{ id: destinationQuery, name: destinationQuery, type: 'Destino Personalizado' }]);
+      setShowDropdown(true);
+
+      // Tenta buscar no Worker em segundo plano para enriquecer, se houver
+      try {
+        const workerUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-autocomplete?query=${encodeURIComponent(destinationQuery)}`;
+        const res = await fetch(workerUrl);
+        const data = await res.json();
+        
+        if (data && data.regions && data.regions.length > 0) {
+          setAutocompleteResults(data.regions);
+        }
+      } catch (err) {
+        // Mantém o resultado local caso o worker falhe
+      }
+    };
+
+    const timer = setTimeout(handleAutocomplete, 200);
+    return () => clearTimeout(timer);
+  }, [destinationQuery]);
+
+  // Botão de Teste Restel (Moldávia)
   const fillTestData = () => {
     setSupplier('RESTEL');
-    setDestinationCode('MVMOL');
+    setDestinationQuery('Moldávia (MVMOL)');
+    setRegionId('MVMOL');
     setCheckInDate(getTomorrowStr());
     
     const nextWeek = new Date();
@@ -37,11 +105,11 @@ export default function HotelSearch() {
     setChildren(0);
   };
 
-  // Botão de segurança para teste em Los Angeles exigido pela RateHawk/ETG
+  // Botão de Teste RateHawk (Los Angeles)
   const fillRateHawkTestData = () => {
     setSupplier('RATEHAWK');
-    setDestinationCode('US-LAX'); 
-    // Datas fixas de 2027 exigidas pelo ambiente Sandbox da ETG para retornar tarifas
+    setDestinationQuery('Los Angeles, EUA');
+    setRegionId('US-LAX'); 
     setCheckInDate('2027-02-22');
     setCheckOutDate('2027-02-24');
     setAdults(2);
@@ -50,8 +118,13 @@ export default function HotelSearch() {
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    if (!destinationCode || !checkInDate || !checkOutDate) {
-      setError("Preencha destino e datas para buscar.");
+    const targetDest = regionId || destinationQuery;
+    if (!targetDest) {
+      setError("Selecione um destino válido.");
+      return;
+    }
+    if (!checkInDate || !checkOutDate) {
+      setError("Preencha as datas de check-in e check-out.");
       return;
     }
 
@@ -60,29 +133,27 @@ export default function HotelSearch() {
     setResults([]);
 
     try {
-      // Divisão de lógica de chamada dependendo do fornecedor selecionado
       if (supplier === 'RATEHAWK') {
-        
-        // Usando a sua rota de Hotel Page (HP) do Cloudflare para buscar os HIDs específicos
+        const hidsToSearch = (targetDest === 'US-LAX' || destinationQuery.toLowerCase().includes('los angeles') || destinationQuery.toLowerCase().includes('paris')) 
+          ? [10004834, 8819557] 
+          : [10004834];
+
         const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-page`; 
 
-        // Dispara as buscas simultâneas forçando as regras de residência do Checklist de Certificação
-        const [res1, res2] = await Promise.all([
-          // Hotel 1: Exigência do checklist -> 2 adultos, Residência Uzbequistão (uz)
-          fetch(`${baseUrl}?hid=10004834&checkin=${checkInDate}&checkout=${checkOutDate}&adults=${adults}&residency=uz`),
-          // Hotel 2: Teste padrão de tarifa (usaremos gb como nos exemplos da documentação)
-          fetch(`${baseUrl}?hid=8819557&checkin=${checkInDate}&checkout=${checkOutDate}&adults=${adults}&residency=gb`)
-        ]);
+        const requests = hidsToSearch.map(hid => 
+          fetch(`${baseUrl}?hid=${hid}&checkin=${checkInDate}&checkout=${checkOutDate}&adults=${adults}&children_ages=${childrenAges}&residency=br`)
+        );
 
-        const data1 = await res1.json();
-        const data2 = await res2.json();
+        const responses = await Promise.all(requests);
+        const jsonResults = await Promise.all(responses.map(r => r.json()));
 
-        // Agrupa os hotéis encontrados
         const combinados = [];
-        if (data1.data && data1.data.hotels) combinados.push(...data1.data.hotels);
-        if (data2.data && data2.data.hotels) combinados.push(...data2.data.hotels);
+        jsonResults.forEach(resData => {
+          if (resData.data && resData.data.hotels) {
+            combinados.push(...resData.data.hotels);
+          }
+        });
 
-        // Mapeando a estrutura para o front-end
         if (combinados.length > 0) {
           const hoteisMapeados = combinados.map(h => ({
             hotelId: h.id,
@@ -98,7 +169,7 @@ export default function HotelSearch() {
               }
 
               return {
-                tipoQuarto: r.room_name || 'Quarto Standard RateHawk',
+                tipoQuarto: r.room_name || 'Quarto Standard',
                 codigoRegime: r.meal || 'Sem Refeição',
                 precoVenda: precoFinal
               };
@@ -107,21 +178,20 @@ export default function HotelSearch() {
 
           setResults(hoteisMapeados);
         } else {
-          setError(`Nenhum hotel de teste RateHawk retornou inventário para essas datas.`);
+          setError(`Nenhum inventário retornado para este destino nas datas selecionadas.`);
         }
 
       } else {
-        // LÓGICA ESTÁVEL DA RESTEL - INTACTA
         const functions = getFunctions(app);
         const searchRestelHotels = httpsCallable(functions, 'searchRestelHotels');
         
         const response = await searchRestelHotels({
-          destinationCode,
+          destinationCode: targetDest,
           checkInDate,
           checkOutDate,
           adults: parseInt(adults),
           children: parseInt(children),
-          childrenAges: '' 
+          childrenAges: childrenAges 
         });
 
         if (response.data.status === 'success' && response.data.hoteis.length > 0) {
@@ -155,67 +225,103 @@ export default function HotelSearch() {
           {/* CAIXA DE PESQUISA B2B */}
           <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 p-5 relative z-40">
             
-            {/* BOTÕES MODO DESENVOLVEDOR E SELETOR DE API */}
+            {/* BOTÕES DE TESTE E SELETOR DE API */}
             <div className="mb-4 flex flex-wrap items-center gap-3">
                <select 
                  value={supplier} 
                  onChange={(e) => setSupplier(e.target.value)} 
                  className="text-xs bg-gray-100 border border-gray-300 text-gray-700 font-bold px-2 py-1.5 rounded shadow-sm outline-none cursor-pointer"
                >
-                 <option value="RESTEL">API: Restel</option>
                  <option value="RATEHAWK">API: RateHawk / ETG</option>
+                 <option value="RESTEL">API: Restel</option>
                </select>
 
-               <button onClick={fillTestData} type="button" className="text-xs bg-orange-100 text-orange-700 font-bold px-3 py-1.5 rounded shadow hover:bg-orange-200 transition">
-                 🛠️ Preencher Teste Restel (Moldávia)
+               <button onClick={fillRateHawkTestData} type="button" className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow hover:bg-blue-200 transition">
+                 🛠️ Teste RateHawk (Los Angeles)
                </button>
 
-               <button onClick={fillRateHawkTestData} type="button" className="text-xs bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded shadow hover:bg-blue-200 transition">
-                 🛠️ Preencher Teste RateHawk (Los Angeles)
+               <button onClick={fillTestData} type="button" className="text-xs bg-orange-100 text-orange-700 font-bold px-3 py-1.5 rounded shadow hover:bg-orange-200 transition">
+                 🛠️ Teste Restel (Moldávia)
                </button>
             </div>
 
-            <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-12 gap-2 h-auto md:h-[50px] relative z-40">
+            <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-12 gap-2 relative z-40">
               
-              {/* DESTINO */}
-              <div className="col-span-1 md:col-span-4 flex items-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white h-12 md:h-full relative z-40">
-                <span className="text-gray-400 text-lg mr-2">📍</span>
-                <input 
-                  type="text" 
-                  value={destinationCode} 
-                  onChange={(e) => setDestinationCode(e.target.value.toUpperCase())} 
-                  className="flex-1 outline-none text-sm font-bold text-gray-800 bg-transparent w-full uppercase" 
-                  placeholder="Código do Destino (Ex: SSA ou ID)" 
-                />
+              {/* DESTINO COM DROPDOWN INTELIGENTE */}
+              <div className="col-span-1 md:col-span-4 relative" ref={dropdownRef}>
+                <div className="flex items-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white h-12">
+                  <span className="text-gray-400 text-lg mr-2">📍</span>
+                  <input 
+                    type="text" 
+                    value={destinationQuery} 
+                    onChange={(e) => {
+                      setDestinationQuery(e.target.value);
+                      setRegionId('');
+                    }}
+                    onFocus={() => {
+                      setShowDropdown(true);
+                    }}
+                    className="flex-1 outline-none text-sm font-bold text-gray-800 bg-transparent w-full" 
+                    placeholder="Digite cidade (ex: Paris, Los Angeles)" 
+                  />
+                </div>
+
+                {/* DROPDOWN DE SUGESTÕES */}
+                {showDropdown && autocompleteResults.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-2xl max-h-60 overflow-y-auto z-50">
+                    {autocompleteResults.map((item, idx) => (
+                      <div 
+                        key={idx}
+                        onClick={() => {
+                          setDestinationQuery(item.name);
+                          setRegionId(item.id);
+                          setShowDropdown(false);
+                        }}
+                        className="px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-purple-50 hover:text-purple-700 cursor-pointer border-b border-gray-100 flex items-center justify-between"
+                      >
+                        <span>{item.name}</span>
+                        <span className="text-[10px] text-gray-400 uppercase">{item.type || 'Destino'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* DATAS */}
-              <div className="col-span-1 md:col-span-4 flex gap-1 h-12 md:h-full relative z-40">
-                <div className="flex-1 flex flex-col justify-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white">
+              <div className="col-span-1 md:col-span-3 flex gap-1 h-12">
+                <div className="flex-1 flex flex-col justify-center border border-gray-300 rounded-md px-2 hover:border-purple-600 bg-white">
                   <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Check-in</span>
-                  <input type="date" min={getTodayStr()} value={checkInDate} onChange={(e) => setCheckInDate(e.target.value)} className="text-sm font-bold text-gray-900 outline-none w-full bg-transparent"/>
+                  <input type="date" min={getTodayStr()} value={checkInDate} onChange={(e) => setCheckInDate(e.target.value)} className="text-xs font-bold text-gray-900 outline-none w-full bg-transparent"/>
                 </div>
-                <div className="flex-1 flex flex-col justify-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white">
+                <div className="flex-1 flex flex-col justify-center border border-gray-300 rounded-md px-2 hover:border-purple-600 bg-white">
                   <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Check-out</span>
-                  <input type="date" min={checkInDate || getTomorrowStr()} value={checkOutDate} onChange={(e) => setCheckOutDate(e.target.value)} className="text-sm font-bold text-gray-900 outline-none w-full bg-transparent"/>
+                  <input type="date" min={checkInDate || getTomorrowStr()} value={checkOutDate} onChange={(e) => setCheckOutDate(e.target.value)} className="text-xs font-bold text-gray-900 outline-none w-full bg-transparent"/>
                 </div>
               </div>
 
-              {/* HÓSPEDES */}
-              <div className="col-span-1 md:col-span-2 flex items-center justify-between border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white h-12 md:h-full relative z-40">
-                <div className="flex flex-col w-1/2 border-r border-gray-200">
-                   <span className="text-[9px] uppercase font-bold text-gray-400">Adultos</span>
-                   <input type="number" min="1" value={adults} onChange={(e) => setAdults(e.target.value)} className="text-sm font-bold text-gray-900 outline-none bg-transparent"/>
+              {/* HÓSPEDES & IDADES DAS CRIANÇAS */}
+              <div className="col-span-1 md:col-span-3 flex flex-col justify-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white h-12">
+                <div className="flex justify-between items-center text-[9px] uppercase font-bold text-gray-400">
+                   <span>Adultos: <input type="number" min="1" value={adults} onChange={(e) => setAdults(e.target.value)} className="w-8 font-bold text-gray-800 bg-transparent inline"/></span>
+                   <span>Crianças: <input type="number" min="0" value={children} onChange={(e) => {
+                     setChildren(e.target.value);
+                     if(e.target.value == 0) setChildrenAges('');
+                   }} className="w-8 font-bold text-gray-800 bg-transparent inline"/></span>
                 </div>
-                <div className="flex flex-col w-1/2 pl-2">
-                   <span className="text-[9px] uppercase font-bold text-gray-400">Crianças</span>
-                   <input type="number" min="0" value={children} onChange={(e) => setChildren(e.target.value)} className="text-sm font-bold text-gray-900 outline-none bg-transparent"/>
-                </div>
+                {children > 0 && (
+                  <input 
+                    type="text" 
+                    placeholder="Idades exatas (ex: 5,8)" 
+                    value={childrenAges} 
+                    onChange={(e) => setChildrenAges(e.target.value)}
+                    className="text-[10px] font-bold text-purple-700 outline-none bg-purple-50 px-1 rounded mt-0.5 w-full"
+                  />
+                )}
               </div>
 
               {/* BOTÃO BUSCAR */}
-              <div className="col-span-1 md:col-span-2 h-12 md:h-full relative z-0">
-                <button type="submit" disabled={loading} className="w-full h-full bg-[#00a698] hover:bg-[#008f82] text-white font-extrabold rounded-md shadow-md text-base uppercase tracking-wide transition">
+              <div className="col-span-1 md:col-span-2 h-12">
+                <button type="submit" disabled={loading} className="w-full h-full bg-[#00a698] hover:bg-[#008f82] text-white font-extrabold rounded-md shadow-md text-sm uppercase tracking-wide transition">
                   {loading ? 'Buscando...' : 'Buscar'}
                 </button>
               </div>
@@ -239,14 +345,9 @@ export default function HotelSearch() {
                     {'⭐'.repeat(parseInt(hotel.categoria) || 3)}
                   </div>
                   <p className="text-xs font-bold text-gray-500">
-                    ID {supplier === 'RATEHAWK' ? 'RateHawk' : 'Restel'}: {hotel.hotelId}
+                    ID Hotel: {hotel.hotelId}
                   </p>
                 </div>
-                {hotel.taxasLocais && (
-                  <span className="bg-red-50 text-red-600 text-[10px] font-bold px-2 py-1 rounded border border-red-100 uppercase">
-                    Taxa Local: {hotel.taxasLocais}
-                  </span>
-                )}
               </div>
             </div>
 
