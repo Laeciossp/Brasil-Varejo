@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom'; // <--- ADICIONE ESTA LINHA
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../firebase'; 
 
@@ -95,6 +96,7 @@ const defaultLastNames = ["Silva", "Costa", "Oliveira", "Santos", "Pereira", "Li
 const defaultChildNames = ["Lucas", "Marina", "Pedro", "Sofia", "Enzo", "Valentina"];
 
 export default function HotelSearch() {
+  const navigate = useNavigate(); // <--- ADICIONE ESTA LINHA AQUI NO TOPO
   const [destinationQuery, setDestinationQuery] = useState('');
   const [regionId, setRegionId] = useState('');
   const [regionsResults, setRegionsResults] = useState([]);
@@ -154,19 +156,26 @@ export default function HotelSearch() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+
+
 useEffect(() => {
-    // Escuta a mensagem enviada de dentro do iframe do mapa
     const handleIframeMessage = (event) => {
       if (event.data && event.data.type === 'SELECT_HOTEL') {
-        const hotelSelecionado = results.find(h => String(h.hotelId) === String(event.data.hotelId));
-        if (hotelSelecionado && hotelSelecionado.ofertas && hotelSelecionado.ofertas.length > 0) {
-          handleSelectOffer(hotelSelecionado.ofertas[0], hotelSelecionado);
+        // Usa uma função de callback no setResults (ou acessa a variável diretamente se não for closure)
+        // Para garantir, vamos usar os dados passados diretamente no evento
+        const idClicado = String(event.data.hotelId);
+        const hotelSelecionado = results.find(h => String(h.hotelId) === idClicado);
+        
+        if (hotelSelecionado) {
+          navigate('/hotel-details', { 
+            state: { hotel: hotelSelecionado, checkInDate, checkOutDate, rooms } 
+          });
         }
       }
     };
     window.addEventListener('message', handleIframeMessage);
     return () => window.removeEventListener('message', handleIframeMessage);
-  }, [results]);
+  }, [results, navigate, checkInDate, checkOutDate, rooms]);
 
 
   useEffect(() => {
@@ -944,9 +953,13 @@ useEffect(() => {
                 }}
                 className="bg-white border border-gray-200 rounded-xl shadow-sm hover:border-orange-400 hover:shadow-md transition-all overflow-hidden flex flex-col xl:flex-row cursor-default"
               >
-                <div className="w-full xl:w-[220px] h-48 xl:h-auto bg-gray-200 relative shrink-0">
-                  <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center"></div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-3">
+      {/* FOTO CLICÁVEL COM ENVIO DE DADOS REAIS */}
+                <div 
+                  onClick={() => navigate('/hotel-details', { state: { hotel, checkInDate, checkOutDate, rooms } })} 
+                  className="w-full xl:w-[220px] h-48 xl:h-auto bg-gray-200 relative shrink-0 cursor-pointer"
+                >
+                  <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center transition-transform hover:scale-105"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-3 pointer-events-none">
                     <span className="text-white text-[10px] font-bold bg-black/40 px-2 py-0.5 rounded flex items-center gap-1">‹ 1 / 10 ›</span>
                   </div>
                 </div>
@@ -956,7 +969,15 @@ useEffect(() => {
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <div className="text-amber-400 text-[10px] mb-0.5">{'⭐'.repeat(hotel.categoria || 4)}</div>
-                        <h3 className="font-bold text-blue-600 text-base leading-tight hover:underline transition cursor-pointer">{hotel.nome}</h3>
+                        
+                        {/* NOME CLICÁVEL COM ENVIO DE DADOS REAIS */}
+                        <h3 
+                          onClick={() => navigate('/hotel-details', { state: { hotel, checkInDate, checkOutDate, rooms } })} 
+                          className="font-bold text-blue-600 text-base leading-tight hover:underline transition cursor-pointer"
+                        >
+                          {hotel.nome}
+                        </h3>
+
                         <p className="text-[11px] text-gray-500 font-medium mt-1 hover:underline cursor-pointer">{hotel.endereco}</p>
                         <p className="text-[11px] text-gray-400">{hotel.distancia}</p>
                       </div>

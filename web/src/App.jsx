@@ -17,8 +17,9 @@ import ViagensPage from './pages/ViagensPage';
 import TourDetails from './pages/TourDetails';
 import FlightSearch from './pages/FlightSearch';
 import HotelSearch from './pages/HotelSearch';
+import HotelDetails from './pages/HotelDetails'; // <-- IMPORT DA NOVA PÁGINA DE DETALHES
 import FlightHotelPackage from './pages/FlightHotelPackage';
-import PalastoreCruzeiros from './pages/PalastoreCruzeiros'; // <-- ROTA DE CRUZEIROS IMPORTADA
+import PalastoreCruzeiros from './pages/PalastoreCruzeiros'; 
 
 import BrandPage from './pages/BrandPage';
 
@@ -61,8 +62,9 @@ function App() {
                
           <Route path="/voos" element={<FlightSearch />} />
           <Route path="/hoteis" element={<HotelSearch />} />
+          <Route path="/hotel-details" element={<HotelDetails />} /> {/* <-- ROTA REGISTRADA PARA O CLIQUE FUNCIONAR */}
           <Route path="/voo-hotel" element={<FlightHotelPackage />} />
-          <Route path="/cruzeiros" element={<PalastoreCruzeiros />} /> {/* <-- NOVA ROTA CONFIGURADA */}
+          <Route path="/cruzeiros" element={<PalastoreCruzeiros />} />
 
           <Route path="/sobre" element={<About />} />
           <Route path="/termos-de-uso" element={<Terms />} />
