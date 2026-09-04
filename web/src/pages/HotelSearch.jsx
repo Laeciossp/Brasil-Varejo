@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom'; // <--- ADICIONE ESTA LINHA
+import { useNavigate } from 'react-router-dom';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../firebase'; 
+import { createClient } from '@supabase/supabase-js';
+
+// INTEGRAÇÃO SUPABASE: Conexão direta com seu banco para buscar as imagens do catálogo
+const SUPABASE_URL = "https://vcqiilytjrrurdbscmio.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_leFg1lWGZlctiU3CXYR2Gw_FpOG2qR3"; 
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const COUNTRIES = [
   { code: 'br', name: 'Brasil' }, { code: 'aw', name: 'Aruba' }, { code: 'af', name: 'Afeganistão' },
@@ -91,12 +97,8 @@ const COUNTRIES = [
   { code: 'zm', name: 'Zâmbia' }, { code: 'zw', name: 'Zimbábue' }, { code: 'xk', name: 'Kosovo' }
 ];
 
-const defaultFirstNames = ["Carlos", "Ana", "Marcos", "Julia", "Roberto", "Fernanda", "Luiz", "Amanda"];
-const defaultLastNames = ["Silva", "Costa", "Oliveira", "Santos", "Pereira", "Lima", "Souza", "Melo"];
-const defaultChildNames = ["Lucas", "Marina", "Pedro", "Sofia", "Enzo", "Valentina"];
-
 export default function HotelSearch() {
-  const navigate = useNavigate(); // <--- ADICIONE ESTA LINHA AQUI NO TOPO
+  const navigate = useNavigate();
   const [destinationQuery, setDestinationQuery] = useState('');
   const [regionId, setRegionId] = useState('');
   const [regionsResults, setRegionsResults] = useState([]);
@@ -134,7 +136,7 @@ export default function HotelSearch() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  // Estado para centralizar o mapa
+  const [activeGalleryHotel, setActiveGalleryHotel] = useState(null);
   const [mapCenterLatLon, setMapCenterLatLon] = useState(null);
 
   const dropdownRef = useRef(null);
@@ -156,27 +158,22 @@ export default function HotelSearch() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-
-
-useEffect(() => {
+  useEffect(() => {
     const handleIframeMessage = (event) => {
       if (event.data && event.data.type === 'SELECT_HOTEL') {
-        // Usa uma função de callback no setResults (ou acessa a variável diretamente se não for closure)
-        // Para garantir, vamos usar os dados passados diretamente no evento
         const idClicado = String(event.data.hotelId);
         const hotelSelecionado = results.find(h => String(h.hotelId) === idClicado);
         
         if (hotelSelecionado) {
           navigate('/hotel-details', { 
-            state: { hotel: hotelSelecionado, checkInDate, checkOutDate, rooms } 
+            state: { hotel: hotelSelecionado, checkInDate, checkOutDate, rooms, residency } 
           });
         }
       }
     };
     window.addEventListener('message', handleIframeMessage);
     return () => window.removeEventListener('message', handleIframeMessage);
-  }, [results, navigate, checkInDate, checkOutDate, rooms]);
-
+  }, [results, navigate, checkInDate, checkOutDate, rooms, residency]);
 
   useEffect(() => {
     const fetchAutocompleteFromAPI = async () => {
@@ -221,20 +218,6 @@ useEffect(() => {
   const addRoom = () => { if (rooms.length < 9) setRooms([...rooms, { adults: 1, childrenAges: [] }]); };
   const removeRoom = (roomIndex) => { if (rooms.length > 1) setRooms(rooms.filter((_, idx) => idx !== roomIndex)); };
 
-  const getTotalGuestsText = () => {
-    const totalAdults = rooms.reduce((acc, r) => acc + r.adults, 0);
-    const totalChildren = rooms.reduce((acc, r) => acc + r.childrenAges.length, 0);
-    return `${rooms.length} quarto${rooms.length > 1 ? 's' : ''} para ${totalAdults + totalChildren} hóspede${totalAdults + totalChildren > 1 ? 's' : ''}`;
-  };
-
-  const toggleStar = (star) => {
-    if (star === 0) setStars([]);
-    else setStars(prev => prev.includes(star) ? prev.filter(s => s !== star) : [...prev, star]);
-  };
-  const toggleMeal = (meal) => {
-    setMeals(prev => prev.includes(meal) ? prev.filter(m => m !== meal) : [...prev, meal]);
-  };
-
   const formatarDataExibicao = (dataString) => {
     if(!dataString) return '';
     const [ano, mes, dia] = dataString.split('-');
@@ -250,8 +233,7 @@ useEffect(() => {
 
     setLoading(true); setError(null); setResults([]); setShowGuestDropdown(false); 
 
-    // 1. INTELIGÊNCIA GEOGRÁFICA: Busca as coordenadas reais da cidade digitada!
-    let cityLat = -23.5505; // Padrão de fallback (São Paulo)
+    let cityLat = -23.5505; 
     let cityLng = -46.6333;
     try {
       const cityName = destinationQuery.split(',')[0];
@@ -303,12 +285,35 @@ useEffect(() => {
         });
 
         if (combinados.length > 0) {
+          // 1. Coleta os HIDs retornados na busca ao vivo
+          const matchedHids = combinados.map(h => Number(h.id));
+          
+          // 2. Busca as imagens e dados estáticos reais no Supabase para os hotéis encontrados
+          let dbHotels = [];
+          if (matchedHids.length > 0) {
+            const { data, error } = await supabase
+              .from('Hotel')
+              .select('hid, images, amenities')
+              .in('hid', matchedHids);
+              
+            if (!error && data) {
+              dbHotels = data;
+            }
+          }
+
+          // 3. Mescla o preço em tempo real com as imagens reais do banco de dados
           const hoteisMapeados = combinados.map((h) => {
-            // ESPALHAMENTO DE PINS caso o fornecedor não envie a coordenada
             const latOffset = (Math.random() - 0.5) * 0.015;
             const lngOffset = (Math.random() - 0.5) * 0.015;
             const finalLat = h.latitude || (cityLat + latOffset);
             const finalLng = h.longitude || (cityLng + lngOffset);
+            
+            // Procura o registro do hotel no Supabase
+            const dbInfo = dbHotels.find(dbH => dbH.hid === Number(h.id));
+            let imagensOficiais = [];
+            if (dbInfo && dbInfo.images && dbInfo.images.length > 0) {
+              imagensOficiais = dbInfo.images;
+            }
 
             return {
               hotelId: h.id, 
@@ -318,6 +323,7 @@ useEffect(() => {
               distancia: 'A partir do centro',
               latitude: finalLat,
               longitude: finalLng,
+              imagensReais: imagensOficiais, // <-- Injetando as fotos reais aqui
               ofertas: h.rates.map(r => ({
                 tipoQuarto: r.room_name || 'Quarto Standard', 
                 codigoRegime: r.meal === 'breakfast' ? 'BB' : r.meal === 'half-board' ? 'HB' : r.meal === 'all-inclusive' ? 'AI' : 'RO',
@@ -331,7 +337,7 @@ useEffect(() => {
           });
           setResults(hoteisMapeados);
         } else {
-          setError(`Nenhuma tarifa disponível para esta combinação no fornecedor. Tente alterar as datas ou destino.`);
+          setError(`Nenhuma tarifa disponível para esta combinação no fornecedor.`);
         }
       } else {
         const functions = getFunctions(app);
@@ -403,7 +409,6 @@ useEffect(() => {
     setFinalPartnerOrderId(partnerOrderId);
 
     try {
-      // Restaurado IDÊNTICO ao HotelSearch_4.jsx (backup que funcionou)
       const roomsFormatados = rooms.map(() => {
         return {
           guests: [
@@ -443,7 +448,6 @@ useEffect(() => {
         currency_code: selectedOffer.paymentTypeObj.currency_code
       } : { type: "deposit" };
 
-      // Aqui está o segredo: enviando partner_order_id solto na raiz, como seu Worker exige
       const finishRes = await fetch('https://palastore-flights-api.laeciossp.workers.dev/hotel-booking-finish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ 
@@ -515,21 +519,24 @@ useEffect(() => {
     return 0;
   });
 
-  // ===========================================================================
-  // MÁGICA DO MAPA RATEHAWK (OPENSTREETMAP + LEAFLET VIA IFRAME ISOLADO)
-  // ===========================================================================
   const buildMapHtml = () => {
     const centerLat = mapCenterLatLon ? mapCenterLatLon.split(',')[0] : -23.5505;
     const centerLng = mapCenterLatLon ? mapCenterLatLon.split(',')[1] : -46.6333;
     
-    const pinsData = filteredResults.filter(h => h.latitude && h.longitude).map(h => ({
-      lat: h.latitude,
-      lng: h.longitude,
-      nome: h.nome.replace(/'/g, "\\'").replace(/"/g, '&quot;'),
-      preco: `USD ${h.ofertas[0]?.precoVenda.toLocaleString('en-US', {minimumFractionDigits: 2})}`,
-      estrelas: '⭐'.repeat(h.categoria || 4),
-      imagem: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80'
-    }));
+    const pinsData = filteredResults.filter(h => h.latitude && h.longitude).map(h => {
+      const img = h.imagensReais && h.imagensReais.length > 0 
+        ? (typeof h.imagensReais[0] === 'string' ? h.imagensReais[0].replace('{size}', '240x240') : h.imagensReais[0]) 
+        : 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80';
+      return {
+        id: h.hotelId,
+        lat: h.latitude,
+        lng: h.longitude,
+        nome: h.nome.replace(/'/g, "\\'").replace(/"/g, '&quot;'),
+        preco: `USD ${h.ofertas[0]?.precoVenda.toLocaleString('en-US', {minimumFractionDigits: 2})}`,
+        estrelas: '⭐'.repeat(h.categoria || 4),
+        imagem: img
+      };
+    });
 
     return `
       <!DOCTYPE html>
@@ -553,6 +560,11 @@ useEffect(() => {
           .map-card-title { font-size: 14px; font-weight: bold; color: #111; margin: 0 0 6px 0; line-height: 1.2; }
           .map-card-price { font-size: 16px; font-weight: 900; color: #00a698; margin: 0; }
 
+          .map-card-btn {
+            margin-top: 8px; width: 100%; background: #ffc107; color: #111; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s;
+          }
+          .map-card-btn:hover { background: #e0a800; }
+
           .price-pin {
             background-color: white;
             border: 1px solid #ccc;
@@ -568,25 +580,9 @@ useEffect(() => {
             transition: all 0.2s;
             cursor: pointer;
           }
-          .price-pin:hover {
-            background-color: #00a698;
-            color: white;
-            border-color: #00a698;
-            z-index: 9999 !important;
-          }
-          .price-pin::after {
-            content: '';
-            position: absolute;
-            bottom: -5px;
-            left: 50%;
-            transform: translateX(-50%);
-            border-width: 5px 5px 0;
-            border-style: solid;
-            border-color: white transparent transparent transparent;
-          }
-          .price-pin:hover::after {
-            border-color: #00a698 transparent transparent transparent;
-          }
+          .price-pin:hover { background-color: #00a698; color: white; border-color: #00a698; z-index: 9999 !important; }
+          .price-pin::after { content: ''; position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%); border-width: 5px 5px 0; border-style: solid; border-color: white transparent transparent transparent; }
+          .price-pin:hover::after { border-color: #00a698 transparent transparent transparent; }
         </style>
       </head>
       <body>
@@ -616,6 +612,7 @@ useEffect(() => {
                 '<div class="map-card-stars">' + hotel.estrelas + '</div>' +
                 '<h4 class="map-card-title">' + hotel.nome + '</h4>' +
                 '<p class="map-card-price">' + hotel.preco + '</p>' +
+                '<button class="map-card-btn" onclick="window.parent.postMessage({type: \\'SELECT_HOTEL\\', hotelId: \\'' + hotel.id + '\\'}, \\'*\\')">Detalhes do Hotel</button>' +
               '</div>' +
             '</div>';
 
@@ -635,7 +632,6 @@ useEffect(() => {
   return (
     <div className="w-full bg-gray-50 font-sans min-h-screen pb-10">
       
-      {/* HEADER BREADCRUMB */}
       <div className="w-full bg-white border-b border-gray-200 py-3 px-4 shadow-sm mb-6">
         <div className="max-w-[1400px] mx-auto">
           <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
@@ -646,7 +642,6 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* BUSCADOR COMPLETO NO TOPO */}
       <div className="max-w-[1400px] mx-auto px-3 mb-6">
         <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-visible relative z-40">
           
@@ -661,7 +656,6 @@ useEffect(() => {
               
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-4">
                 
-                {/* DESTINO */}
                 <div className="col-span-1 lg:col-span-4 relative bg-white border border-gray-300 rounded-md hover:border-gray-400 transition" ref={dropdownRef}>
                   <label className="block text-[10px] text-gray-400 uppercase pt-1.5 px-3">Destino</label>
                   <div className="flex items-center px-3 pb-1.5">
@@ -693,7 +687,6 @@ useEffect(() => {
                   )}
                 </div>
 
-                {/* DATAS */}
                 <div className="col-span-1 lg:col-span-4 flex bg-white border border-gray-300 rounded-md hover:border-gray-400 transition relative overflow-hidden">
                   <div 
                     className="flex-1 px-3 flex flex-col justify-center relative cursor-pointer group hover:bg-gray-50 transition"
@@ -734,7 +727,6 @@ useEffect(() => {
                   </div>
                 </div>
 
-                {/* HÓSPEDES & QUARTOS */}
                 <div className="col-span-1 lg:col-span-2 relative bg-white border border-gray-300 rounded-md px-3 py-1.5 cursor-pointer hover:border-gray-400 transition flex flex-col justify-center" ref={guestDropdownRef} onClick={() => setShowGuestDropdown(!showGuestDropdown)}>
                   <span className="block text-[10px] text-gray-400 uppercase">{rooms.length} quarto{rooms.length > 1 ? 's' : ''} para</span>
                   <div className="text-sm text-gray-900 font-medium flex justify-between items-center">
@@ -820,7 +812,6 @@ useEffect(() => {
                 </div>
               </div>
 
-              {/* PARÂMETROS ADICIONAIS DO BUSCADOR */}
               <div className="mt-2">
                 <span className="text-xs text-white font-medium mb-2 block">Parâmetros adicionais</span>
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
@@ -884,9 +875,6 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* ======================================================= */}
-      {/* 3. LAYOUT DE 3 COLUNAS (FILTROS | LISTA | MAPA) */}
-      {/* ======================================================= */}
       <div className="max-w-[1400px] mx-auto px-3 mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
           
@@ -943,80 +931,81 @@ useEffect(() => {
 
             {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm font-bold border-l-4 border-red-500 shadow-sm">{error}</div>}
 
-            {filteredResults.map((hotel, index) => (
-              <div 
-                key={index} 
-                onMouseEnter={() => {
-                  if(hotel.latitude && hotel.longitude) {
-                    setMapCenterLatLon(`${hotel.latitude},${hotel.longitude}`);
-                  }
-                }}
-                className="bg-white border border-gray-200 rounded-xl shadow-sm hover:border-orange-400 hover:shadow-md transition-all overflow-hidden flex flex-col xl:flex-row cursor-default"
-              >
-      {/* FOTO CLICÁVEL COM ENVIO DE DADOS REAIS */}
+            {filteredResults.map((hotel, index) => {
+              
+              // Define a imagem principal do Card a partir do Supabase (imagensReais)
+              const cardBg = hotel.imagensReais && hotel.imagensReais.length > 0 
+                ? (typeof hotel.imagensReais[0] === 'string' ? hotel.imagensReais[0].replace('{size}', '800x600') : hotel.imagensReais[0]) 
+                : "https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80";
+
+              return (
                 <div 
-                  onClick={() => navigate('/hotel-details', { state: { hotel, checkInDate, checkOutDate, rooms } })} 
-                  className="w-full xl:w-[220px] h-48 xl:h-auto bg-gray-200 relative shrink-0 cursor-pointer"
+                  key={index} 
+                  onMouseEnter={() => {
+                    if(hotel.latitude && hotel.longitude) {
+                      setMapCenterLatLon(`${hotel.latitude},${hotel.longitude}`);
+                    }
+                  }}
+                  className="bg-white border border-gray-200 rounded-xl shadow-sm hover:border-orange-400 hover:shadow-md transition-all overflow-hidden flex flex-col xl:flex-row cursor-default"
                 >
-                  <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center transition-transform hover:scale-105"></div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-3 pointer-events-none">
-                    <span className="text-white text-[10px] font-bold bg-black/40 px-2 py-0.5 rounded flex items-center gap-1">‹ 1 / 10 ›</span>
-                  </div>
-                </div>
-
-                <div className="flex-1 p-4 flex flex-col justify-between">
-                  <div>
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <div className="text-amber-400 text-[10px] mb-0.5">{'⭐'.repeat(hotel.categoria || 4)}</div>
-                        
-                        {/* NOME CLICÁVEL COM ENVIO DE DADOS REAIS */}
-                        <h3 
-                          onClick={() => navigate('/hotel-details', { state: { hotel, checkInDate, checkOutDate, rooms } })} 
-                          className="font-bold text-blue-600 text-base leading-tight hover:underline transition cursor-pointer"
-                        >
-                          {hotel.nome}
-                        </h3>
-
-                        <p className="text-[11px] text-gray-500 font-medium mt-1 hover:underline cursor-pointer">{hotel.endereco}</p>
-                        <p className="text-[11px] text-gray-400">{hotel.distancia}</p>
-                      </div>
-                      <div className="bg-green-600 text-white font-black text-sm px-2.5 py-1 rounded shadow-sm">8,2</div>
+                  <div 
+                    onClick={() => setActiveGalleryHotel(hotel)} 
+                    className="w-full xl:w-[220px] h-48 xl:h-auto bg-gray-200 relative shrink-0 cursor-pointer group overflow-hidden"
+                  >
+                    <div 
+                      className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
+                      style={{ backgroundImage: `url('${cardBg}')` }}
+                    ></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-3">
+                      <span className="text-white text-[10px] font-bold bg-black/50 px-2 py-1 rounded-md backdrop-blur-sm flex items-center gap-1.5 shadow-sm border border-white/20">📷 Ver {hotel.imagensReais?.length || 0} fotos</span>
                     </div>
+                  </div>
 
-                    <div className="pt-3 flex flex-col gap-2.5">
-                      {hotel.ofertas?.filter(oferta => {
-                        const mealMatch = meals.length === 0 || meals.includes(oferta.codigoRegime);
-                        const cancelMatch = !freeCancellation || oferta.freeCancellation;
-                        return mealMatch && cancelMatch;
-                      }).map((oferta, idx) => (
-                        <div key={idx} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-2 rounded-lg border-t border-gray-100 transition">
-                          <div className="mb-2 sm:mb-0">
-                            <p className="font-medium text-gray-700 text-xs">{oferta.tipoQuarto}</p>
-                            <p className="text-[10px] text-gray-500 mt-0.5">Para {rooms.reduce((acc, r) => acc + r.adults, 0)} adultos</p>
-                          </div>
-                          <div className="flex flex-col sm:items-center gap-1 sm:px-4">
-                            <p className="text-[10px] text-green-700 font-medium flex items-center gap-1 uppercase"><span>🍽️</span> {oferta.nomeRegime}</p>
-                            {oferta.freeCancellation && <p className="text-[10px] text-green-700 font-medium flex items-center gap-1"><span>↩️</span> Cancelamento gratuito</p>}
-                          </div>
-                          <div className="text-left sm:text-right flex flex-col sm:items-end w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0">
-                            <span className="text-base font-medium text-gray-900">USD {oferta.precoVenda.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
-                            <span className="text-[9px] text-gray-500 mb-1">para {rooms.length} quartos para {rooms.reduce((acc, r) => acc + r.adults + r.childrenAges.length, 0)} hóspedes</span>
-                            <button 
-                              onClick={() => handleSelectOffer(oferta, hotel)}
-                              className="w-full sm:w-auto bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-bold text-[11px] px-4 py-1.5 rounded shadow-sm transition"
-                            >Mostrar</button>
-                          </div>
+                  <div className="flex-1 p-4 flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <div className="text-amber-400 text-[10px] mb-0.5">{'⭐'.repeat(hotel.categoria || 4)}</div>
+                          <h3 className="font-bold text-gray-900 text-base leading-tight">{hotel.nome}</h3>
+                          <p className="text-[11px] text-gray-500 font-medium mt-1">{hotel.endereco}</p>
+                          <p className="text-[11px] text-gray-400">{hotel.distancia}</p>
                         </div>
-                      ))}
+                        <div className="bg-green-600 text-white font-black text-sm px-2.5 py-1 rounded shadow-sm">8,2</div>
+                      </div>
+
+                      <div className="pt-3 flex flex-col gap-2.5">
+                        {hotel.ofertas?.filter(oferta => {
+                          const mealMatch = meals.length === 0 || meals.includes(oferta.codigoRegime);
+                          const cancelMatch = !freeCancellation || oferta.freeCancellation;
+                          return mealMatch && cancelMatch;
+                        }).map((oferta, idx) => (
+                          <div key={idx} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-2 rounded-lg border-t border-gray-100 transition">
+                            <div className="mb-2 sm:mb-0">
+                              <p className="font-medium text-gray-700 text-xs">{oferta.tipoQuarto}</p>
+                              <p className="text-[10px] text-gray-500 mt-0.5">Para {rooms.reduce((acc, r) => acc + r.adults, 0)} adultos</p>
+                            </div>
+                            <div className="flex flex-col sm:items-center gap-1 sm:px-4">
+                              <p className="text-[10px] text-green-700 font-medium flex items-center gap-1 uppercase"><span>🍽️</span> {oferta.nomeRegime}</p>
+                              {oferta.freeCancellation && <p className="text-[10px] text-green-700 font-medium flex items-center gap-1"><span>↩️</span> Cancelamento gratuito</p>}
+                            </div>
+                            <div className="text-left sm:text-right flex flex-col sm:items-end w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0">
+                              <span className="text-base font-medium text-gray-900">USD {oferta.precoVenda.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+                              
+                              <button 
+                                onClick={() => navigate('/hotel-details', { state: { hotel, checkInDate, checkOutDate, rooms, residency } })}
+                                className="w-full sm:w-auto bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-bold text-[11px] px-4 py-1.5 rounded shadow-sm transition mt-1"
+                              >Mostrar</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          {/* COLUNA DIREITA: MAPA OPENSTREETMAP (COM PINS DE PREÇO E HOVER DE IMAGEM) */}
           <div className="lg:col-span-4 sticky top-4 h-[calc(100vh-40px)] bg-gray-100 rounded-xl border border-gray-300 overflow-hidden shadow-inner hidden lg:flex flex-col">
             
             <div className="bg-white p-3 border-b border-gray-200 flex justify-between items-center z-10 shadow-sm relative">
@@ -1050,9 +1039,49 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* ======================================================= */}
-      {/* MODAL DE CHECKOUT B2B (USANDO PORTAL PARA FUGIR DO MENU) */}
-      {/* ======================================================= */}
+      {activeGalleryHotel && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl p-6 rounded-2xl relative shadow-2xl">
+            <button onClick={() => setActiveGalleryHotel(null)} className="absolute top-4 right-4 text-xl font-bold text-gray-500 hover:text-black">✕</button>
+            <h3 className="font-black text-lg mb-4 text-gray-900">Galeria Oficial: {activeGalleryHotel.nome}</h3>
+            
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-[70vh] overflow-y-auto pr-1">
+              {activeGalleryHotel.imagensReais && activeGalleryHotel.imagensReais.length > 0 ? (
+                activeGalleryHotel.imagensReais.map((imgUrl, i) => (
+                  <img 
+                    key={i} 
+                    src={typeof imgUrl === 'string' ? imgUrl.replace('{size}', '500x500') : imgUrl} 
+                    className="rounded-lg h-40 w-full object-cover shadow-sm border border-gray-100" 
+                    alt={`Hotel API ${i}`} 
+                  />
+                ))
+              ) : (
+                <div className="col-span-full py-12 text-center text-gray-500 text-xs font-medium bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                  Nenhuma imagem estática cadastrada no banco de dados para este hotel.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-100 flex gap-3">
+              <button onClick={() => setActiveGalleryHotel(null)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 rounded-xl font-bold text-sm transition">
+                Fechar
+              </button>
+              <button 
+                onClick={() => { 
+                  const h = activeGalleryHotel;
+                  setActiveGalleryHotel(null); 
+                  navigate('/hotel-details', { state: { hotel: h, checkInDate, checkOutDate, rooms, residency } }); 
+                }} 
+                className="flex-1 bg-[#ffc107] hover:bg-yellow-500 text-gray-900 py-3 rounded-xl font-black text-sm transition shadow-md"
+              >
+                Ver Página Completa do Hotel
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {bookingStep !== 'idle' && typeof document !== 'undefined' && createPortal(
         <div 
           className="fixed inset-0 z-[9999999] bg-black/80 backdrop-blur-sm overflow-y-auto flex items-start justify-center pt-10 sm:pt-16 pb-10 px-4" 
@@ -1061,7 +1090,6 @@ useEffect(() => {
           
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full flex flex-col relative overflow-hidden my-auto border border-gray-200">
             
-            {/* CABEÇALHO DO MODAL */}
             <div className="bg-gray-900 p-5 flex justify-between items-center text-white shrink-0">
               <h3 className="font-black text-sm uppercase tracking-wide">Finalizar Reserva B2B</h3>
               {bookingStep !== 'booking' && (
@@ -1069,7 +1097,6 @@ useEffect(() => {
               )}
             </div>
 
-            {/* CORPO DO MODAL */}
             <div className="p-6 sm:p-7">
               {bookingStep === 'prebooking' && (
                 <div className="text-center py-6">
