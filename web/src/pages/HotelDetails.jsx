@@ -336,7 +336,7 @@ export default function HotelDetails() {
                 <span className="text-sm font-bold text-gray-900">Avaliação RateHawk</span>
                 <span className="bg-[#84cc16] text-white font-black px-2.5 py-1 rounded text-sm">8,2</span>
               </div>
-              <span className="text-xs text-gray-500 uppercase">A partir de USD {menorPreco.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+              <span className="text-xs text-gray-500 uppercase">A partir de BRL {menorPreco.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
             </div>
           </div>
 
@@ -393,10 +393,13 @@ export default function HotelDetails() {
                 <option value="todas">Camas: todas as opções</option>
                 <option value="casal">Cama de casal</option>
               </select>
-              <select value={filterRefeicoes} onChange={(e) => setFilterRefeicoes(e.target.value)} className="border border-gray-300 rounded p-2 text-xs outline-none">
+              <select value={filterRefeicoes} onChange={(e) => setFilterRefeicoes(e.target.value)} className="border border-gray-300 rounded p-2 text-xs outline-none cursor-pointer">
                 <option value="todas">Refeições: todas as opções</option>
                 <option value="RO">Sem refeições</option>
                 <option value="BB">Café da manhã</option>
+                <option value="HB">Café da manhã + almoço ou jantar</option>
+                <option value="FB">Café da manhã, almoço e jantar</option>
+                <option value="AI">All inclusive</option>
               </select>
               <select value={filterCancelamento} onChange={(e) => setFilterCancelamento(e.target.value)} className="border border-gray-300 rounded p-2 text-xs outline-none">
                 <option value="todas">Cancelamento: todas as opções</option>
@@ -454,7 +457,7 @@ export default function HotelDetails() {
                 </div>
 
                 <div className="col-span-1 md:col-span-2">
-                  <span className="text-sm font-black text-gray-900 block">USD {oferta.precoVenda.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+                  <span className="text-sm font-black text-gray-900 block">BRL {oferta.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                   <span className="text-[9px] text-gray-500">Sem sobretaxa</span>
                 </div>
 
@@ -540,7 +543,7 @@ export default function HotelDetails() {
               <div className="mt-auto pt-4 border-t border-gray-200">
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Preço Total Líquido</p>
                 <p className="text-2xl font-black text-gray-900 mb-1">
-                  USD {activeRoomDetail.oferta.precoVenda.toLocaleString('en-US', {minimumFractionDigits: 2})}
+                  BRL{activeRoomDetail.oferta.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
                 </p>
                 <p className="text-[10px] text-gray-500 mb-6">Para {noites} diária(s), {totalGuests} hóspede(s)</p>
                 
@@ -589,7 +592,7 @@ export default function HotelDetails() {
                     <p className="text-[10px] text-orange-600 font-black uppercase tracking-wider mb-1">Resumo do Hotel</p>
                     <p className="font-black text-gray-900 text-base leading-tight">{selectedOffer.hotelNome}</p>
                     <p className="text-xs font-medium text-gray-700 mt-1">{selectedOffer.tipoQuarto} - {selectedOffer.codigoRegime}</p>
-                    <p className="text-xl font-black text-green-700 mt-2">USD {selectedOffer.precoVenda.toLocaleString('en-US', {minimumFractionDigits: 2})}</p>
+                    <p className="text-xl font-black text-green-700 mt-2">BRL {selectedOffer.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
                   </div>
 
                   <p className="text-xs font-black text-gray-900 mb-3 uppercase tracking-wide border-b border-gray-100 pb-2">Dados do Hóspede Principal</p>

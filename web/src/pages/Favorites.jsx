@@ -1,12 +1,13 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Heart, ShoppingCart, Trash2, ArrowLeft } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Heart, ShoppingCart, Trash2, ArrowLeft, Building2 } from 'lucide-react';
 import useCartStore from '../store/useCartStore';
 import { urlFor } from '../lib/sanity';
 import { formatCurrency } from '../lib/utils';
 
 export default function Favorites() {
   const { favorites, toggleFavorite, addItem } = useCartStore();
+  const navigate = useNavigate();
 
   if (favorites.length === 0) {
     return (
@@ -36,62 +37,99 @@ export default function Favorites() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {favorites.map((product) => (
-          <div key={product._id} className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100 group relative hover:shadow-xl transition-all">
-            {/* Botão Remover */}
-            <button 
-              onClick={() => toggleFavorite(product)}
-              className="absolute top-4 right-4 p-2.5 bg-red-50 text-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all z-10"
-              title="Remover dos favoritos"
-            >
-              <Trash2 size={18} />
-            </button>
+        {favorites.map((item) => {
+          const isHotel = item.type === 'hotel';
 
-            <Link to={`/product/${product.slug?.current}`} className="block">
-              <div className="w-full h-48 mb-6 bg-slate-50 rounded-2xl p-4 flex items-center justify-center relative overflow-hidden">
-                 {product.image || product.images?.[0] ? (
-                    <img 
-                        src={product.image ? product.image : urlFor(product.images[0]).url()} 
-                        alt={product.name} 
-                        className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500"
-                    />
-                 ) : (
-                    <div className="text-slate-300 font-bold uppercase text-[10px]">Sem Imagem</div>
-                 )}
+          // Resolve a imagem de forma segura dependendo se é Hotel ou Produto
+          let resolvedImageUrl = null;
+          if (isHotel) {
+            resolvedImageUrl = item.image;
+          } else {
+            resolvedImageUrl = item.image ? item.image : (item.images?.[0] ? urlFor(item.images[0]).url() : null);
+          }
+
+          return (
+            <div key={item._id} className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100 group relative hover:shadow-xl transition-all flex flex-col">
+              
+              <button 
+                onClick={() => toggleFavorite(item)}
+                className="absolute top-4 right-4 p-2.5 bg-red-50 text-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all z-10"
+                title="Remover dos favoritos"
+              >
+                <Trash2 size={18} />
+              </button>
+
+              <div 
+                onClick={() => {
+                  if (isHotel) {
+                    navigate('/hotel-details', {
+                      state: {
+                        hotel: item.originalHotelData,
+                        checkInDate: item.checkInDate,
+                        checkOutDate: item.checkOutDate,
+                        rooms: item.rooms,
+                        residency: item.residency
+                      }
+                    });
+                  } else {
+                    navigate(`/product/${item.slug?.current}`);
+                  }
+                }} 
+                className="block cursor-pointer flex-1"
+              >
+                <div className="w-full h-48 mb-6 bg-slate-50 rounded-2xl p-4 flex items-center justify-center relative overflow-hidden">
+                   
+                   {isHotel && (
+                     <div className="absolute top-3 left-3 bg-blue-600 text-white text-[10px] font-black uppercase px-2 py-1 rounded-md z-10 flex items-center gap-1 shadow-sm">
+                       <Building2 size={12}/> Hotel
+                     </div>
+                   )}
+                   
+                   {resolvedImageUrl ? (
+                      <img 
+                          src={resolvedImageUrl} 
+                          alt={item.name || item.title} 
+                          className={`w-full h-full object-${isHotel ? 'cover' : 'contain'} group-hover:scale-110 transition-transform duration-500 rounded-xl`}
+                      />
+                   ) : (
+                      <div className="text-slate-300 font-bold uppercase text-[10px]">Sem Imagem</div>
+                   )}
+                </div>
+                <h3 className="font-bold text-slate-800 mb-1 truncate text-lg leading-tight">{item.name || item.title}</h3>
+                <p className="text-2xl font-black text-crocus-deep mb-6">
+                 {isHotel ? `BRL ${item.price.toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : formatCurrency(item.price)}
+                </p>
               </div>
-              <h3 className="font-bold text-slate-800 mb-1 truncate text-lg leading-tight">{product.name || product.title}</h3>
-              <p className="text-2xl font-black text-crocus-deep mb-6">{formatCurrency(product.price)}</p>
-            </Link>
 
-            <button 
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // RESOLVENDO A IMAGEM QUEBRADA:
-                // Pegamos a URL da imagem da mesma forma que o componente exibe
-                const resolvedImageUrl = product.image 
-                  ? product.image 
-                  : (product.images?.[0] ? urlFor(product.images[0]).url() : null);
-
-                // Criamos uma cópia do produto substituindo a propriedade image pela URL final
-                const productForCart = {
-                  ...product,
-                  image: resolvedImageUrl
-                };
-                
-                // Enviamos o produto já formatado para o carrinho
-                addItem(productForCart);
-                
-                // Remove dos favoritos
-                toggleFavorite(product);
-              }}
-              className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 hover:bg-orange-500 hover:shadow-orange-500/30 transition-all cursor-pointer"
-            >
-              <ShoppingCart size={16} /> Mover para Carrinho
-            </button>
-          </div>
-        ))}
+              {isHotel ? (
+                <button 
+                  onClick={() => {
+                    navigate('/hotel-details', {
+                      state: {
+                        hotel: item.originalHotelData, checkInDate: item.checkInDate, checkOutDate: item.checkOutDate, rooms: item.rooms, residency: item.residency
+                      }
+                    });
+                  }}
+                  className="w-full mt-auto bg-[#ffc107] text-gray-900 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 hover:bg-yellow-500 transition-all cursor-pointer shadow-sm"
+                >
+                  <Building2 size={16} /> Ver Hotel e Reservar
+                </button>
+              ) : (
+                <button 
+                  onClick={(e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    const productForCart = { ...item, image: resolvedImageUrl };
+                    addItem(productForCart);
+                    toggleFavorite(item);
+                  }}
+                  className="w-full mt-auto bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 hover:bg-orange-500 hover:shadow-orange-500/30 transition-all cursor-pointer"
+                >
+                  <ShoppingCart size={16} /> Mover para Carrinho
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
