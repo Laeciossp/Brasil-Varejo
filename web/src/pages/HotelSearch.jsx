@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../firebase'; 
 
@@ -89,6 +90,10 @@ const COUNTRIES = [
   { code: 'zm', name: 'Zâmbia' }, { code: 'zw', name: 'Zimbábue' }, { code: 'xk', name: 'Kosovo' }
 ];
 
+const defaultFirstNames = ["Carlos", "Ana", "Marcos", "Julia", "Roberto", "Fernanda", "Luiz", "Amanda"];
+const defaultLastNames = ["Silva", "Costa", "Oliveira", "Santos", "Pereira", "Lima", "Souza", "Melo"];
+const defaultChildNames = ["Lucas", "Marina", "Pedro", "Sofia", "Enzo", "Valentina"];
+
 export default function HotelSearch() {
   const [destinationQuery, setDestinationQuery] = useState('');
   const [regionId, setRegionId] = useState('');
@@ -109,6 +114,10 @@ export default function HotelSearch() {
   const [lateCheckout, setLateCheckout] = useState('');
   const [freeCancellation, setFreeCancellation] = useState(false);
 
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
+  const [sortBy, setSortBy] = useState('popularidade');
+  const [filterHotelName, setFilterHotelName] = useState('');
+
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [bookingStep, setBookingStep] = useState('idle'); 
   const [bookingError, setBookingError] = useState(null);
@@ -122,9 +131,14 @@ export default function HotelSearch() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Estado para centralizar o mapa
+  const [mapCenterLatLon, setMapCenterLatLon] = useState(null);
 
   const dropdownRef = useRef(null);
   const guestDropdownRef = useRef(null);
+  const checkInRef = useRef(null);
+  const checkOutRef = useRef(null);
 
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const getTomorrowStr = () => {
@@ -139,6 +153,21 @@ export default function HotelSearch() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+useEffect(() => {
+    // Escuta a mensagem enviada de dentro do iframe do mapa
+    const handleIframeMessage = (event) => {
+      if (event.data && event.data.type === 'SELECT_HOTEL') {
+        const hotelSelecionado = results.find(h => String(h.hotelId) === String(event.data.hotelId));
+        if (hotelSelecionado && hotelSelecionado.ofertas && hotelSelecionado.ofertas.length > 0) {
+          handleSelectOffer(hotelSelecionado.ofertas[0], hotelSelecionado);
+        }
+      }
+    };
+    window.addEventListener('message', handleIframeMessage);
+    return () => window.removeEventListener('message', handleIframeMessage);
+  }, [results]);
+
 
   useEffect(() => {
     const fetchAutocompleteFromAPI = async () => {
@@ -186,7 +215,7 @@ export default function HotelSearch() {
   const getTotalGuestsText = () => {
     const totalAdults = rooms.reduce((acc, r) => acc + r.adults, 0);
     const totalChildren = rooms.reduce((acc, r) => acc + r.childrenAges.length, 0);
-    return `${totalAdults + totalChildren} hóspede${totalAdults + totalChildren > 1 ? 's' : ''}`;
+    return `${rooms.length} quarto${rooms.length > 1 ? 's' : ''} para ${totalAdults + totalChildren} hóspede${totalAdults + totalChildren > 1 ? 's' : ''}`;
   };
 
   const toggleStar = (star) => {
@@ -197,18 +226,42 @@ export default function HotelSearch() {
     setMeals(prev => prev.includes(meal) ? prev.filter(m => m !== meal) : [...prev, meal]);
   };
 
+  const formatarDataExibicao = (dataString) => {
+    if(!dataString) return '';
+    const [ano, mes, dia] = dataString.split('-');
+    const meses = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
+    return `${dia} de ${meses[mes - 1]} de ${ano}`;
+  };
+
   const handleSearch = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const targetDest = regionId || destinationQuery;
     if (!targetDest) return setError("Informe ou selecione um destino válido.");
     if (!checkInDate || !checkOutDate) return setError("Preencha as datas de check-in e check-out.");
 
-    setLoading(true); setError(null); setResults([]);
+    setLoading(true); setError(null); setResults([]); setShowGuestDropdown(false); 
+
+    // 1. INTELIGÊNCIA GEOGRÁFICA: Busca as coordenadas reais da cidade digitada!
+    let cityLat = -23.5505; // Padrão de fallback (São Paulo)
+    let cityLng = -46.6333;
+    try {
+      const cityName = destinationQuery.split(',')[0];
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cityName)}`);
+      const geoData = await geoRes.json();
+      if (geoData && geoData.length > 0) {
+        cityLat = parseFloat(geoData[0].lat);
+        cityLng = parseFloat(geoData[0].lon);
+      }
+    } catch (err) {
+      console.error("Erro ao buscar coordenadas da cidade", err);
+    }
+    
+    setMapCenterLatLon(`${cityLat},${cityLng}`);
 
     try {
       if (supplier === 'RATEHAWK') {
-        const hidsToSearch = (targetDest === 'US-LAX' || destinationQuery.toLowerCase().includes('los angeles')) 
-          ? [10004834, 8819557] : [10004834];
+        const hidsToSearch = (targetDest === 'US-LAX' || destinationQuery.toLowerCase().includes('los angeles') || destinationQuery.toLowerCase().includes('conrad')) 
+          ? [10004834, 8819557] : [10004834, 8819557, 9015534, 8663536];
 
         const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-page`; 
         
@@ -241,19 +294,35 @@ export default function HotelSearch() {
         });
 
         if (combinados.length > 0) {
-          const hoteisMapeados = combinados.map(h => ({
-            hotelId: h.id, nome: `Hotel RateHawk Teste (${h.id})`, categoria: 4, 
-            ofertas: h.rates.map(r => ({
-              tipoQuarto: r.room_name || 'Standard', 
-              codigoRegime: r.meal || 'Sem Refeição', 
-              precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0),
-              paymentTypeObj: r.payment_options?.payment_types?.[0],
-              bookHash: r.book_hash
-            }))
-          }));
+          const hoteisMapeados = combinados.map((h) => {
+            // ESPALHAMENTO DE PINS caso o fornecedor não envie a coordenada
+            const latOffset = (Math.random() - 0.5) * 0.015;
+            const lngOffset = (Math.random() - 0.5) * 0.015;
+            const finalLat = h.latitude || (cityLat + latOffset);
+            const finalLng = h.longitude || (cityLng + lngOffset);
+
+            return {
+              hotelId: h.id, 
+              nome: h.name || `Hotel RateHawk Teste (${h.id})`, 
+              categoria: h.star_rating || 4, 
+              endereco: h.address || 'Localização central',
+              distancia: 'A partir do centro',
+              latitude: finalLat,
+              longitude: finalLng,
+              ofertas: h.rates.map(r => ({
+                tipoQuarto: r.room_name || 'Quarto Standard', 
+                codigoRegime: r.meal === 'breakfast' ? 'BB' : r.meal === 'half-board' ? 'HB' : r.meal === 'all-inclusive' ? 'AI' : 'RO',
+                nomeRegime: r.meal_data?.value || 'Sem refeições', 
+                precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0),
+                paymentTypeObj: r.payment_options?.payment_types?.[0],
+                bookHash: r.book_hash,
+                freeCancellation: r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before != null
+              }))
+            };
+          });
           setResults(hoteisMapeados);
         } else {
-          setError(`Nenhum inventário retornado.`);
+          setError(`Nenhuma tarifa disponível para esta combinação no fornecedor. Tente alterar as datas ou destino.`);
         }
       } else {
         const functions = getFunctions(app);
@@ -293,7 +362,7 @@ export default function HotelSearch() {
         return;
       }
 
-      const novoBookHashP = data.data?.hotels?.[0]?.rates?.[0]?.book_hash;
+      const novoBookHashP = data.data?.hotels?.[0]?.rates?.[0]?.book_hash || oferta.bookHash;
       const infoPagamentoAtualizada = data.data?.hotels?.[0]?.rates?.[0]?.payment_options?.payment_types?.[0];
 
       if (!novoBookHashP || !novoBookHashP.startsWith('p-')) {
@@ -325,6 +394,7 @@ export default function HotelSearch() {
     setFinalPartnerOrderId(partnerOrderId);
 
     try {
+      // Restaurado IDÊNTICO ao HotelSearch_4.jsx (backup que funcionou)
       const roomsFormatados = rooms.map(() => {
         return {
           guests: [
@@ -339,7 +409,7 @@ export default function HotelSearch() {
 
       const orderPayload = {
         partner_order_id: partnerOrderId,
-        hash: selectedOffer.bookHash, // Utilizando a chave "hash" correta
+        hash: selectedOffer.bookHash,
         language: "en",
         user: { 
           email: guestEmail, 
@@ -355,7 +425,6 @@ export default function HotelSearch() {
       const formData = await formRes.json();
       
       if (formData.status !== 'ok') {
-        console.error("Erro API Form:", formData);
         throw new Error(`Erro API Form: ${JSON.stringify(formData.error || formData.message || "Desconhecido")}`);
       }
 
@@ -365,6 +434,7 @@ export default function HotelSearch() {
         currency_code: selectedOffer.paymentTypeObj.currency_code
       } : { type: "deposit" };
 
+      // Aqui está o segredo: enviando partner_order_id solto na raiz, como seu Worker exige
       const finishRes = await fetch('https://palastore-flights-api.laeciossp.workers.dev/hotel-booking-finish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ 
@@ -379,7 +449,6 @@ export default function HotelSearch() {
       const finishData = await finishRes.json();
       
       if (finishData.status !== 'ok' && finishData.error !== 'timeout' && finishData.error !== 'unknown') {
-        console.error("Erro API Finish:", finishData);
         throw new Error(`Erro API Finish: ${JSON.stringify(finishData.error || finishData.message || "Desconhecido")}`);
       }
 
@@ -410,7 +479,6 @@ export default function HotelSearch() {
           setBookingError(`Reserva falhou. Motivo: ${data.error}`);
         }
 
-        // Aumentado para 60 tentativas (3 minutos) conforme o padrão do script de homologação
         if (attempts >= 60) {
           clearInterval(interval);
           setBookingStep('error');
@@ -422,23 +490,170 @@ export default function HotelSearch() {
     }, 3000);
   };
 
+  const filteredResults = results.filter(hotel => {
+    if (filterHotelName && !hotel.nome.toLowerCase().includes(filterHotelName.toLowerCase())) return false;
+    if (stars.length > 0 && !stars.includes(hotel.categoria)) return false;
+    const validOffers = hotel.ofertas.filter(oferta => {
+      const mealMatch = meals.length === 0 || meals.includes(oferta.codigoRegime);
+      const cancelMatch = !freeCancellation || oferta.freeCancellation;
+      return mealMatch && cancelMatch;
+    });
+    return validOffers.length > 0;
+  }).sort((a, b) => {
+    if (sortBy === 'preco_crescente') {
+      return a.ofertas[0].precoVenda - b.ofertas[0].precoVenda;
+    }
+    return 0;
+  });
+
+  // ===========================================================================
+  // MÁGICA DO MAPA RATEHAWK (OPENSTREETMAP + LEAFLET VIA IFRAME ISOLADO)
+  // ===========================================================================
+  const buildMapHtml = () => {
+    const centerLat = mapCenterLatLon ? mapCenterLatLon.split(',')[0] : -23.5505;
+    const centerLng = mapCenterLatLon ? mapCenterLatLon.split(',')[1] : -46.6333;
+    
+    const pinsData = filteredResults.filter(h => h.latitude && h.longitude).map(h => ({
+      lat: h.latitude,
+      lng: h.longitude,
+      nome: h.nome.replace(/'/g, "\\'").replace(/"/g, '&quot;'),
+      preco: `USD ${h.ofertas[0]?.precoVenda.toLocaleString('en-US', {minimumFractionDigits: 2})}`,
+      estrelas: '⭐'.repeat(h.categoria || 4),
+      imagem: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80'
+    }));
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+          body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+          #map { height: 100%; width: 100%; }
+
+          .leaflet-popup-tip-container { display: none; }
+          .leaflet-popup-content-wrapper { padding: 0; margin: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+          .leaflet-popup-content { margin: 0; width: 220px !important; }
+
+          .map-card { display: flex; flex-direction: column; background: white; }
+          .map-card-img { width: 100%; height: 130px; object-fit: cover; }
+          .map-card-info { padding: 12px; }
+          .map-card-stars { font-size: 10px; color: #fbbf24; margin-bottom: 4px; letter-spacing: 2px;}
+          .map-card-title { font-size: 14px; font-weight: bold; color: #111; margin: 0 0 6px 0; line-height: 1.2; }
+          .map-card-price { font-size: 16px; font-weight: 900; color: #00a698; margin: 0; }
+
+          .price-pin {
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-weight: 800;
+            font-size: 12px;
+            color: #111;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            text-align: center;
+            white-space: nowrap;
+            position: relative;
+            transition: all 0.2s;
+            cursor: pointer;
+          }
+          .price-pin:hover {
+            background-color: #00a698;
+            color: white;
+            border-color: #00a698;
+            z-index: 9999 !important;
+          }
+          .price-pin::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 5px 5px 0;
+            border-style: solid;
+            border-color: white transparent transparent transparent;
+          }
+          .price-pin:hover::after {
+            border-color: #00a698 transparent transparent transparent;
+          }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script>
+          const center = [${centerLat}, ${centerLng}];
+          const hotels = ${JSON.stringify(pinsData)};
+
+          const map = L.map('map').setView(center, 14);
+
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: 'Colaboradores &copy; OpenStreetMap'
+          }).addTo(map);
+
+          hotels.forEach(hotel => {
+            const customIcon = L.divIcon({
+              className: 'custom-pin',
+              html: '<div class="price-pin">' + hotel.preco + '</div>',
+              iconSize: [80, 28],
+              iconAnchor: [40, 28],
+              popupAnchor: [0, -32] 
+            });
+
+            const popupContent = '<div class="map-card">' +
+              '<img src="' + hotel.imagem + '" class="map-card-img" />' +
+              '<div class="map-card-info">' +
+                '<div class="map-card-stars">' + hotel.estrelas + '</div>' +
+                '<h4 class="map-card-title">' + hotel.nome + '</h4>' +
+                '<p class="map-card-price">' + hotel.preco + '</p>' +
+              '</div>' +
+            '</div>';
+
+            const marker = L.marker([hotel.lat, hotel.lng], { icon: customIcon }).addTo(map);
+            marker.bindPopup(popupContent);
+
+            marker.on('mouseover', function (e) {
+              this.openPopup();
+            });
+          });
+        </script>
+      </body>
+      </html>
+    `;
+  };
+
   return (
-    <div className="w-full bg-orange-500 p-4 md:p-6 font-sans min-h-screen">
-      <div className="max-w-[1200px] mx-auto space-y-3">
-        
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+    <div className="w-full bg-gray-50 font-sans min-h-screen pb-10">
+      
+      {/* HEADER BREADCRUMB */}
+      <div className="w-full bg-white border-b border-gray-200 py-3 px-4 shadow-sm mb-6">
+        <div className="max-w-[1400px] mx-auto">
+          <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
+            <span className="cursor-pointer hover:text-orange-500 transition">Página principal</span>
+            <span>›</span>
+            <span className="font-bold text-gray-900 cursor-pointer">{destinationQuery ? destinationQuery.split(',')[0] : 'Destino'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* BUSCADOR COMPLETO NO TOPO */}
+      <div className="max-w-[1400px] mx-auto px-3 mb-6">
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-visible relative z-40">
           
-          <div className="flex overflow-x-auto bg-gray-50 border-b border-gray-200 scrollbar-hide">
-            <button className="flex items-center gap-2 px-6 py-4 bg-[#333333] text-white text-sm font-bold whitespace-nowrap">
+          <div className="flex overflow-x-auto bg-white border-b border-gray-200 rounded-t-xl">
+            <button className="flex items-center gap-2 px-6 py-4 bg-[#333333] text-white text-sm font-bold whitespace-nowrap rounded-tl-xl">
               <span>🏨</span> Hotéis e apartamentos
             </button>
           </div>
 
-          <div className="p-5 md:p-6 bg-white">
+          <div className="p-5 md:p-6 bg-orange-500 rounded-b-xl">
             <form onSubmit={handleSearch}>
               
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4">
-                <div className="col-span-1 md:col-span-4 relative border border-gray-300 rounded-md bg-white hover:border-gray-400 transition" ref={dropdownRef}>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-4">
+                
+                {/* DESTINO */}
+                <div className="col-span-1 lg:col-span-4 relative bg-white border border-gray-300 rounded-md hover:border-gray-400 transition" ref={dropdownRef}>
                   <label className="block text-[10px] text-gray-400 uppercase pt-1.5 px-3">Destino</label>
                   <div className="flex items-center px-3 pb-1.5">
                     <input 
@@ -469,65 +684,119 @@ export default function HotelSearch() {
                   )}
                 </div>
 
-                <div className="col-span-1 md:col-span-4 flex">
-                  <div className="flex-1 border border-gray-300 rounded-l-md bg-white px-3 hover:border-gray-400 transition flex flex-col justify-center">
-                    <label className="block text-[10px] text-gray-400 uppercase pt-1">Check-in</label>
-                    <input type="date" min={getTodayStr()} value={checkInDate} onChange={(e) => setCheckInDate(e.target.value)} className="text-sm text-gray-900 font-medium outline-none bg-transparent pb-1 cursor-pointer"/>
+                {/* DATAS */}
+                <div className="col-span-1 lg:col-span-4 flex bg-white border border-gray-300 rounded-md hover:border-gray-400 transition relative overflow-hidden">
+                  <div 
+                    className="flex-1 px-3 flex flex-col justify-center relative cursor-pointer group hover:bg-gray-50 transition"
+                    onClick={() => checkInRef.current && checkInRef.current.showPicker()}
+                  >
+                    <label className="block text-[10px] text-gray-400 uppercase pt-1 cursor-pointer">Check-in</label>
+                    <div className="text-sm text-gray-900 font-bold pb-1 truncate cursor-pointer">
+                      {checkInDate ? formatarDataExibicao(checkInDate) : <span className="text-gray-300 font-normal">Adicionar data</span>}
+                    </div>
+                    <input 
+                      type="date" 
+                      ref={checkInRef}
+                      min={getTodayStr()} 
+                      value={checkInDate} 
+                      onChange={(e) => setCheckInDate(e.target.value)} 
+                      className="absolute bottom-0 left-0 w-full h-0 opacity-0 pointer-events-none"
+                    />
                   </div>
-                  <div className="flex-1 border-y border-r border-gray-300 rounded-r-md bg-white px-3 hover:border-gray-400 transition flex flex-col justify-center -ml-[1px]">
-                    <label className="block text-[10px] text-gray-400 uppercase pt-1">Check-out</label>
-                    <input type="date" min={checkInDate || getTomorrowStr()} value={checkOutDate} onChange={(e) => setCheckOutDate(e.target.value)} className="text-sm text-gray-900 font-medium outline-none bg-transparent pb-1 cursor-pointer"/>
+
+                  <div className="w-[1px] bg-gray-300 my-2"></div>
+
+                  <div 
+                    className="flex-1 px-3 flex flex-col justify-center relative cursor-pointer group hover:bg-gray-50 transition"
+                    onClick={() => checkOutRef.current && checkOutRef.current.showPicker()}
+                  >
+                    <label className="block text-[10px] text-gray-400 uppercase pt-1 cursor-pointer">Check-out</label>
+                    <div className="text-sm text-gray-900 font-bold pb-1 truncate cursor-pointer">
+                      {checkOutDate ? formatarDataExibicao(checkOutDate) : <span className="text-gray-300 font-normal">Adicionar data</span>}
+                    </div>
+                    <input 
+                      type="date" 
+                      ref={checkOutRef}
+                      min={checkInDate || getTomorrowStr()} 
+                      value={checkOutDate} 
+                      onChange={(e) => setCheckOutDate(e.target.value)} 
+                      className="absolute bottom-0 left-0 w-full h-0 opacity-0 pointer-events-none"
+                    />
                   </div>
                 </div>
 
-                <div className="col-span-1 md:col-span-2 relative" ref={guestDropdownRef}>
-                  <div onClick={() => setShowGuestDropdown(!showGuestDropdown)} className="border border-gray-300 rounded-md bg-white px-3 py-1.5 h-full cursor-pointer hover:border-gray-400 transition flex flex-col justify-center">
-                    <span className="block text-[10px] text-gray-400 uppercase">{rooms.length} quarto{rooms.length > 1 ? 's' : ''} para</span>
-                    <div className="text-sm text-gray-900 font-medium flex justify-between items-center">
-                      <span>{getTotalGuestsText()}</span>
-                      <span className="text-gray-400 text-xs">▼</span>
-                    </div>
+                {/* HÓSPEDES & QUARTOS */}
+                <div className="col-span-1 lg:col-span-2 relative bg-white border border-gray-300 rounded-md px-3 py-1.5 cursor-pointer hover:border-gray-400 transition flex flex-col justify-center" ref={guestDropdownRef} onClick={() => setShowGuestDropdown(!showGuestDropdown)}>
+                  <span className="block text-[10px] text-gray-400 uppercase">{rooms.length} quarto{rooms.length > 1 ? 's' : ''} para</span>
+                  <div className="text-sm text-gray-900 font-medium flex justify-between items-center">
+                    <span>{rooms.reduce((acc, r) => acc + r.adults + r.childrenAges.length, 0)} hóspedes</span>
+                    <span className="text-gray-400 text-xs">▼</span>
                   </div>
 
                   {showGuestDropdown && (
-                    <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-gray-200 rounded-md shadow-2xl p-5 z-50">
-                      <div className="max-h-72 overflow-y-auto pr-2 scrollbar-thin">
+                    <div className="absolute right-0 top-full mt-2 w-[340px] md:w-[380px] bg-white border border-gray-200 rounded-lg shadow-2xl p-5 z-[100]" onClick={(e) => e.stopPropagation()}>
+                      <div className="max-h-[360px] overflow-y-auto pr-2 scrollbar-thin">
                         {rooms.map((room, roomIndex) => (
-                          <div key={roomIndex} className="mb-4 pb-4 border-b border-gray-100 last:border-0 last:pb-0 last:mb-0">
+                          <div key={roomIndex} className="mb-5 pb-5 border-b border-gray-100 last:border-0 last:pb-0 last:mb-0">
+                            
                             <div className="flex justify-between items-center mb-3">
-                              <h4 className="font-bold text-gray-800">Quarto {roomIndex + 1}</h4>
-                              {rooms.length > 1 && <button type="button" onClick={() => removeRoom(roomIndex)} className="text-xs text-gray-400 hover:text-red-500 font-bold">✕</button>}
+                              <h4 className="font-bold text-gray-900 text-base">Quarto {roomIndex + 1}</h4>
+                              {roomIndex > 0 && (
+                                <button type="button" onClick={() => removeRoom(roomIndex)} className="text-sm text-red-500 hover:underline">Remover</button>
+                              )}
                             </div>
-                            <div className="flex justify-between items-center mb-3">
-                              <span className="text-sm text-gray-600">Adultos</span>
-                              <div className="flex items-center gap-3 border border-gray-300 rounded px-2 py-1">
-                                <button type="button" onClick={() => updateAdults(roomIndex, -1)} disabled={room.adults <= 1} className="w-5 h-5 flex items-center justify-center text-gray-500 disabled:opacity-30 hover:bg-gray-100">−</button>
-                                <span className="text-sm font-medium w-4 text-center">{room.adults}</span>
-                                <button type="button" onClick={() => updateAdults(roomIndex, 1)} disabled={room.adults >= 6} className="w-5 h-5 flex items-center justify-center text-gray-500 disabled:opacity-30 hover:bg-gray-100">+</button>
-                              </div>
-                            </div>
-                            {room.childrenAges.map((age, childIndex) => (
-                              <div key={childIndex} className="flex justify-between items-center mb-2">
-                                <span className="text-sm text-gray-600">Criança {childIndex + 1}</span>
-                                <div className="flex items-center gap-2">
-                                  <select value={age} onChange={(e) => updateChildAge(roomIndex, childIndex, e.target.value)} className="text-sm border border-gray-300 rounded px-2 py-1 outline-none bg-white">
-                                    {[...Array(18).keys()].map(n => <option key={n} value={n}>{n} ano{n !== 1 ? 's' : ''}</option>)}
-                                  </select>
-                                  <button type="button" onClick={() => removeChild(roomIndex, childIndex)} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
+                            
+                            <div className="flex gap-4">
+                              <div className="flex flex-col items-start w-1/3 shrink-0">
+                                <span className="text-xs text-gray-500 mb-1.5">Adultos</span>
+                                <div className="flex items-center border border-gray-300 rounded overflow-hidden h-9">
+                                  <button type="button" onClick={() => updateAdults(roomIndex, -1)} disabled={room.adults <= 1} className="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 transition">−</button>
+                                  <span className="w-6 text-center text-sm font-medium text-gray-800">{room.adults}</span>
+                                  <button type="button" onClick={() => updateAdults(roomIndex, 1)} disabled={room.adults >= 6} className="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 transition">+</button>
                                 </div>
                               </div>
-                            ))}
-                            {room.childrenAges.length < 4 && (
-                              <button type="button" onClick={() => addChild(roomIndex)} className="text-sm text-blue-600 hover:text-blue-800 font-medium py-1">+ Adicionar uma criança</button>
-                            )}
+
+                              <div className="flex flex-col items-start flex-1">
+                                <span className="text-xs text-gray-500 mb-1.5">Crianças</span>
+                                <div className="flex flex-wrap gap-2">
+                                  {room.childrenAges.map((age, childIndex) => (
+                                    <div key={childIndex} className="flex items-center border border-gray-300 rounded h-9 bg-white overflow-hidden shadow-sm">
+                                      <select 
+                                        value={age} 
+                                        onChange={(e) => updateChildAge(roomIndex, childIndex, e.target.value)} 
+                                        className="pl-2 pr-1 h-full text-sm text-gray-800 outline-none bg-transparent cursor-pointer appearance-none"
+                                      >
+                                        {[...Array(18).keys()].map(n => (
+                                          <option key={n} value={n}>{n === 0 ? '0 ano' : `${n} ano${n !== 1 ? 's' : ''}`}</option>
+                                        ))}
+                                      </select>
+                                      <button type="button" onClick={() => removeChild(roomIndex, childIndex)} className="px-2 h-full flex items-center justify-center border-l border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-red-500 transition font-bold">✕</button>
+                                    </div>
+                                  ))}
+                                  {room.childrenAges.length < 4 && (
+                                    <button 
+                                      type="button" 
+                                      onClick={() => addChild(roomIndex)} 
+                                      className={`border border-gray-300 rounded h-9 text-gray-700 hover:bg-gray-50 transition text-sm font-medium ${room.childrenAges.length === 0 ? 'px-4' : 'w-9 flex items-center justify-center'}`}
+                                    >
+                                      {room.childrenAges.length === 0 ? 'Adicionar uma criança' : '+'}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                            </div>
                           </div>
                         ))}
                       </div>
-                      <div className="pt-3 border-t border-gray-200 mt-2">
+
+                      <div className="pt-4 mt-2 border-t border-gray-100 flex flex-col gap-4">
                         {rooms.length < 9 && (
-                          <button type="button" onClick={addRoom} className="text-sm text-blue-600 hover:text-blue-800 font-medium mb-4 block">+ Adicionar um quarto</button>
+                          <button type="button" onClick={addRoom} className="text-sm text-blue-600 hover:text-blue-800 font-medium text-left">
+                            Adicionar um quarto
+                          </button>
                         )}
-                        <button type="button" onClick={() => setShowGuestDropdown(false)} className="w-full bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-medium py-2 rounded transition">
+                        <button type="button" onClick={() => setShowGuestDropdown(false)} className="w-full bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-bold py-2.5 rounded shadow-sm transition text-sm">
                           Concluído
                         </button>
                       </div>
@@ -535,196 +804,278 @@ export default function HotelSearch() {
                   )}
                 </div>
 
-                <div className="col-span-1 md:col-span-2">
-                  <button type="submit" disabled={loading} className="w-full h-full bg-[#00a698] hover:bg-[#008f82] text-white font-bold rounded-md shadow-sm text-sm transition">
-                    {loading ? '...' : 'Buscar'}
+                <div className="col-span-1 lg:col-span-2">
+                  <button type="submit" disabled={loading} className="w-full h-full bg-[#333333] hover:bg-black text-white font-medium rounded-md shadow-sm text-sm transition">
+                    {loading ? 'Buscando...' : 'Buscar'}
                   </button>
                 </div>
               </div>
 
-              <div className="mt-6 mb-2">
-                <span className="text-sm text-gray-500 font-medium">Parâmetros adicionais</span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-3">
-                <div className="col-span-1 md:col-span-3 border border-gray-300 rounded-md bg-white px-3 flex flex-col justify-center h-11 relative">
-                  <label className="block text-[9px] text-gray-400 uppercase pt-1">Nacionalidade dos hóspedes</label>
-                  <div className="flex items-center justify-between pb-1">
-                    <select 
-                      value={residency} 
-                      onChange={(e) => setResidency(e.target.value)} 
-                      className="text-sm text-gray-900 font-medium outline-none bg-transparent w-full cursor-pointer"
-                    >
-                      {COUNTRIES.map(country => (
-                        <option key={country.code} value={country.code}>
-                          {country.name}
-                        </option>
-                      ))}
+              {/* PARÂMETROS ADICIONAIS DO BUSCADOR */}
+              <div className="mt-2">
+                <span className="text-xs text-white font-medium mb-2 block">Parâmetros adicionais</span>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
+                  
+                  <div className="col-span-1 lg:col-span-2 border border-gray-300 rounded-md bg-white px-2 flex flex-col justify-center h-[38px] hover:border-gray-400 transition">
+                    <label className="block text-[8px] text-gray-400 uppercase font-bold">Nacionalidade</label>
+                    <select value={residency} onChange={(e) => setResidency(e.target.value)} className="text-[11px] text-gray-900 font-bold outline-none bg-transparent w-full cursor-pointer">
+                      {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
                     </select>
                   </div>
-                </div>
 
-                <div className="col-span-1 md:col-span-9 flex border border-gray-300 rounded-md divide-x divide-gray-300 overflow-hidden text-sm text-gray-700 bg-white h-11">
-                  <button type="button" onClick={() => toggleStar(0)} className={`flex-1 px-2 py-1 transition ${stars.length === 0 ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>Sem estrelas</button>
-                  <button type="button" onClick={() => toggleStar(2)} className={`flex-1 px-2 py-1 transition ${stars.includes(2) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>2 estrelas</button>
-                  <button type="button" onClick={() => toggleStar(3)} className={`flex-1 px-2 py-1 transition ${stars.includes(3) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>3 estrelas</button>
-                  <button type="button" onClick={() => toggleStar(4)} className={`flex-1 px-2 py-1 transition ${stars.includes(4) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>4 estrelas</button>
-                  <button type="button" onClick={() => toggleStar(5)} className={`flex-1 px-2 py-1 transition ${stars.includes(5) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>5 estrelas</button>
+                  <div className="col-span-1 lg:col-span-3 flex border border-gray-300 rounded-md divide-x divide-gray-300 overflow-hidden text-[11px] font-medium text-gray-700 bg-white h-[38px]">
+                    <button type="button" onClick={() => toggleStar(0)} className={`flex-1 px-1 transition ${stars.length === 0 ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>Sem estrelas</button>
+                    <button type="button" onClick={() => toggleStar(2)} className={`flex-1 px-1 transition ${stars.includes(2) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>2⭐</button>
+                    <button type="button" onClick={() => toggleStar(3)} className={`flex-1 px-1 transition ${stars.includes(3) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>3⭐</button>
+                    <button type="button" onClick={() => toggleStar(4)} className={`flex-1 px-1 transition ${stars.includes(4) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>4⭐</button>
+                    <button type="button" onClick={() => toggleStar(5)} className={`flex-1 px-1 transition ${stars.includes(5) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>5⭐</button>
+                  </div>
+
+                  <div className="col-span-1 lg:col-span-2 flex border border-gray-300 rounded-md divide-x divide-gray-300 overflow-hidden text-[11px] font-medium text-gray-700 bg-white h-[38px]">
+                    <button type="button" title="Somente quarto" onClick={() => toggleMeal('RO')} className={`flex-1 transition ${meals.includes('RO') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>RO</button>
+                    <button type="button" title="Café da manhã" onClick={() => toggleMeal('BB')} className={`flex-1 transition ${meals.includes('BB') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>BB</button>
+                    <button type="button" title="Meia pensão" onClick={() => toggleMeal('HB')} className={`flex-1 transition ${meals.includes('HB') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>HB</button>
+                    <button type="button" title="Pensão completa" onClick={() => toggleMeal('FB')} className={`flex-1 transition ${meals.includes('FB') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>FB</button>
+                    <button type="button" title="Tudo incluído" onClick={() => toggleMeal('AI')} className={`flex-1 transition ${meals.includes('AI') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>AI</button>
+                  </div>
+
+                  <div className="col-span-1 lg:col-span-5 flex items-center gap-2">
+                    
+                    <div className="flex border border-gray-300 rounded-md px-2 hover:border-gray-400 transition-all bg-white h-[38px] flex-1 min-w-[110px]">
+                      <div className="flex flex-col w-full justify-center">
+                        <label className="text-[8px] text-gray-400 uppercase font-bold">Check-in antec.</label>
+                        <select value={earlyCheckin} onChange={(e) => setEarlyCheckin(e.target.value)} className="text-[11px] font-medium text-gray-700 outline-none bg-transparent cursor-pointer w-full">
+                          <option value="">Selecionar</option>
+                          {['01:00','02:00','03:00','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00'].map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex border border-gray-300 rounded-md px-2 hover:border-gray-400 transition-all bg-white h-[38px] flex-1 min-w-[110px]">
+                      <div className="flex flex-col w-full justify-center">
+                        <label className="text-[8px] text-gray-400 uppercase font-bold">Check-out tard.</label>
+                        <select value={lateCheckout} onChange={(e) => setLateCheckout(e.target.value)} className="text-[11px] font-medium text-gray-700 outline-none bg-transparent cursor-pointer w-full">
+                          <option value="">Selecionar</option>
+                          {['13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00'].map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-1.5 cursor-pointer h-[38px] px-1 whitespace-nowrap">
+                      <input type="checkbox" checked={freeCancellation} onChange={(e) => setFreeCancellation(e.target.checked)} className="w-3.5 h-3.5 accent-[#ffc107] cursor-pointer" />
+                      <span className="text-[11px] font-medium text-white shadow-sm drop-shadow-md">Cancel. Grátis</span>
+                    </label>
+                  </div>
+
                 </div>
               </div>
 
-              <div className="flex flex-col xl:flex-row gap-3 items-start xl:items-center">
-                <div className="flex border border-gray-300 rounded-md divide-x divide-gray-300 overflow-hidden text-sm font-medium text-gray-700 bg-white h-11">
-                  <button type="button" title="Somente quarto" onClick={() => toggleMeal('RO')} className={`px-5 relative group transition ${meals.includes('RO') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>
-                    RO
-                    <span className="invisible group-hover:visible opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap transition-opacity">Somente quarto</span>
-                  </button>
-                  <button type="button" title="Café da manhã" onClick={() => toggleMeal('BB')} className={`px-5 relative group transition ${meals.includes('BB') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>
-                    BB
-                    <span className="invisible group-hover:visible opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap transition-opacity">Café da manhã</span>
-                  </button>
-                  <button type="button" title="Meia pensão" onClick={() => toggleMeal('HB')} className={`px-5 relative group transition ${meals.includes('HB') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>
-                    HB
-                    <span className="invisible group-hover:visible opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap transition-opacity">Meia pensão</span>
-                  </button>
-                  <button type="button" title="Pensão completa" onClick={() => toggleMeal('FB')} className={`px-5 relative group transition ${meals.includes('FB') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>
-                    FB
-                    <span className="invisible group-hover:visible opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap transition-opacity">Pensão completa</span>
-                  </button>
-                  <button type="button" title="Tudo incluído" onClick={() => toggleMeal('AI')} className={`px-5 relative group transition ${meals.includes('AI') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>
-                    AI
-                    <span className="invisible group-hover:visible opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap transition-opacity">Tudo incluído</span>
-                  </button>
-                </div>
-
-                <div className="flex border border-gray-300 rounded-md px-3 min-w-[200px] cursor-pointer hover:border-gray-400 transition-all items-center justify-between bg-white h-11">
-                  <div className="flex flex-col w-full">
-                    <label className="text-[9px] text-gray-400 uppercase pt-1">Check-in antecipado</label>
-                    <select value={earlyCheckin} onChange={(e) => setEarlyCheckin(e.target.value)} className="text-sm text-gray-500 outline-none bg-transparent cursor-pointer pb-1 w-full">
-                      <option value="">Selecionar horário</option>
-                      <option value="01:00">01:00</option>
-                      <option value="02:00">02:00</option>
-                      <option value="03:00">03:00</option>
-                      <option value="04:00">04:00</option>
-                      <option value="05:00">05:00</option>
-                      <option value="06:00">06:00</option>
-                      <option value="07:00">07:00</option>
-                      <option value="08:00">08:00</option>
-                      <option value="09:00">09:00</option>
-                      <option value="10:00">10:00</option>
-                      <option value="11:00">11:00</option>
-                      <option value="12:00">12:00</option>
-                      <option value="13:00">13:00</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex border border-gray-300 rounded-md px-3 min-w-[200px] cursor-pointer hover:border-gray-400 transition-all items-center justify-between bg-white h-11">
-                  <div className="flex flex-col w-full">
-                    <label className="text-[9px] text-gray-400 uppercase pt-1">Check-out tardio</label>
-                    <select value={lateCheckout} onChange={(e) => setLateCheckout(e.target.value)} className="text-sm text-gray-500 outline-none bg-transparent cursor-pointer pb-1 w-full">
-                      <option value="">Selecionar horário</option>
-                      <option value="13:00">13:00</option>
-                      <option value="14:00">14:00</option>
-                      <option value="15:00">15:00</option>
-                      <option value="16:00">16:00</option>
-                      <option value="17:00">17:00</option>
-                      <option value="18:00">18:00</option>
-                      <option value="19:00">19:00</option>
-                      <option value="20:00">20:00</option>
-                      <option value="21:00">21:00</option>
-                      <option value="22:00">22:00</option>
-                      <option value="23:00">23:00</option>
-                    </select>
-                  </div>
-                </div>
-
-                <label className="flex items-center gap-2 cursor-pointer ml-1 xl:ml-4 group h-11">
-                  <input 
-                    type="checkbox" 
-                    checked={freeCancellation} 
-                    onChange={(e) => setFreeCancellation(e.target.checked)}
-                    className="w-4 h-4 accent-orange-500 cursor-pointer" 
-                  />
-                  <span className="text-sm font-medium text-gray-700">Cancelamento gratuito</span>
-                </label>
-
-              </div>
             </form>
           </div>
         </div>
+      </div>
 
-        {error && <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm mt-6 font-medium text-sm">{error}</div>}
+      {/* ======================================================= */}
+      {/* 3. LAYOUT DE 3 COLUNAS (FILTROS | LISTA | MAPA) */}
+      {/* ======================================================= */}
+      <div className="max-w-[1400px] mx-auto px-3 mt-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+          
+          <div className="lg:col-span-3 bg-white rounded-xl shadow-sm p-5 border border-gray-200 space-y-6 text-sm text-gray-800">
+            <div className="flex justify-between items-center pb-4 border-b border-gray-200">
+              <div className="flex items-center gap-2 font-bold text-gray-900 text-sm">
+                <span className="text-red-500 text-lg">♥</span> Favoritos
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" checked={onlyFavorites} onChange={(e) => setOnlyFavorites(e.target.checked)} className="sr-only peer" />
+                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
+              </label>
+            </div>
 
-        {results.length > 0 && (
-          <div className="mt-8 space-y-6">
-            {results.map((hotel, index) => (
-              <div key={index} className="bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col md:flex-row">
-                <div className="flex-1 p-5 border-b md:border-b-0 md:border-r border-gray-100">
-                  <h3 className="font-black text-gray-900 text-xl">{hotel.nome}</h3>
-                  <p className="text-xs font-bold text-gray-500 mt-1">ID Hotel: {hotel.hotelId}</p>
+            <div className="pb-4 border-b border-gray-200">
+              <label className="block font-bold text-gray-900 mb-2">Ordenar por</label>
+              <div className="relative">
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm bg-white outline-none cursor-pointer font-medium appearance-none">
+                  <option value="popularidade">Popularidade</option>
+                  <option value="preco_crescente">Menor preço</option>
+                  <option value="classificacao">Avaliações</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
+              </div>
+            </div>
+
+            <div className="pb-4 border-b border-gray-200">
+              <label className="block font-bold text-gray-900 mb-2">Nome do hotel</label>
+              <input type="text" placeholder="Por exemplo, Hilton" value={filterHotelName} onChange={(e) => setFilterHotelName(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-orange-500 transition"/>
+            </div>
+
+            <div className="pb-4 border-b border-gray-200 space-y-3">
+              <h4 className="font-bold text-gray-900">Refeições</h4>
+              <label className="flex justify-between cursor-pointer group"><span className="flex items-center gap-3 text-gray-700 font-medium group-hover:text-orange-600 transition"><input type="checkbox" checked={meals.includes('RO')} onChange={()=>toggleMeal('RO')} className="accent-orange-500 w-4 h-4"/> Sem refeições incluídas</span><span className="text-gray-400 text-xs">13</span></label>
+              <label className="flex justify-between cursor-pointer group"><span className="flex items-center gap-3 text-gray-700 font-medium group-hover:text-orange-600 transition"><input type="checkbox" checked={meals.includes('BB')} onChange={()=>toggleMeal('BB')} className="accent-orange-500 w-4 h-4"/> Pequeno-almoço incluído</span><span className="text-gray-400 text-xs">37</span></label>
+              <label className="flex justify-between cursor-pointer group"><span className="flex items-center gap-3 text-gray-700 font-medium group-hover:text-orange-600 transition"><input type="checkbox" checked={meals.includes('HB')} onChange={()=>toggleMeal('HB')} className="accent-orange-500 w-4 h-4"/> Café + jantar ou almoço</span><span className="text-gray-400 text-xs">1</span></label>
+            </div>
+
+            <div className="pb-4 border-b border-gray-200 space-y-3">
+              <h4 className="font-bold text-gray-900">Classificação por estrelas</h4>
+              <label className="flex justify-between cursor-pointer group"><span className="flex items-center gap-3 text-gray-700 font-medium group-hover:text-orange-600 transition"><input type="checkbox" checked={stars.length===0} onChange={()=>toggleStar(0)} className="accent-orange-500 w-4 h-4"/> Sem estrelas</span></label>
+              <label className="flex justify-between cursor-pointer group"><span className="flex items-center gap-3 text-gray-700 font-medium group-hover:text-orange-600 transition"><input type="checkbox" checked={stars.includes(2)} onChange={()=>toggleStar(2)} className="accent-orange-500 w-4 h-4"/> ⭐⭐ 2 estrelas</span></label>
+              <label className="flex justify-between cursor-pointer group"><span className="flex items-center gap-3 text-gray-700 font-medium group-hover:text-orange-600 transition"><input type="checkbox" checked={stars.includes(3)} onChange={()=>toggleStar(3)} className="accent-orange-500 w-4 h-4"/> ⭐⭐⭐ 3 estrelas</span><span className="text-gray-400 text-xs">35</span></label>
+              <label className="flex justify-between cursor-pointer group"><span className="flex items-center gap-3 text-gray-700 font-medium group-hover:text-orange-600 transition"><input type="checkbox" checked={stars.includes(4)} onChange={()=>toggleStar(4)} className="accent-orange-500 w-4 h-4"/> ⭐⭐⭐⭐ 4 estrelas</span><span className="text-gray-400 text-xs">7</span></label>
+              <label className="flex justify-between cursor-pointer group"><span className="flex items-center gap-3 text-gray-700 font-medium group-hover:text-orange-600 transition"><input type="checkbox" checked={stars.includes(5)} onChange={()=>toggleStar(5)} className="accent-orange-500 w-4 h-4"/> ⭐⭐⭐⭐⭐ 5 estrelas</span><span className="text-gray-400 text-xs">2</span></label>
+            </div>
+          </div>
+
+          <div className="lg:col-span-5 space-y-4">
+            
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+              <h2 className="text-lg font-black text-gray-900">{destinationQuery ? destinationQuery.split(',')[0] : 'Destino'}: {filteredResults.length} opções de acomodação disponíveis</h2>
+            </div>
+
+            {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm font-bold border-l-4 border-red-500 shadow-sm">{error}</div>}
+
+            {filteredResults.map((hotel, index) => (
+              <div 
+                key={index} 
+                onMouseEnter={() => {
+                  if(hotel.latitude && hotel.longitude) {
+                    setMapCenterLatLon(`${hotel.latitude},${hotel.longitude}`);
+                  }
+                }}
+                className="bg-white border border-gray-200 rounded-xl shadow-sm hover:border-orange-400 hover:shadow-md transition-all overflow-hidden flex flex-col xl:flex-row cursor-default"
+              >
+                <div className="w-full xl:w-[220px] h-48 xl:h-auto bg-gray-200 relative shrink-0">
+                  <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-3">
+                    <span className="text-white text-[10px] font-bold bg-black/40 px-2 py-0.5 rounded flex items-center gap-1">‹ 1 / 10 ›</span>
+                  </div>
                 </div>
-                <div className="w-full md:w-[450px] bg-gray-50 p-5 flex flex-col gap-3">
-                  {hotel.ofertas?.map((oferta, idx) => (
-                    <div key={idx} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm flex justify-between items-center">
+
+                <div className="flex-1 p-4 flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start mb-3">
                       <div>
-                        <p className="font-bold text-gray-800 text-sm">{oferta.tipoQuarto}</p>
-                        <p className="text-[10px] text-gray-500 uppercase">{oferta.codigoRegime}</p>
+                        <div className="text-amber-400 text-[10px] mb-0.5">{'⭐'.repeat(hotel.categoria || 4)}</div>
+                        <h3 className="font-bold text-blue-600 text-base leading-tight hover:underline transition cursor-pointer">{hotel.nome}</h3>
+                        <p className="text-[11px] text-gray-500 font-medium mt-1 hover:underline cursor-pointer">{hotel.endereco}</p>
+                        <p className="text-[11px] text-gray-400">{hotel.distancia}</p>
                       </div>
-                      <div className="flex flex-col items-end">
-                        <span className="text-lg font-black text-green-700">R$ {oferta.precoVenda.toFixed(2)}</span>
-                        <button onClick={() => handleSelectOffer(oferta, hotel)} className="mt-1 bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold uppercase px-4 py-2 rounded transition">
-                          Selecionar
-                        </button>
-                      </div>
+                      <div className="bg-green-600 text-white font-black text-sm px-2.5 py-1 rounded shadow-sm">8,2</div>
                     </div>
-                  ))}
+
+                    <div className="pt-3 flex flex-col gap-2.5">
+                      {hotel.ofertas?.filter(oferta => {
+                        const mealMatch = meals.length === 0 || meals.includes(oferta.codigoRegime);
+                        const cancelMatch = !freeCancellation || oferta.freeCancellation;
+                        return mealMatch && cancelMatch;
+                      }).map((oferta, idx) => (
+                        <div key={idx} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-2 rounded-lg border-t border-gray-100 transition">
+                          <div className="mb-2 sm:mb-0">
+                            <p className="font-medium text-gray-700 text-xs">{oferta.tipoQuarto}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">Para {rooms.reduce((acc, r) => acc + r.adults, 0)} adultos</p>
+                          </div>
+                          <div className="flex flex-col sm:items-center gap-1 sm:px-4">
+                            <p className="text-[10px] text-green-700 font-medium flex items-center gap-1 uppercase"><span>🍽️</span> {oferta.nomeRegime}</p>
+                            {oferta.freeCancellation && <p className="text-[10px] text-green-700 font-medium flex items-center gap-1"><span>↩️</span> Cancelamento gratuito</p>}
+                          </div>
+                          <div className="text-left sm:text-right flex flex-col sm:items-end w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0">
+                            <span className="text-base font-medium text-gray-900">USD {oferta.precoVenda.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+                            <span className="text-[9px] text-gray-500 mb-1">para {rooms.length} quartos para {rooms.reduce((acc, r) => acc + r.adults + r.childrenAges.length, 0)} hóspedes</span>
+                            <button 
+                              onClick={() => handleSelectOffer(oferta, hotel)}
+                              className="w-full sm:w-auto bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-bold text-[11px] px-4 py-1.5 rounded shadow-sm transition"
+                            >Mostrar</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
-        )}
 
+          {/* COLUNA DIREITA: MAPA OPENSTREETMAP (COM PINS DE PREÇO E HOVER DE IMAGEM) */}
+          <div className="lg:col-span-4 sticky top-4 h-[calc(100vh-40px)] bg-gray-100 rounded-xl border border-gray-300 overflow-hidden shadow-inner hidden lg:flex flex-col">
+            
+            <div className="bg-white p-3 border-b border-gray-200 flex justify-between items-center z-10 shadow-sm relative">
+              <button className="bg-white border border-gray-300 text-xs font-bold px-4 py-2 rounded shadow hover:bg-gray-50 transition flex items-center gap-1 text-gray-700">
+                <span>‹</span> Ampliar o mapa
+              </button>
+              <div className="relative flex-1 ml-3">
+                <input type="text" placeholder="Pesquisar movendo o mapa" readOnly className="w-full text-xs border border-gray-300 rounded px-3 py-2 outline-none bg-gray-50 font-medium text-gray-600"/>
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400">📍</span>
+              </div>
+            </div>
+
+            <div className="flex-1 w-full relative">
+              {filteredResults.length > 0 ? (
+                <iframe 
+                  title="Mapa de Localização com Preços"
+                  width="100%" 
+                  height="100%" 
+                  style={{ border: 0 }} 
+                  srcDoc={buildMapHtml()}
+                ></iframe>
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-400 text-sm font-medium">
+                  Faça uma busca para ver os hotéis no mapa
+                </div>
+              )}
+            </div>
+            
+          </div>
+
+        </div>
       </div>
 
-      {bookingStep !== 'idle' && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] px-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+      {/* ======================================================= */}
+      {/* MODAL DE CHECKOUT B2B (USANDO PORTAL PARA FUGIR DO MENU) */}
+      {/* ======================================================= */}
+      {bookingStep !== 'idle' && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999999] bg-black/80 backdrop-blur-sm overflow-y-auto flex items-start justify-center pt-10 sm:pt-16 pb-10 px-4" 
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+        >
+          
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full flex flex-col relative overflow-hidden my-auto border border-gray-200">
             
-            <div className="bg-gray-900 p-4 flex justify-between items-center text-white">
-              <h3 className="font-bold">Finalizar Reserva</h3>
+            {/* CABEÇALHO DO MODAL */}
+            <div className="bg-gray-900 p-5 flex justify-between items-center text-white shrink-0">
+              <h3 className="font-black text-sm uppercase tracking-wide">Finalizar Reserva B2B</h3>
               {bookingStep !== 'booking' && (
-                <button onClick={() => setBookingStep('idle')} className="text-gray-400 hover:text-white text-xl">✕</button>
+                <button onClick={() => setBookingStep('idle')} className="text-gray-400 hover:text-white text-2xl leading-none">✕</button>
               )}
             </div>
 
-            <div className="p-6">
+            {/* CORPO DO MODAL */}
+            <div className="p-6 sm:p-7">
               {bookingStep === 'prebooking' && (
                 <div className="text-center py-6">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto mb-4"></div>
-                  <p className="text-gray-700 font-bold">Validando disponibilidade e tarifas...</p>
+                  <p className="text-gray-800 font-black text-lg">Validando disponibilidade e tarifas...</p>
                   <p className="text-xs text-gray-500 mt-1">Conectando com a RateHawk (Prebook)</p>
                 </div>
               )}
 
               {bookingStep === 'details' && selectedOffer && (
                 <form onSubmit={handleConfirmBooking}>
-                  <div className="mb-4 bg-orange-50 p-4 rounded-lg border border-orange-100">
-                    <p className="text-xs text-orange-600 font-bold uppercase tracking-wider mb-1">Hotel</p>
-                    <p className="font-black text-gray-900">{selectedOffer.hotelNome}</p>
-                    <p className="text-sm text-gray-700 mt-1">{selectedOffer.tipoQuarto} - {selectedOffer.codigoRegime}</p>
-                    <p className="text-xl font-black text-green-700 mt-2">R$ {selectedOffer.precoVenda.toFixed(2)}</p>
+                  <div className="mb-5 bg-orange-50 p-4 rounded-xl border border-orange-100 shadow-inner">
+                    <p className="text-[10px] text-orange-600 font-black uppercase tracking-wider mb-1">Resumo do Hotel</p>
+                    <p className="font-black text-gray-900 text-base leading-tight">{selectedOffer.hotelNome}</p>
+                    <p className="text-xs font-medium text-gray-700 mt-1">{selectedOffer.tipoQuarto} - {selectedOffer.codigoRegime}</p>
+                    <p className="text-xl font-black text-green-700 mt-2">USD {selectedOffer.precoVenda.toLocaleString('en-US', {minimumFractionDigits: 2})}</p>
                   </div>
 
-                  <p className="text-sm font-bold text-gray-800 mb-3">Dados do Hóspede Principal</p>
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                    <input type="text" placeholder="Nome" required value={guestFirstName} onChange={e => setGuestFirstName(e.target.value)} className="border border-gray-300 rounded p-2 text-sm outline-none focus:border-orange-500" />
-                    <input type="text" placeholder="Sobrenome" required value={guestLastName} onChange={e => setGuestLastName(e.target.value)} className="border border-gray-300 rounded p-2 text-sm outline-none focus:border-orange-500" />
+                  <p className="text-xs font-black text-gray-900 mb-3 uppercase tracking-wide border-b border-gray-100 pb-2">Dados do Hóspede Principal</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <input type="text" placeholder="Nome" required value={guestFirstName} onChange={e => setGuestFirstName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
+                    <input type="text" placeholder="Sobrenome" required value={guestLastName} onChange={e => setGuestLastName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
                   </div>
-                  <input type="email" placeholder="E-mail" required value={guestEmail} onChange={e => setGuestEmail(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mb-3 outline-none focus:border-orange-500" />
-                  <input type="text" placeholder="Telefone" required value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm mb-6 outline-none focus:border-orange-500" />
+                  <input type="email" placeholder="E-mail" required value={guestEmail} onChange={e => setGuestEmail(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium mb-3 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
+                  <input type="text" placeholder="Telefone com DDD" required value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium mb-6 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
 
-                  <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition uppercase text-sm">
+                  <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-3 sm:py-4 rounded-xl shadow-lg hover:shadow-xl transition uppercase text-sm tracking-wide">
                     Confirmar Reserva B2B
                   </button>
                 </form>
@@ -732,33 +1083,36 @@ export default function HotelSearch() {
 
               {bookingStep === 'booking' && (
                 <div className="text-center py-6">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mx-auto mb-4"></div>
-                  <p className="text-gray-700 font-bold">Processando sua reserva...</p>
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-green-600 mx-auto mb-4"></div>
+                  <p className="text-gray-800 font-black text-lg">Processando sua reserva...</p>
                   <p className="text-xs text-gray-500 mt-1">Aguardando confirmação do fornecedor</p>
                 </div>
               )}
 
               {bookingStep === 'success' && (
                 <div className="text-center py-6">
-                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">✓</div>
-                  <h4 className="text-xl font-black text-gray-900 mb-1">Reserva Confirmada!</h4>
-                  <p className="text-sm text-gray-600 mb-4">ID do Pedido: <span className="font-bold">{finalPartnerOrderId}</span></p>
-                  <button onClick={() => setBookingStep('idle')} className="bg-gray-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-gray-800 transition">Fechar</button>
+                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">✓</div>
+                  <h4 className="text-xl font-black text-gray-900 mb-2">Reserva Confirmada!</h4>
+                  <p className="text-sm text-gray-600 mb-5 bg-gray-50 py-2 px-4 rounded-lg border border-gray-100 inline-block">ID do Pedido: <span className="font-bold">{finalPartnerOrderId}</span></p>
+                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wide hover:bg-gray-800 transition shadow-lg">Fechar e Voltar</button>
                 </div>
               )}
 
               {bookingStep === 'error' && (
                 <div className="text-center py-6">
-                  <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">✕</div>
-                  <h4 className="text-xl font-black text-gray-900 mb-1">Ops! Ocorreu um problema.</h4>
-                  <p className="text-sm text-red-600 mb-4">{bookingError}</p>
-                  <button onClick={() => setBookingStep('idle')} className="bg-gray-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-gray-800 transition">Tentar Novamente</button>
+                  <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">✕</div>
+                  <h4 className="text-xl font-black text-gray-900 mb-2">Ops! Ocorreu um problema.</h4>
+                  <p className="text-sm text-red-600 mb-5 bg-red-50 p-3 rounded-lg border border-red-100 break-words">{bookingError}</p>
+                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wide hover:bg-gray-800 transition shadow-lg">Tentar Novamente</button>
                 </div>
               )}
             </div>
+
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+
     </div>
   );
 }
