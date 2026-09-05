@@ -100,7 +100,7 @@ const COUNTRIES = [
 ];
 
 export default function HotelSearch() {
-  const { favorites, toggleFavorite } = useCartStore(); // <--- ADICIONE ESTA LINHA AQUI
+  const { favorites, toggleFavorite } = useCartStore(); 
   const navigate = useNavigate();
   const [destinationQuery, setDestinationQuery] = useState('');
   const [regionId, setRegionId] = useState('');
@@ -179,18 +179,38 @@ export default function HotelSearch() {
   }, [results, navigate, checkInDate, checkOutDate, rooms, residency]);
 
   useEffect(() => {
+   useEffect(() => {
     const fetchAutocompleteFromAPI = async () => {
       if (!destinationQuery || destinationQuery.length < 2) {
         setRegionsResults([]); setHotelsResults([]); setShowDropdown(false); return;
       }
       try {
+        // 1. Autocomplete da RateHawk (Worker)
         const workerUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-autocomplete?query=${encodeURIComponent(destinationQuery)}`;
         const res = await fetch(workerUrl);
         const data = await res.json();
         const regions = data.regions || data.data?.regions || [];
         const hotels = data.hotels || data.data?.hotels || [];
-        setRegionsResults(regions); setHotelsResults(hotels);
-        setShowDropdown(regions.length > 0 || hotels.length > 0);
+
+        // 2. Autocomplete da Restel (Direto do Supabase)
+        const { data: restelSupabaseData, error } = await supabase
+          .from('RestelHotel')
+          .select('name, city, province')
+          .or(`name.ilike.%${destinationQuery}%,city.ilike.%${destinationQuery}%`)
+          .limit(6);
+
+        let restelHotelsFormatted = [];
+        if (!error && restelSupabaseData) {
+          restelHotelsFormatted = restelSupabaseData.map(h => ({
+            id: `restel_${h.name}`,
+            name: `${h.name} (${h.city || h.province || ''}) [Restel B2B]`,
+            type: 'hotel'
+          }));
+        }
+
+        setRegionsResults(regions); 
+        setHotelsResults([...hotels, ...restelHotelsFormatted]);
+        setShowDropdown(regions.length > 0 || hotels.length > 0 || restelHotelsFormatted.length > 0);
       } catch (err) {
         console.error("Erro no autocompletar:", err);
       }
@@ -252,108 +272,119 @@ export default function HotelSearch() {
     
     setMapCenterLatLon(`${cityLat},${cityLng}`);
 
+    let ratehawkResults = [];
+    let restelResults = [];
+
+    // 1. BUSCA RATEHAWK EM PARALELO
     try {
-      if (supplier === 'RATEHAWK') {
-        const hidsToSearch = (targetDest === 'US-LAX' || destinationQuery.toLowerCase().includes('los angeles') || destinationQuery.toLowerCase().includes('conrad')) 
-          ? [10004834, 8819557] : [10004834, 8819557, 9015534, 8663536];
+      const hidsToSearch = (targetDest === 'US-LAX' || destinationQuery.toLowerCase().includes('los angeles') || destinationQuery.toLowerCase().includes('conrad')) 
+        ? [10004834, 8819557] : [10004834, 8819557, 9015534, 8663536];
 
-        const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-page`; 
-        
-        const guestsPayload = rooms.map(room => ({
-          adults: room.adults,
-          children: room.childrenAges
-        }));
+      const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-page`; 
+      const guestsPayload = rooms.map(room => ({
+        adults: room.adults,
+        children: room.childrenAges
+      }));
 
-        const requests = hidsToSearch.map(hid => 
-          fetch(baseUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              hid: hid,
-              checkin: checkInDate,
-              checkout: checkOutDate,
-              residency: residency,
-              currency: "USD",
-              guests: guestsPayload
-            })
+      const requests = hidsToSearch.map(hid => 
+        fetch(baseUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            hid: hid,
+            checkin: checkInDate,
+            checkout: checkOutDate,
+            residency: residency,
+            currency: "USD",
+            guests: guestsPayload
           })
-        );
+        })
+      );
 
-        const responses = await Promise.all(requests);
-        const jsonResults = await Promise.all(responses.map(r => r.json()));
+      const responses = await Promise.all(requests);
+      const jsonResults = await Promise.all(responses.map(r => r.json()));
 
-        const combinados = [];
-        jsonResults.forEach(resData => {
-          if (resData.data && resData.data.hotels) combinados.push(...resData.data.hotels);
-        });
+      const combinados = [];
+      jsonResults.forEach(resData => {
+        if (resData.data && resData.data.hotels) combinados.push(...resData.data.hotels);
+      });
 
-        if (combinados.length > 0) {
-          const matchedIds = combinados.map(h => String(h.id));
-          
-          let dbHotels = [];
-          if (matchedIds.length > 0) {
-            const { data, error } = await supabase
-              .from('Hotel')
-              .select('id, images, amenities')
-              .in('id', matchedIds);
-              
-            if (!error && data) {
-              dbHotels = data;
-            }
-          }
-
-          const hoteisMapeados = combinados.map((h) => {
-            const latOffset = (Math.random() - 0.5) * 0.015;
-            const lngOffset = (Math.random() - 0.5) * 0.015;
-            const finalLat = h.latitude || (cityLat + latOffset);
-            const finalLng = h.longitude || (cityLng + lngOffset);
-            
-            const dbInfo = dbHotels.find(dbH => dbH.id === String(h.id));
-            let imagensOficiais = [];
-            if (dbInfo && dbInfo.images && dbInfo.images.length > 0) {
-              imagensOficiais = dbInfo.images;
-            }
-
-            return {
-              hotelId: h.id, 
-              nome: h.name || `Hotel RateHawk Teste (${h.id})`, 
-              categoria: h.star_rating || 4, 
-              endereco: h.address || 'Localização central',
-              distancia: 'A partir do centro',
-              latitude: finalLat,
-              longitude: finalLng,
-              imagensReais: imagensOficiais,
-              ofertas: h.rates.map(r => ({
-                tipoQuarto: r.room_name || 'Quarto Standard', 
-                codigoRegime: r.meal === 'breakfast' ? 'BB' : r.meal === 'half-board' ? 'HB' : r.meal === 'all-inclusive' ? 'AI' : 'RO',
-                nomeRegime: r.meal_data?.value || 'Sem refeições', 
-                precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0) * 5.1,
-                paymentTypeObj: r.payment_options?.payment_types?.[0],
-                bookHash: r.book_hash,
-                freeCancellation: r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before != null
-              }))
-            };
-          });
-          setResults(hoteisMapeados);
-        } else {
-          setError(`Nenhuma tarifa disponível para esta combinação no fornecedor.`);
+      if (combinados.length > 0) {
+        const matchedIds = combinados.map(h => String(h.id));
+        let dbHotels = [];
+        if (matchedIds.length > 0) {
+          const { data } = await supabase.from('Hotel').select('id, images, amenities').in('id', matchedIds);
+          if (data) dbHotels = data;
         }
-      } else {
-        const functions = getFunctions(app);
-        const searchRestelHotels = httpsCallable(functions, 'searchRestelHotels');
-        const response = await searchRestelHotels({
-  destinationCode: destinationQuery.split(',')[0], // Manda a string "Salvador" limpa
-  checkInDate, checkOutDate,
-          adults: rooms[0].adults, children: rooms[0].childrenAges.length, childrenAges: rooms[0].childrenAges.join(',')
+
+        ratehawkResults = combinados.map((h) => {
+          const latOffset = (Math.random() - 0.5) * 0.015;
+          const lngOffset = (Math.random() - 0.5) * 0.015;
+          const finalLat = h.latitude || (cityLat + latOffset);
+          const finalLng = h.longitude || (cityLng + lngOffset);
+          const dbInfo = dbHotels.find(dbH => dbH.id === String(h.id));
+          let imagensOficiais = dbInfo?.images?.length > 0 ? dbInfo.images : [];
+
+          return {
+            hotelId: `rh_${h.id}`, 
+            nome: h.name || `Hotel RateHawk (${h.id})`, 
+            categoria: h.star_rating || 4, 
+            endereco: h.address || 'Localização central',
+            distancia: 'RateHawk',
+            latitude: finalLat,
+            longitude: finalLng,
+            imagensReais: imagensOficiais,
+            ofertas: h.rates.map(r => ({
+              tipoQuarto: r.room_name || 'Quarto Standard', 
+              codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO',
+              nomeRegime: r.meal_data?.value || 'Sem refeições', 
+              precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0) * 5.1,
+              paymentTypeObj: r.payment_options?.payment_types?.[0],
+              bookHash: r.book_hash,
+              freeCancellation: r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before != null
+            }))
+          };
         });
-        if (response.data.status === 'success' && response.data.hoteis.length > 0) setResults(response.data.hoteis);
-        else setError(`Nenhum hotel encontrado via Restel.`);
       }
     } catch (err) {
-      setError(`Falha ao conectar: ${err.message}`);
-    } finally {
-      setLoading(false);
+      console.error("Aviso: Falha na busca RateHawk:", err);
     }
+
+    // 2. BUSCA RESTEL EM PARALELO
+    try {
+      const functions = getFunctions(app);
+      const searchRestelHotels = httpsCallable(functions, 'searchRestelHotels');
+      
+      const response = await searchRestelHotels({
+        destinationCode: destinationQuery.split(',')[0],
+        checkInDate: checkInDate,
+        checkOutDate: checkOutDate,
+        adults: rooms[0].adults,
+        children: rooms[0].childrenAges.length,
+        childrenAges: rooms[0].childrenAges.join(',')
+      });
+
+      if (response.data && response.data.status === 'success' && response.data.hoteis) {
+        restelResults = response.data.hoteis.map(h => ({
+          ...h,
+          hotelId: `restel_${h.hotelId}`,
+          distancia: 'Restel B2B'
+        }));
+      }
+    } catch (err) {
+      console.error("Aviso: Falha na busca Restel:", err);
+    }
+
+    // 3. JUNTA OS DOIS MUNDOS
+    const todosOsHoteis = [...ratehawkResults, ...restelResults];
+
+    if (todosOsHoteis.length > 0) {
+      setResults(todosOsHoteis);
+    } else {
+      setError("Nenhum hotel encontrado em nenhum dos fornecedores para esta data e destino.");
+    }
+
+    setLoading(false);
   };
 
   const handleSelectOffer = async (oferta, hotel) => {
@@ -524,17 +555,16 @@ export default function HotelSearch() {
     const centerLng = mapCenterLatLon ? mapCenterLatLon.split(',')[1] : -46.6333;
     
    const pinsData = filteredResults.filter(h => h.latitude && h.longitude).map(h => {
-      // SEM DADOS FALSOS / SEM UNSPLASH: Usa a imagem oficial ou um fundo cinza vazio
       const img = h.imagensReais && h.imagensReais.length > 0 
         ? (typeof h.imagensReais[0] === 'string' ? h.imagensReais[0].replace('{size}', '240x240') : h.imagensReais[0]) 
-        : 'data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=='; // Pixel cinza
+        : 'data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=='; 
 
       return {
         id: h.hotelId,
         lat: h.latitude,
         lng: h.longitude,
         nome: h.nome.replace(/'/g, "\\'").replace(/"/g, '&quot;'),
-        preco: `BRL ${h.ofertas[0]?.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, // CORRIGIDO PARA BRL
+        preco: `BRL ${h.ofertas[0]?.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 
         estrelas: '⭐'.repeat(h.categoria || 4),
         imagem: img
       };
@@ -573,7 +603,7 @@ export default function HotelSearch() {
             border-radius: 8px;
             padding: 5px 10px;
             font-weight: 800;
-            font-size: 11px; /* Fonte otimizada para caber valores longos em BRL */
+            font-size: 11px; 
             color: #111;
             box-shadow: 0 2px 6px rgba(0,0,0,0.15);
             text-align: center;
@@ -604,8 +634,8 @@ export default function HotelSearch() {
             const customIcon = L.divIcon({
               className: 'custom-pin',
               html: '<div class="price-pin">' + hotel.preco + '</div>',
-              iconSize: [130, 36],   // Largura generosa de 130px para acomodar o texto completo
-              iconAnchor: [65, 36],  // Metade da largura (65) para centralizar perfeitamente a ponta do balão
+              iconSize: [130, 36],   
+              iconAnchor: [65, 36],  
               popupAnchor: [0, -38] 
             });
 
@@ -881,13 +911,8 @@ export default function HotelSearch() {
      <div className="max-w-[1400px] mx-auto px-3 mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
           
-          {/* ======================================================== */}
-          {/* ======================================================== */}
-          {/* COLUNA ESQUERDA: FILTROS REFINADOS E VISUAIS */}
-          {/* ======================================================== */}
           <div className="lg:col-span-3 bg-white rounded-xl shadow-sm p-5 border border-gray-200 text-sm text-gray-800">
             
-            {/* FAVORITOS */}
             <div className="flex justify-between items-center pb-5 mb-5 border-b border-gray-200">
               <div className="flex items-center gap-2 font-bold text-gray-900 text-sm">
                 <span className="text-red-500 text-lg">♥</span> Favoritos
@@ -898,7 +923,6 @@ export default function HotelSearch() {
               </label>
             </div>
 
-            {/* ORDENAR POR */}
             <div className="pb-5 mb-5 border-b border-gray-200">
               <label className="block font-bold text-gray-900 mb-2">Ordenar por</label>
               <div className="relative">
@@ -911,13 +935,11 @@ export default function HotelSearch() {
               </div>
             </div>
 
-            {/* NOME DO HOTEL */}
             <div className="pb-5 mb-5 border-b border-gray-200">
               <label className="block font-bold text-gray-900 mb-2">Nome do hotel</label>
               <input type="text" placeholder="Por exemplo, Hilton" value={filterHotelName} onChange={(e) => setFilterHotelName(e.target.value)} className="w-full border border-gray-300 rounded p-2.5 text-sm outline-none focus:border-orange-500 transition"/>
             </div>
 
-            {/* REFEIÇÕES */}
             <div className="pb-5 mb-5 border-b border-gray-200 space-y-3">
               <h4 className="font-bold text-gray-900">Refeições</h4>
               <label className="flex justify-between items-start cursor-pointer group">
@@ -952,7 +974,6 @@ export default function HotelSearch() {
               </label>
             </div>
 
-            {/* CLASSIFICAÇÃO POR ESTRELAS */}
             <div className="pb-5 mb-5 border-b border-gray-200 space-y-3">
               <h4 className="font-bold text-gray-900">Classificação por estrelas</h4>
               <label className="flex justify-between items-center cursor-pointer group">
@@ -987,7 +1008,6 @@ export default function HotelSearch() {
               </label>
             </div>
 
-            {/* PAGAMENTO E RESERVA */}
             <div className="pb-5 mb-5 border-b border-gray-200 space-y-3">
               <h4 className="font-bold text-gray-900">Pagamento e reserva</h4>
               <label className="flex justify-between items-center cursor-pointer group">
@@ -998,14 +1018,12 @@ export default function HotelSearch() {
               </label>
             </div>
 
-            {/* LOCALIZAÇÃO */}
             <div className="pb-5 mb-5 border-b border-gray-200 space-y-3">
               <h4 className="font-bold text-gray-900">Localização</h4>
               <label className="block text-gray-700 font-medium text-sm mb-1">do centro da cidade</label>
               <input type="range" className="w-full accent-orange-500" min="0" max="100" />
             </div>
 
-            {/* CLASSIFICAÇÃO DE AVALIAÇÕES */}
             <div className="pb-5 mb-5 border-b border-gray-200 space-y-3">
               <h4 className="font-bold text-gray-900">Classificação de avaliações</h4>
               {[
@@ -1024,7 +1042,6 @@ export default function HotelSearch() {
               ))}
             </div>
 
-            {/* PREÇO PARA & MOEDA */}
             <div className="pb-5 mb-5 border-b border-gray-200 space-y-4">
               <h4 className="font-bold text-gray-900">Preço para</h4>
               <div className="flex bg-gray-100 p-1 rounded-md">
@@ -1041,10 +1058,8 @@ export default function HotelSearch() {
               </div>
             </div>
 
-            {/* COMODIDADES E SERVIÇOS */}
             <div className="pb-5 mb-5 border-b border-gray-200 space-y-4">
               <h4 className="font-bold text-gray-900">Comodidades e Serviços</h4>
-              
               <div className="space-y-3">
                 <span className="text-xs font-bold text-gray-500 uppercase">No hotel</span>
                 {[
@@ -1085,7 +1100,6 @@ export default function HotelSearch() {
               </div>
             </div>
 
-            {/* CARACTERÍSTICAS DA ACOMODAÇÃO */}
             <div className="pb-5 mb-5 border-b border-gray-200 space-y-3">
               <h4 className="font-bold text-gray-900">Características da acomodação</h4>
               {[
@@ -1101,7 +1115,6 @@ export default function HotelSearch() {
               ))}
             </div>
 
-            {/* CERTIFICADOS */}
             <div className="pb-5 mb-5 border-b border-gray-200 space-y-3">
               <h4 className="font-bold text-gray-900">Certificados</h4>
               <label className="flex justify-between items-center cursor-pointer group">
@@ -1112,7 +1125,6 @@ export default function HotelSearch() {
               </label>
             </div>
 
-            {/* TIPO DE PROPRIEDADE */}
             <div className="pb-5 mb-5 border-b border-gray-200 space-y-3">
               <h4 className="font-bold text-gray-900">Tipo de propriedade</h4>
               {[
@@ -1132,7 +1144,6 @@ export default function HotelSearch() {
               ))}
             </div>
 
-            {/* NÚMERO DE QUARTOS */}
             <div className="pb-5 mb-5 border-b border-gray-200 space-y-3">
               <h4 className="font-bold text-gray-900">Número de quartos</h4>
               {[
@@ -1149,7 +1160,6 @@ export default function HotelSearch() {
               ))}
             </div>
 
-            {/* MARCAS */}
             <div className="space-y-3">
               <h4 className="font-bold text-gray-900">Marcas</h4>
               {[
@@ -1169,9 +1179,6 @@ export default function HotelSearch() {
 
           </div>
 
-          {/* ======================================================== */}
-          {/* COLUNA DO CENTRO: LISTA DE RESULTADOS (100% SEM UNSPLASH) */}
-          {/* ======================================================== */}
           <div className="lg:col-span-5 space-y-4">
             
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
@@ -1186,11 +1193,10 @@ export default function HotelSearch() {
                 ? (typeof hotel.imagensReais[0] === 'string' ? hotel.imagensReais[0].replace('{size}', '800x600') : hotel.imagensReais[0]) 
                 : null;
 
-              // VERIFICA SE ESTE HOTEL JÁ ESTÁ NA GLOBAL STORE DE FAVORITOS
               const isFavorite = favorites.some(fav => fav._id === String(hotel.hotelId) && fav.type === 'hotel');
 
               const handleToggleFavorite = (e) => {
-                e.stopPropagation(); // Evita que o clique abra a galeria da imagem
+                e.stopPropagation(); 
                 e.preventDefault();
                 
                 toggleFavorite({
@@ -1221,7 +1227,6 @@ export default function HotelSearch() {
                     onClick={() => setActiveGalleryHotel(hotel)} 
                     className="w-full xl:w-[220px] h-48 xl:h-auto bg-gray-100 relative shrink-0 cursor-pointer group overflow-hidden border-r border-gray-200 flex items-center justify-center"
                   >
-                    {/* BOTÃO DO CORAÇÃO FAVORITAR (GLOBAL STORE) */}
                     <button 
                       onClick={handleToggleFavorite}
                       className="absolute top-3 right-3 z-20 p-2 bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:scale-110 transition-transform"
@@ -1291,9 +1296,6 @@ export default function HotelSearch() {
             })}
           </div>
 
-          {/* ======================================================== */}
-          {/* COLUNA DIREITA: MAPA DO GOOGLE (SEM ALTERAÇÕES) */}
-          {/* ======================================================== */}
           <div className="lg:col-span-4 sticky top-4 h-[calc(100vh-40px)] bg-gray-100 rounded-xl border border-gray-300 overflow-hidden shadow-inner hidden lg:flex flex-col">
             
             <div className="bg-white p-3 border-b border-gray-200 flex justify-between items-center z-10 shadow-sm relative">
