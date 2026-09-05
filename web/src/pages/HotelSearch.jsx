@@ -342,7 +342,8 @@ export default function HotelSearch() {
         const functions = getFunctions(app);
         const searchRestelHotels = httpsCallable(functions, 'searchRestelHotels');
         const response = await searchRestelHotels({
-          destinationCode: targetDest, checkInDate, checkOutDate,
+  destinationCode: destinationQuery.split(',')[0], // Manda a string "Salvador" limpa
+  checkInDate, checkOutDate,
           adults: rooms[0].adults, children: rooms[0].childrenAges.length, childrenAges: rooms[0].childrenAges.join(',')
         });
         if (response.data.status === 'success' && response.data.hoteis.length > 0) setResults(response.data.hoteis);
