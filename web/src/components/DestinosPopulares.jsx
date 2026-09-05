@@ -3,27 +3,28 @@ import { MapPin, Globe, Award, TrendingUp, ArrowRight, Calendar, PlaneTakeoff } 
 
 // Mapeamento Inteligente Atualizado com Hubs de Conexão
 const IATA_MAP = {
-  "Rio de Janeiro": "RIO", "Fernando de Noronha": "FEN", "Foz do Iguaçu": "IGU", "Salvador": "SSA",
-  "Lençóis Maranhenses": "SLZ", "Gramado": "POA", "Bonito": "BYO", "Porto de Galinhas": "REC",
-  "Paraty": "RIO", "Chapada dos Veadeiros": "BSB", "Jericoacoara": "JJD", "Ouro Preto": "CNF",
-  "Búzios": "SDU", "Florianópolis": "FLN", "Maragogi": "MCZ", "Jalapão": "PMW",
-  "Campos do Jordão": "GRU", "Praia da Pipa": "NAT", "Pantanal": "CGB", "Manaus": "MAO",
-  "Morro de São Paulo": "SSA", "Chapada Diamantina": "LEC", "Ilhabela": "GRU", "Petrópolis": "RIO",
-  "Canela": "POA", "João Pessoa": "JPA", "Angra dos Reis": "RIO", "Arraial do Cabo": "SDU",
-  "Maceió": "MCZ", "Curitiba": "CWB", "São Paulo": "SAO", "Brasilia": "BSB", "Fortaleza": "FOR",
-  "Belo Horizonte": "BHZ", "Recife": "REC", "Porto Alegre": "POA", "Goiânia": "GYN",
-  "Belém": "BEL", "São Luís": "SLZ", "Natal": "NAT", "Teresina": "THE", "Aracaju": "AJU",
-  "Cuiabá": "CGB", "Campo Grande": "CGR", "Vitória": "VIX", "Campinas": "VCP", "Santos": "SAO",
-  "Caldas Novas": "CLV", "Balneário Camboriú": "NVT", "Cabo Frio": "SDU",
-  "Paris": "PAR", "Roma": "ROM", "Londres": "LON", "Nova York": "NYC", "Tokyo": "TYO",
-  "Barcelona": "BCN", "Amsterdam": "AMS", "Lisboa": "LIS", "Florence": "FLR", "Veneza": "VCE",
-  "Kyoto": "KIX", "Cairo": "CAI", "Atenas": "ATH", "Machu Picchu": "CUZ", "Istanbul": "IST",
-  "Sydney": "SYD", "Dubai": "DXB", "Bangkok": "BKK", "Singapore": "SIN", "Bali": "DPS",
-  "Praga": "PRG", "Cape Town": "CPT", "Buenos Aires": "BUE", "Milan": "MIL", "Seville": "SVQ",
-  "Reykjavik": "REK", "Viena": "VIE", "Munich": "MUC", "Marrakech": "RAK", "Palma de Mallorca": "PMI",
-  "Kuala Lumpur": "KUL", "Seoul": "SEL", "Mecca": "JED", "Phuket": "HKT", "Shanghai": "SHA",
-  "Hong Kong": "HKG", "Antalya": "AYT", "Osaka": "OSA", "Cancun": "CUN", "Las Vegas": "LAS",
-  "Miami": "MIA", "Los Angeles": "LAX", "Berlin": "BER", "Pattaya": "UTP", "Madrid": "MAD"
+   "Rio de Janeiro": "RIO", "Fernando de Noronha": "FEN", "Foz do Iguaçu": "IGU", "Salvador": "SSA",
+    "Lençóis Maranhenses": "SLZ", "Gramado": "POA", "Bonito": "BYO", "Porto de Galinhas": "REC",
+    "Paraty": "RIO", "Chapada dos Veadeiros": "BSB", "Jericoacoara": "JJD", "Ouro Preto": "CNF",
+    "Búzios": "SDU", "Florianópolis": "FLN", "Maragogi": "MCZ", "Jalapão": "PMW",
+    "Campos do Jordão": "SAO", "Praia da Pipa": "NAT", "Pantanal": "CGB", "Manaus": "MAO",
+    "Morro de São Paulo": "SSA", "Chapada Diamantina": "LEC", "Ilhabela": "GRU", "Petrópolis": "RIO",
+    "Canela": "POA", "João Pessoa": "JPA", "Angra dos Reis": "RIO", "Arraial do Cabo": "SDU",
+    "Maceió": "MCZ", "Curitiba": "CWB", "São Paulo": "SAO", "Brasilia": "BSB", "Fortaleza": "FOR",
+    "Belo Horizonte": "BHZ", "Recife": "REC", "Porto Alegre": "POA", "Goiânia": "GYN",
+    "Belém": "BEL", "São Luís": "SLZ", "Natal": "NAT", "Teresina": "THE", "Aracaju": "AJU",
+    "Cuiabá": "CGB", "Campo Grande": "CGR", "Vitória": "VIX", "Campinas": "VCP", "Santos": "SAO",
+    "Caldas Novas": "CLV", "Balneário Camboriú": "NVT", "Cabo Frio": "SDU",
+    "Paris": "PAR", "Roma": "ROM", "Londres": "LON", "Nova York": "NYC", "Tokyo": "TYO",
+    "Barcelona": "BCN", "Amsterdam": "AMS", "Lisboa": "LIS", "Florence": "FLR", "Veneza": "VCE",
+    "Kyoto": "KIX", "Cairo": "CAI", "Atenas": "ATH", "Machu Picchu": "CUZ", "Istanbul": "IST",
+    "Sydney": "SYD", "Dubai": "DXB", "Bangkok": "BKK", "Singapore": "SIN", "Bali": "DPS",
+    "Praga": "PRG", "Cape Town": "CPT", "Buenos Aires": "BUE", "Milan": "MIL", "Seville": "SVQ",
+    "Reykjavik": "REK", "Viena": "VIE", "Munich": "MUC", "Marrakech": "RAK", "Palma de Mallorca": "PMI",
+    "Kuala Lumpur": "KUL", "Seoul": "SEL", "Mecca": "JED", "Phuket": "HKT", "Shanghai": "SHA",
+    "Hong Kong": "HKG", "Antalya" : "AYT", "Osaka": "OSA", "Cancun": "CUN", "Las Vegas": "LAS",
+    "Miami": "MIA", "Los Angeles": "LAX", "Berlin": "BER", "Pattaya": "UTP", "Madrid": "MAD"
+
 };
 
 export default function DestinosPopulares({ onSelectDestination }) {
