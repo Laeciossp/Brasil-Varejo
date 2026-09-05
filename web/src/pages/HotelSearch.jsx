@@ -125,6 +125,12 @@ export default function HotelSearch() {
   const [sortBy, setSortBy] = useState('popularidade');
   const [filterHotelName, setFilterHotelName] = useState('');
 
+  // 👇 NOVOS ESTADOS PARA O CONTROLE DO MAPA 
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const [searchOnMapMove, setSearchOnMapMove] = useState(false);
+  const [mapBounds, setMapBounds] = useState(null);
+  // 👆 =====================================
+
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [bookingStep, setBookingStep] = useState('idle'); 
   const [bookingError, setBookingError] = useState(null);
@@ -163,6 +169,7 @@ export default function HotelSearch() {
 
   useEffect(() => {
     const handleIframeMessage = (event) => {
+      // Abre Detalhes do Hotel
       if (event.data && event.data.type === 'SELECT_HOTEL') {
         const idClicado = String(event.data.hotelId);
         const hotelSelecionado = results.find(h => String(h.hotelId) === idClicado);
@@ -173,13 +180,18 @@ export default function HotelSearch() {
           });
         }
       }
+
+      // 👇 RECEBE AS COORDENADAS DO MAPA QUANDO É ARRASTADO
+      if (event.data && event.data.type === 'MAP_MOVED') {
+        setMapBounds(event.data.bounds);
+      }
     };
+    
     window.addEventListener('message', handleIframeMessage);
     return () => window.removeEventListener('message', handleIframeMessage);
   }, [results, navigate, checkInDate, checkOutDate, rooms, residency]);
 
-
-useEffect(() => {
+  useEffect(() => {
     const fetchAutocompleteFromAPI = async () => {
       if (!destinationQuery || destinationQuery.length < 2) {
         setRegionsResults([]); setHotelsResults([]); setShowDropdown(false); return;
@@ -356,12 +368,12 @@ useEffect(() => {
           if (matchedIds.length > 0) {
             const { data } = await supabase
               .from('Hotel')
-              .select('id, images, amenities, description') // 👈 Adicionado 'description' aqui
+              .select('id, images, amenities, description') 
               .in('id', matchedIds);
             if (data) dbHotels = data;
           }
 
-ratehawkResults = combinados.map((h) => {
+          ratehawkResults = combinados.map((h) => {
             const latOffset = (Math.random() - 0.5) * 0.015;
             const lngOffset = (Math.random() - 0.5) * 0.015;
             const finalLat = h.latitude || (cityLat + latOffset);
@@ -371,19 +383,15 @@ ratehawkResults = combinados.map((h) => {
             // DADOS REAIS: Puxa estritamente do banco de dados (Supabase) ou da API
             let imagensOficiais = dbInfo?.images?.length > 0 ? dbInfo.images : [];
             
-            // NOVA LÓGICA DE EXTRAÇÃO: COMPATÍVEL COM GRUPOS DE COMODIDADES
+            // LÓGICA DE EXTRAÇÃO: COMPATÍVEL COM GRUPOS DE COMODIDADES
             let comodidadesOficiais = [];
             if (Array.isArray(dbInfo?.amenities)) {
-              // Verifica se a estrutura é o array de grupos (ex: group_name: "Alimentação")
               if (dbInfo.amenities.length > 0 && typeof dbInfo.amenities[0] === 'object' && dbInfo.amenities[0].amenities) {
-                // Junta todas as comodidades de todos os grupos em uma lista única
                 comodidadesOficiais = dbInfo.amenities.flatMap(grupo => grupo.amenities || []);
               } else {
-                // Caso seja salvo como um array simples de strings
                 comodidadesOficiais = dbInfo.amenities;
               }
             } else if (dbInfo?.amenities && Array.isArray(dbInfo.amenities.amenities)) {
-              // Caso seja salvo como um objeto JSON único
               comodidadesOficiais = dbInfo.amenities.amenities;
             }
 
@@ -399,7 +407,6 @@ ratehawkResults = combinados.map((h) => {
               longitude: finalLng,
               imagensReais: imagensOficiais,
               
-              // Duplicidade de chaves apenas para garantir leitura na página de detalhes
               amenities: comodidadesOficiais,
               comodidades: comodidadesOficiais,
               description: descricaoOficial,
@@ -606,6 +613,7 @@ ratehawkResults = combinados.map((h) => {
     }, 3000);
   };
 
+  // FILTRO GERAL: Nome, Estrelas e Refeições
   const filteredResults = results.filter(hotel => {
     if (filterHotelName && !hotel.nome.toLowerCase().includes(filterHotelName.toLowerCase())) return false;
     if (stars.length > 0 && !stars.includes(hotel.categoria)) return false;
@@ -622,10 +630,21 @@ ratehawkResults = combinados.map((h) => {
     return 0;
   });
 
+  // 👇 NOVO FILTRO: PESQUISAR MOVENDO O MAPA
+  const hoteisExibidosNaLista = filteredResults.filter(hotel => {
+    if (searchOnMapMove && mapBounds && hotel.latitude && hotel.longitude) {
+      return hotel.latitude <= mapBounds.north && hotel.latitude >= mapBounds.south &&
+             hotel.longitude <= mapBounds.east && hotel.longitude >= mapBounds.west;
+    }
+    return true;
+  });
+
   const buildMapHtml = () => {
     const centerLat = mapCenterLatLon ? mapCenterLatLon.split(',')[0] : -23.5505;
     const centerLng = mapCenterLatLon ? mapCenterLatLon.split(',')[1] : -46.6333;
     
+    // O mapa continua renderizando todos os filtrados (filteredResults) 
+    // para que você possa vê-los enquanto arrasta o mapa
     const pinsData = filteredResults.filter(h => h.latitude && h.longitude).map(h => {
       const img = h.imagensReais && h.imagensReais.length > 0 
         ? (typeof h.imagensReais[0] === 'string' ? h.imagensReais[0].replace('{size}', '240x240') : h.imagensReais[0]) 
@@ -701,6 +720,20 @@ ratehawkResults = combinados.map((h) => {
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: 'Colaboradores &copy; OpenStreetMap'
           }).addTo(map);
+
+          // 👇 AVISA O REACT SEMPRE QUE O MAPA TERMINAR DE SER ARRASTADO
+          map.on('moveend', function() {
+            const bounds = map.getBounds();
+            window.parent.postMessage({
+              type: 'MAP_MOVED',
+              bounds: {
+                north: bounds.getNorth(),
+                south: bounds.getSouth(),
+                east: bounds.getEast(),
+                west: bounds.getWest()
+              }
+            }, '*');
+          });
 
           hotels.forEach(hotel => {
             const customIcon = L.divIcon({
@@ -1258,12 +1291,12 @@ ratehawkResults = combinados.map((h) => {
           <div className="lg:col-span-5 space-y-4">
             
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-              <h2 className="text-lg font-black text-gray-900">{destinationQuery ? destinationQuery.split(',')[0] : 'Destino'}: {filteredResults.length} opções de acomodação disponíveis</h2>
+              <h2 className="text-lg font-black text-gray-900">{destinationQuery ? destinationQuery.split(',')[0] : 'Destino'}: {hoteisExibidosNaLista.length} opções de acomodação disponíveis</h2>
             </div>
 
             {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm font-bold border-l-4 border-red-500 shadow-sm">{error}</div>}
 
-            {filteredResults.map((hotel, index) => {
+            {hoteisExibidosNaLista.map((hotel, index) => {
               
               const cardBg = hotel.imagensReais && hotel.imagensReais.length > 0 
                 ? (typeof hotel.imagensReais[0] === 'string' ? hotel.imagensReais[0].replace('{size}', '800x600') : hotel.imagensReais[0]) 
@@ -1390,13 +1423,22 @@ ratehawkResults = combinados.map((h) => {
           <div className="lg:col-span-4 sticky top-4 h-[calc(100vh-40px)] bg-gray-100 rounded-xl border border-gray-300 overflow-hidden shadow-inner hidden lg:flex flex-col">
             
             <div className="bg-white p-3 border-b border-gray-200 flex justify-between items-center z-10 shadow-sm relative">
-              <button className="bg-white border border-gray-300 text-xs font-bold px-4 py-2 rounded shadow hover:bg-gray-50 transition flex items-center gap-1 text-gray-700">
-                <span>‹</span> Ampliar o mapa
+              <button 
+                onClick={() => setIsMapExpanded(true)} 
+                className="bg-white border border-gray-300 text-xs font-bold px-4 py-2 rounded shadow hover:bg-gray-50 transition flex items-center gap-1 text-gray-700"
+              >
+                <span>⛶</span> Ampliar o mapa
               </button>
-              <div className="relative flex-1 ml-3">
-                <input type="text" placeholder="Pesquisar movendo o mapa" readOnly className="w-full text-xs border border-gray-300 rounded px-3 py-2 outline-none bg-gray-50 font-medium text-gray-600"/>
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400">📍</span>
-              </div>
+              
+              <label className="flex items-center gap-2 cursor-pointer ml-3 bg-gray-50 border border-gray-300 px-3 py-1.5 rounded-md hover:bg-gray-100 transition">
+                <input 
+                  type="checkbox" 
+                  checked={searchOnMapMove} 
+                  onChange={(e) => setSearchOnMapMove(e.target.checked)} 
+                  className="accent-[#ffc107] w-4 h-4 cursor-pointer"
+                />
+                <span className="text-xs font-bold text-gray-700 whitespace-nowrap">Pesquisar movendo o mapa</span>
+              </label>
             </div>
 
             <div className="flex-1 w-full relative">
@@ -1463,12 +1505,37 @@ ratehawkResults = combinados.map((h) => {
         document.body
       )}
 
+      {/* MODAL: MAPA EXPANDIDO */}
+      {isMapExpanded && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999999] bg-white flex flex-col">
+          <div className="p-4 bg-gray-900 flex justify-between items-center shadow-md">
+            <h2 className="font-black text-white text-lg">Mapa de Acomodações</h2>
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 cursor-pointer bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 hover:bg-gray-700 transition">
+                <input type="checkbox" checked={searchOnMapMove} onChange={(e) => setSearchOnMapMove(e.target.checked)} className="accent-[#ffc107] w-4 h-4" />
+                <span className="text-xs font-bold text-white">Pesquisar movendo o mapa</span>
+              </label>
+              <button onClick={() => setIsMapExpanded(false)} className="bg-[#ffc107] hover:bg-yellow-500 text-gray-900 px-6 py-2 rounded-lg font-black text-sm uppercase tracking-wide transition shadow-lg">
+                Fechar Mapa
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 w-full relative">
+            <iframe title="Mapa Expandido" width="100%" height="100%" style={{ border: 0 }} srcDoc={buildMapHtml()}></iframe>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL 2: FLUXO DE CHECKOUT B2B (PREBOOK -> BOOKING FORM) */}
       {bookingStep !== 'idle' && typeof document !== 'undefined' && createPortal(
         <div 
           className="fixed inset-0 z-[9999999] bg-black/80 backdrop-blur-sm overflow-y-auto flex items-start justify-center pt-10 sm:pt-16 pb-10 px-4" 
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
         >
+          
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full flex flex-col relative overflow-hidden my-auto border border-gray-200">
+            
             <div className="bg-gray-900 p-5 flex justify-between items-center text-white shrink-0">
               <h3 className="font-black text-sm uppercase tracking-wide">Finalizar Reserva B2B</h3>
               {bookingStep !== 'booking' && (
@@ -1481,6 +1548,7 @@ ratehawkResults = combinados.map((h) => {
                 <div className="text-center py-6">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto mb-4"></div>
                   <p className="text-gray-800 font-black text-lg">Validando disponibilidade e tarifas...</p>
+                  <p className="text-xs text-gray-500 mt-1">Conectando com a RateHawk (Prebook)</p>
                 </div>
               )}
 
@@ -1490,18 +1558,18 @@ ratehawkResults = combinados.map((h) => {
                     <p className="text-[10px] text-orange-600 font-black uppercase tracking-wider mb-1">Resumo do Hotel</p>
                     <p className="font-black text-gray-900 text-base leading-tight">{selectedOffer.hotelNome}</p>
                     <p className="text-xs font-medium text-gray-700 mt-1">{selectedOffer.tipoQuarto} - {selectedOffer.codigoRegime}</p>
-                    <p className="text-xl font-black text-green-700 mt-2">BRL {selectedOffer.precoVenda?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                    <p className="text-xl font-black text-green-700 mt-2">BRL {selectedOffer.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
                   </div>
 
                   <p className="text-xs font-black text-gray-900 mb-3 uppercase tracking-wide border-b border-gray-100 pb-2">Dados do Hóspede Principal</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                    <input type="text" placeholder="Nome" required value={guestFirstName} onChange={e => setGuestFirstName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none focus:border-orange-500 shadow-sm" />
-                    <input type="text" placeholder="Sobrenome" required value={guestLastName} onChange={e => setGuestLastName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none focus:border-orange-500 shadow-sm" />
+                    <input type="text" placeholder="Nome" required value={guestFirstName} onChange={e => setGuestFirstName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
+                    <input type="text" placeholder="Sobrenome" required value={guestLastName} onChange={e => setGuestLastName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
                   </div>
-                  <input type="email" placeholder="E-mail" required value={guestEmail} onChange={e => setGuestEmail(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium mb-3 outline-none focus:border-orange-500 shadow-sm" />
-                  <input type="text" placeholder="Telefone com DDD" required value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium mb-6 outline-none focus:border-orange-500 shadow-sm" />
+                  <input type="email" placeholder="E-mail" required value={guestEmail} onChange={e => setGuestEmail(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium mb-3 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
+                  <input type="text" placeholder="Telefone com DDD" required value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium mb-6 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
 
-                  <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-3 sm:py-4 rounded-xl shadow-lg transition uppercase text-sm tracking-wide">
+                  <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-3 sm:py-4 rounded-xl shadow-lg hover:shadow-xl transition uppercase text-sm tracking-wide">
                     Confirmar Reserva B2B
                   </button>
                 </form>
@@ -1511,26 +1579,29 @@ ratehawkResults = combinados.map((h) => {
                 <div className="text-center py-6">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-green-600 mx-auto mb-4"></div>
                   <p className="text-gray-800 font-black text-lg">Processando sua reserva...</p>
+                  <p className="text-xs text-gray-500 mt-1">Aguardando confirmação do fornecedor</p>
                 </div>
               )}
 
               {bookingStep === 'success' && (
                 <div className="text-center py-6">
-                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">✓</div>
+                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">✓</div>
                   <h4 className="text-xl font-black text-gray-900 mb-2">Reserva Confirmada!</h4>
-                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wide">Fechar e Voltar</button>
+                  <p className="text-sm text-gray-600 mb-5 bg-gray-50 py-2 px-4 rounded-lg border border-gray-100 inline-block">ID do Pedido: <span className="font-bold">{finalPartnerOrderId}</span></p>
+                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wide hover:bg-gray-800 transition shadow-lg">Fechar e Voltar</button>
                 </div>
               )}
 
               {bookingStep === 'error' && (
                 <div className="text-center py-6">
-                  <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">✕</div>
+                  <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">✕</div>
                   <h4 className="text-xl font-black text-gray-900 mb-2">Ops! Ocorreu um problema.</h4>
                   <p className="text-sm text-red-600 mb-5 bg-red-50 p-3 rounded-lg border border-red-100 break-words">{bookingError}</p>
-                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wide">Tentar Novamente</button>
+                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wide hover:bg-gray-800 transition shadow-lg">Tentar Novamente</button>
                 </div>
               )}
             </div>
+
           </div>
         </div>,
         document.body
