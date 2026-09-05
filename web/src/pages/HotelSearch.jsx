@@ -314,15 +314,11 @@ useEffect(() => {
     let ratehawkResults = [];
     let restelResults = [];
 
-   // 1. BUSCA RATEHAWK (Mantém os HIDs oficiais para auditoria, mas sem travar cidades reais)
+    // 1. BUSCA RATEHAWK
     try {
       const queryLower = destinationQuery.toLowerCase();
-      
-      // Se o usuário buscar explicitamente por termos de teste ou LAX, injeta os HIDs oficiais da RateHawk para a fiscalização
       const isTestSearch = queryLower.includes('los angeles') || queryLower.includes('conrad') || queryLower.includes('us-lax');
       const hidsToSearch = isTestSearch ? [10004834, 8819557, 9015534, 8663536] : [];
-
-      let ratehawkResults = [];
 
       if (hidsToSearch.length > 0) {
         const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-page`; 
@@ -358,27 +354,57 @@ useEffect(() => {
           const matchedIds = combinados.map(h => String(h.id));
           let dbHotels = [];
           if (matchedIds.length > 0) {
-            const { data } = await supabase.from('Hotel').select('id, images, amenities').in('id', matchedIds);
+            const { data } = await supabase
+              .from('Hotel')
+              .select('id, images, amenities, description') // 👈 Adicionado 'description' aqui
+              .in('id', matchedIds);
             if (data) dbHotels = data;
           }
 
-          ratehawkResults = combinados.map((h) => {
+ratehawkResults = combinados.map((h) => {
             const latOffset = (Math.random() - 0.5) * 0.015;
             const lngOffset = (Math.random() - 0.5) * 0.015;
             const finalLat = h.latitude || (cityLat + latOffset);
             const finalLng = h.longitude || (cityLng + lngOffset);
             const dbInfo = dbHotels.find(dbH => dbH.id === String(h.id));
+            
+            // DADOS REAIS: Puxa estritamente do banco de dados (Supabase) ou da API
             let imagensOficiais = dbInfo?.images?.length > 0 ? dbInfo.images : [];
+            
+            // NOVA LÓGICA DE EXTRAÇÃO: COMPATÍVEL COM GRUPOS DE COMODIDADES
+            let comodidadesOficiais = [];
+            if (Array.isArray(dbInfo?.amenities)) {
+              // Verifica se a estrutura é o array de grupos (ex: group_name: "Alimentação")
+              if (dbInfo.amenities.length > 0 && typeof dbInfo.amenities[0] === 'object' && dbInfo.amenities[0].amenities) {
+                // Junta todas as comodidades de todos os grupos em uma lista única
+                comodidadesOficiais = dbInfo.amenities.flatMap(grupo => grupo.amenities || []);
+              } else {
+                // Caso seja salvo como um array simples de strings
+                comodidadesOficiais = dbInfo.amenities;
+              }
+            } else if (dbInfo?.amenities && Array.isArray(dbInfo.amenities.amenities)) {
+              // Caso seja salvo como um objeto JSON único
+              comodidadesOficiais = dbInfo.amenities.amenities;
+            }
+
+            let descricaoOficial = dbInfo?.description || dbInfo?.descricao || h.description || "";
 
             return {
               hotelId: `rh_${h.id}`, 
               nome: h.name || `Hotel RateHawk (${h.id})`, 
               categoria: h.star_rating || 4, 
-              endereco: h.address || 'Localização central',
-              distancia: 'RateHawk (Homologação Oficial)',
+              endereco: h.address || '',
+              distancia: 'RateHawk',
               latitude: finalLat,
               longitude: finalLng,
               imagensReais: imagensOficiais,
+              
+              // Duplicidade de chaves apenas para garantir leitura na página de detalhes
+              amenities: comodidadesOficiais,
+              comodidades: comodidadesOficiais,
+              description: descricaoOficial,
+              descricao: descricaoOficial,
+              
               ofertas: h.rates.map(r => ({
                 tipoQuarto: r.room_name || 'Quarto Standard', 
                 codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO',
@@ -391,82 +417,15 @@ useEffect(() => {
             };
           });
         }
-      } 
-      const guestsPayload = rooms.map(room => ({
-        adults: room.adults,
-        children: room.childrenAges
-      }));
-
-      const requests = hidsToSearch.map(hid => 
-        fetch(baseUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            hid: hid,
-            checkin: checkInDate,
-            checkout: checkOutDate,
-            residency: residency,
-            currency: "USD",
-            guests: guestsPayload
-          })
-        })
-      );
-
-      const responses = await Promise.all(requests);
-      const jsonResults = await Promise.all(responses.map(r => r.json()));
-
-      const combinados = [];
-      jsonResults.forEach(resData => {
-        if (resData.data && resData.data.hotels) combinados.push(...resData.data.hotels);
-      });
-
-      if (combinados.length > 0) {
-        const matchedIds = combinados.map(h => String(h.id));
-        let dbHotels = [];
-        if (matchedIds.length > 0) {
-          const { data } = await supabase.from('Hotel').select('id, images, amenities').in('id', matchedIds);
-          if (data) dbHotels = data;
-        }
-
-        ratehawkResults = combinados.map((h) => {
-          const latOffset = (Math.random() - 0.5) * 0.015;
-          const lngOffset = (Math.random() - 0.5) * 0.015;
-          const finalLat = h.latitude || (cityLat + latOffset);
-          const finalLng = h.longitude || (cityLng + lngOffset);
-          const dbInfo = dbHotels.find(dbH => dbH.id === String(h.id));
-          let imagensOficiais = dbInfo?.images?.length > 0 ? dbInfo.images : [];
-
-          return {
-            hotelId: `rh_${h.id}`, 
-            nome: h.name || `Hotel RateHawk (${h.id})`, 
-            categoria: h.star_rating || 4, 
-            endereco: h.address || 'Localização central',
-            distancia: 'RateHawk',
-            latitude: finalLat,
-            longitude: finalLng,
-            imagensReais: imagensOficiais,
-            ofertas: h.rates.map(r => ({
-              tipoQuarto: r.room_name || 'Quarto Standard', 
-              codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO',
-              nomeRegime: r.meal_data?.value || 'Sem refeições', 
-              precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0) * 5.1,
-              paymentTypeObj: r.payment_options?.payment_types?.[0],
-              bookHash: r.book_hash,
-              freeCancellation: r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before != null
-            }))
-          };
-        });
       }
     } catch (err) {
       console.error("Aviso: Falha na busca RateHawk:", err);
     }
 
-    // 2. BUSCA RESTEL EM PARALELO (Com tratamento limpo do destino)
+    // 2. BUSCA RESTEL EM PARALELO
     try {
       const functions = getFunctions(app);
       const searchRestelHotels = httpsCallable(functions, 'searchRestelHotels');
-      
-      // Limpa e pega apenas o nome principal da cidade/destino digitado ou selecionado
       const cleanDestination = destinationQuery.split(',')[0].trim();
 
       const response = await searchRestelHotels({
@@ -1371,14 +1330,29 @@ useEffect(() => {
                   <div className="flex-1 p-4 flex flex-col justify-between">
                     <div>
                       <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <div className="text-amber-400 text-[10px] mb-0.5">{'⭐'.repeat(hotel.categoria || 4)}</div>
-                          <h3 className="font-bold text-gray-900 text-base leading-tight">{hotel.nome}</h3>
-                          <p className="text-[11px] text-gray-500 font-medium mt-1">{hotel.endereco}</p>
-                          <p className="text-[11px] text-gray-400">{hotel.distancia}</p>
-                        </div>
-                        <div className="bg-green-600 text-white font-black text-sm px-2.5 py-1 rounded shadow-sm">8,2</div>
-                      </div>
+  <div>
+    <div className="text-amber-400 text-[10px] mb-0.5">{'⭐'.repeat(hotel.categoria || 4)}</div>
+    
+    {/* Título clicável com cor azul e hover */}
+    <h3 
+      onClick={() => navigate('/hotel-details', { state: { hotel, checkInDate, checkOutDate, rooms, residency } })}
+      className="font-bold text-blue-600 text-base leading-tight hover:underline transition cursor-pointer"
+    >
+      {hotel.nome}
+    </h3>
+
+    {/* Endereço clicável/interativo */}
+    <p 
+      onClick={() => navigate('/hotel-details', { state: { hotel, checkInDate, checkOutDate, rooms, residency } })}
+      className="text-[11px] text-gray-500 font-medium mt-1 hover:underline cursor-pointer"
+    >
+      {hotel.endereco}
+    </p>
+
+    <p className="text-[11px] text-gray-400">{hotel.distancia}</p>
+  </div>
+  <div className="bg-green-600 text-white font-black text-sm px-2.5 py-1 rounded shadow-sm">8,2</div>
+</div>
 
                       <div className="pt-3 flex flex-col gap-2.5">
                         {hotel.ofertas?.filter(oferta => {

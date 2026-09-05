@@ -26,7 +26,8 @@ async function dispararAPI(xmlString) {
         headers: { 
             'Content-Type': 'application/x-www-form-urlencoded', 
             'Accept-Encoding': 'gzip, deflate' 
-        }
+        },
+        timeout: 60000
     });
 }
 
@@ -34,7 +35,7 @@ async function dispararAPI(xmlString) {
 // 2. MOTOR DE IMPORTAÇÃO (CARGA COMPLETA: XML 17 -> XML 15 -> SUPABASE)
 // ============================================================================
 async function iniciarTrator() {
-    console.log("🚀 Iniciando Trator de Importação Restel (CARGA MÁXIMA)...");
+    console.log("🚀 Iniciando Trator de Importação Restel (COM DIAGNÓSTICO E FILTRAGEM)...");
 
     const xml17 = `<?xml version="1.0" encoding="UTF-8"?>
 <peticion>
@@ -46,22 +47,42 @@ async function iniciarTrator() {
     try {
         console.log("📡 Baixando lista mestre de hotéis (XML 17)... Isso pode levar alguns segundos.");
         const res17 = await dispararAPI(xml17);
+        
+        // Exibe um trecho do XML bruto para fins de diagnóstico no terminal
+        console.log("📦 Resposta bruta da Restel (XML 17 - Início):", String(res17.data).substring(0, 300));
+
         const json17 = parser.parse(res17.data);
         
-        let hoteis = json17?.respuesta?.parametros?.hoteles?.hotel;
-        if (!hoteis) return console.log("⚠️ Nenhum hotel encontrado no XML 17.");
+        // Tenta múltiplos caminhos possíveis na estrutura da resposta da Restel para o XML 17
+        let hoteis = json17?.respuesta?.parametros?.hoteles?.hotel 
+                  || json17?.respuesta?.hoteles?.hotel 
+                  || json17?.respuesta?.hotel;
+
+        if (!hoteis) {
+            console.log("⚠️ Caminho padrão não encontrado. Estrutura completa recebida do XML 17:", JSON.stringify(json17).substring(0, 800));
+            return;
+        }
         
         if (!Array.isArray(hoteis)) hoteis = [hoteis];
         
         const totalHoteis = hoteis.length;
-        console.log(`✅ ${totalHoteis} hotéis totais identificados na Restel.`);
-        console.log(`⏳ Iniciando processamento completo... (Aviso: Isso levará algumas horas. Não feche o terminal!)`);
+        console.log(`✅ ${totalHoteis} registros totais identificados na Restel.`);
+        console.log(`⏳ Iniciando processamento... (Apenas códigos estritamente numéricos serão consultados)`);
 
         let contador = 0;
 
         for (const h of hoteis) {
             contador++;
-            const cobol = String(h.hot_codcobol).padStart(6, '0');
+            // Mapeia possíveis nomes da chave do código cobol dependendo do retorno do XML 17
+            const codigoBruto = String(h.hot_codcobol || h.codigo || h.cod || "").trim();
+
+            // 🛑 BLINDAGEM: Descarta imediatamente qualquer código que contenha letras (regiões, zonas, etc.)
+            if (!/^\d+$/.test(codigoBruto)) {
+                console.log(`[${contador}/${totalHoteis}] ⏩ Ignorando código não numérico/grupo: ${codigoBruto}`);
+                continue;
+            }
+
+            const cobol = codigoBruto.padStart(6, '0');
             
             const xml15 = `<?xml version="1.0" encoding="UTF-8"?>
 <peticion>
@@ -96,7 +117,7 @@ async function iniciarTrator() {
                     comodidades = servs.map(s => s.desc_serv);
                 }
 
-                // Grava ou atualiza no Supabase
+                // Grava ou atualiza no Supabase garantindo que o Cobol é puramente numérico
                 const { error } = await supabase.from('RestelHotel').upsert({
                     cobol: cobol,
                     name: details.nombre_h || "Sem Nome",
@@ -117,18 +138,18 @@ async function iniciarTrator() {
                 if (error) {
                     console.error(`[${contador}/${totalHoteis}] ❌ Erro DB - Cobol ${cobol}:`, error.message);
                 } else {
-                    console.log(`[${contador}/${totalHoteis}] 💾 Salvo: ${details.nombre_h} (${cobol})`);
+                    console.log(`[${contador}/${totalHoteis}] 💾 Salvo com sucesso: ${details.nombre_h} (${cobol})`);
                 }
 
             } catch (err) {
                 console.error(`[${contador}/${totalHoteis}] ❌ Erro API - Cobol ${cobol}:`, err.message);
             }
 
-            // Intervalo de segurança (300ms) para não derrubar a API da Restel
+            // Intervalo de segurança (300ms) para respeitar o limite de requisições da Restel
             await new Promise(r => setTimeout(r, 300));
         }
 
-        console.log("\n🎉 IMPORTAÇÃO 100% FINALIZADA! Todos os hotéis foram salvos no Supabase.");
+        console.log("\n🎉 IMPORTAÇÃO 100% FINALIZADA! Apenas hotéis válidos com código numérico foram processados.");
 
     } catch (error) {
         console.error("❌ Falha crítica no Trator Restel:", error.message);

@@ -42,29 +42,70 @@ export default function HotelDetails() {
 
     const fetchHotelFromSupabase = async () => {
       try {
+        // 1. Remove os prefixos 'rh_' ou 'restel_' para que o Supabase encontre o ID real (ex: 10004834)
+        const rawId = String(hotel.hotelId).replace('rh_', '').replace('restel_', '');
+
         const { data, error } = await supabase
           .from('Hotel')
           .select('*')
-          .eq('id', String(hotel.hotelId))
+          .eq('id', rawId)
           .single();
 
         if (error) {
           console.warn("Hotel não encontrado na base local do Supabase, utilizando dados básicos da busca.");
         }
 
+        // 2. Extrator seguro para evitar TELA BRANCA caso a descrição venha como Array de objetos (Padrão RateHawk: description_struct)
+        const parseDescription = (descData) => {
+          if (!descData) return "";
+          if (typeof descData === 'string') return descData;
+          if (Array.isArray(descData)) {
+            return descData.map(item => {
+              if (item.paragraphs && Array.isArray(item.paragraphs)) {
+                return item.paragraphs.join(' ');
+              }
+              return '';
+            }).filter(text => text.length > 0).join('\n\n');
+          }
+          return "Detalhes não disponíveis no formato padrão.";
+        };
+
+        // 3. Extrator de comodidades que respeita os grupos do seu banco JSON
+        const parseAmenities = (amenitiesData) => {
+          if (!amenitiesData) return [];
+          let parsed = amenitiesData;
+          if (typeof amenitiesData === 'object' && !Array.isArray(amenitiesData) && amenitiesData.amenities) {
+            parsed = amenitiesData.amenities;
+          }
+          if (!Array.isArray(parsed) || parsed.length === 0) return [];
+          if (typeof parsed[0] === 'object' && parsed[0].group_name) {
+            return parsed; // Já está no formato de grupos do Supabase
+          }
+          return [{ group_name: "Comodidades Gerais", amenities: parsed }];
+        };
+
+        // 4. Extrator de métodos de pagamento (A RateHawk envia ['visa', 'master_card'])
+        const parsePayments = (methods) => {
+          if (!methods) return "Consultar condições na reserva";
+          if (Array.isArray(methods)) return methods.join(', ').replace(/_/g, ' ').toUpperCase();
+          if (typeof methods === 'string') return methods;
+          return "Consultar condições na reserva";
+        };
+
         if (data) {
           setStaticData({
-            name: data.name,
-            address: data.address,
-            star_rating: data.starRating,
-            latitude: data.latitude,
-            longitude: data.longitude,
-            images: data.images || [],
-            amenity_groups: data.amenities || [],
-            check_in_time: "14:00",
-            check_out_time: "11:00",
-            payment_methods: ["Cartão de Crédito", "Faturado B2B"],
-            metapolicy_extra_info: "Consulte as regras de cancelamento e taxas locais aplicáveis no momento do prebook."
+            name: data.name || hotel.nome,
+            address: data.address || hotel.endereco,
+            star_rating: data.starRating || hotel.categoria,
+            latitude: data.latitude || hotel.latitude,
+            longitude: data.longitude || hotel.longitude,
+            images: data.images?.length > 0 ? data.images : (hotel.imagensReais || []),
+            amenity_groups: parseAmenities(data.amenities || data.amenity_groups || hotel.comodidades),
+            description: parseDescription(data.description || data.description_struct || hotel.descricao),
+            check_in_time: data.check_in_time ? String(data.check_in_time).slice(0, 5) : null,
+            check_out_time: data.check_out_time ? String(data.check_out_time).slice(0, 5) : null,
+            payment_methods: parsePayments(data.payment_methods),
+            metapolicy_extra_info: data.metapolicy_extra_info || "Sem restrições extras documentadas."
           });
         } else {
           setStaticData({
@@ -73,8 +114,13 @@ export default function HotelDetails() {
             star_rating: hotel.categoria,
             latitude: hotel.latitude,
             longitude: hotel.longitude,
-            images: [],
-            amenity_groups: []
+            images: hotel.imagensReais || [],
+            amenity_groups: parseAmenities(hotel.comodidades),
+            description: parseDescription(hotel.descricao),
+            check_in_time: null,
+            check_out_time: null,
+            payment_methods: "Consultar condições na reserva",
+            metapolicy_extra_info: "Consulte as regras aplicáveis."
           });
         }
       } catch (err) {
@@ -91,7 +137,7 @@ export default function HotelDetails() {
   // LÓGICA DE FINALIZAÇÃO DA RESERVA (PREBOOK -> BOOKING -> FINISH)
   // ==========================================
   const handleStartBooking = async (oferta) => {
-    setActiveRoomDetail(null); // Fecha o modal de detalhes do quarto
+    setActiveRoomDetail(null); 
     setSelectedOffer({ ...oferta, hotelNome: staticData?.name || hotel.nome, hotelId: hotel.hotelId });
     setBookingStep('prebooking');
     setBookingError(null);
@@ -236,6 +282,7 @@ export default function HotelDetails() {
     }, 3000);
   };
 
+  // Trava de segurança no render principal para evitar erro caso location.state se perca
   if (!hotel) return null;
 
   const formatarData = (dataString) => {
@@ -313,8 +360,8 @@ export default function HotelDetails() {
       <div className="bg-white border-b border-gray-200 py-3 shadow-sm sticky top-0 z-40">
         <div className="max-w-[1200px] mx-auto px-4 flex justify-between items-center">
           <div className="flex gap-8 items-center text-xs">
-            <div><span className="font-bold text-gray-500 uppercase block">Check-in</span><span className="font-bold text-gray-900">{formatarData(checkInDate)} (Após {staticData?.check_in_time || '14:00'})</span></div>
-            <div><span className="font-bold text-gray-500 uppercase block">Check-out</span><span className="font-bold text-gray-900">{formatarData(checkOutDate)} (Até {staticData?.check_out_time || '11:00'})</span></div>
+            <div><span className="font-bold text-gray-500 uppercase block">Check-in</span><span className="font-bold text-gray-900">{formatarData(checkInDate)} {staticData?.check_in_time ? `(Após ${staticData.check_in_time})` : ''}</span></div>
+            <div><span className="font-bold text-gray-500 uppercase block">Check-out</span><span className="font-bold text-gray-900">{formatarData(checkOutDate)} {staticData?.check_out_time ? `(Até ${staticData.check_out_time})` : ''}</span></div>
           </div>
           <button onClick={() => navigate(-1)} className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold px-6 py-2 rounded text-xs transition">
             Alterar busca
@@ -361,20 +408,31 @@ export default function HotelDetails() {
               </div>
             )}
           </div>
+
+          {staticData?.description && (
+            <div className="mt-6 pt-6 border-t border-gray-100">
+              <h2 className="text-sm font-black text-gray-900 mb-2">Sobre o hotel</h2>
+              <p className="text-xs text-gray-600 leading-relaxed text-justify whitespace-pre-line">
+                {staticData.description}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <h2 className="text-lg font-black text-gray-900 mb-4">Instalações e serviços</h2>
           {loadingStatic ? (
-            <p className="text-xs text-gray-500">Carregando instalações do banco...</p>
+            <p className="text-xs text-gray-500">Processando informações do Supabase...</p>
           ) : staticData?.amenity_groups && staticData.amenity_groups.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {staticData.amenity_groups.map((grupo, idx) => (
                 <div key={idx} className="space-y-2">
-                  <h3 className="font-bold text-sm text-gray-900 border-b border-gray-100 pb-1">{grupo.group_name || "Comodidades"}</h3>
+                  <h3 className="font-bold text-sm text-gray-900 border-b border-gray-100 pb-1">{grupo.group_name || "Comodidades Gerais"}</h3>
                   <ul className="text-xs text-gray-600 space-y-1">
                     {(grupo.amenities || []).map((amenity, i) => (
-                      <li key={i} className="flex items-center gap-1.5"><span className="text-[#00a698] font-bold">✓</span> {typeof amenity === 'string' ? amenity : amenity.name}</li>
+                      <li key={i} className="flex items-center gap-1.5">
+                        <span className="text-[#00a698] font-bold">✓</span> {typeof amenity === 'string' ? amenity : amenity.name}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -469,25 +527,6 @@ export default function HotelDetails() {
               </div>
             );
           })}
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <h2 className="text-lg font-black text-gray-900 mb-4">Política, Pagamento e Informações Adicionais</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-gray-700">
-            <div className="space-y-2 border-r border-gray-100 pr-4">
-              <h3 className="font-bold text-gray-900 text-sm">Check-in / Check-out</h3>
-              <p><strong>Check-in:</strong> Após {staticData?.check_in_time || '14:00'}</p>
-              <p><strong>Check-out:</strong> Até {staticData?.check_out_time || '11:00'}</p>
-            </div>
-            <div className="space-y-2 border-r border-gray-100 pr-4">
-              <h3 className="font-bold text-gray-900 text-sm">Pagamento</h3>
-              <p><strong>Métodos aceitos:</strong> {staticData?.payment_methods ? staticData.payment_methods.join(', ') : 'Cartão / Faturado B2B'}</p>
-            </div>
-            <div className="space-y-2">
-              <h3 className="font-bold text-gray-900 text-sm">Informações adicionais</h3>
-              <p className="whitespace-pre-line text-gray-600">{staticData?.metapolicy_extra_info || 'Sem restrições extras.'}</p>
-            </div>
-          </div>
         </div>
 
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
