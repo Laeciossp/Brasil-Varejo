@@ -178,8 +178,8 @@ export default function HotelSearch() {
     return () => window.removeEventListener('message', handleIframeMessage);
   }, [results, navigate, checkInDate, checkOutDate, rooms, residency]);
 
-  useEffect(() => {
-   useEffect(() => {
+
+useEffect(() => {
     const fetchAutocompleteFromAPI = async () => {
       if (!destinationQuery || destinationQuery.length < 2) {
         setRegionsResults([]); setHotelsResults([]); setShowDropdown(false); return;
@@ -189,28 +189,67 @@ export default function HotelSearch() {
         const workerUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-autocomplete?query=${encodeURIComponent(destinationQuery)}`;
         const res = await fetch(workerUrl);
         const data = await res.json();
-        const regions = data.regions || data.data?.regions || [];
-        const hotels = data.hotels || data.data?.hotels || [];
+        const ratehawkRegions = data.regions || data.data?.regions || [];
+        const ratehawkHotels = data.hotels || data.data?.hotels || [];
 
-        // 2. Autocomplete da Restel (Direto do Supabase)
-        const { data: restelSupabaseData, error } = await supabase
+        // 2. Autocomplete da Restel (Supabase): Cidades/Províncias (Regiões) e Hotéis
+        const { data: restelData, error } = await supabase
           .from('RestelHotel')
-          .select('name, city, province')
-          .or(`name.ilike.%${destinationQuery}%,city.ilike.%${destinationQuery}%`)
-          .limit(6);
+          .select('name, city, province, countryCode')
+          .or(`name.ilike.%${destinationQuery}%,city.ilike.%${destinationQuery}%,province.ilike.%${destinationQuery}%,countryCode.ilike.%${destinationQuery}%`)
+          .limit(20);
 
+        let restelRegionsFormatted = [];
         let restelHotelsFormatted = [];
-        if (!error && restelSupabaseData) {
-          restelHotelsFormatted = restelSupabaseData.map(h => ({
-            id: `restel_${h.name}`,
-            name: `${h.name} (${h.city || h.province || ''}) [Restel B2B]`,
-            type: 'hotel'
+
+        if (!error && restelData) {
+          const uniqueCities = new Set();
+          const uniqueProvinces = new Set();
+
+          restelData.forEach(h => {
+            if (h.city && h.city.toLowerCase().includes(destinationQuery.toLowerCase())) {
+              uniqueCities.add(JSON.stringify({ city: h.city, province: h.province, country: h.countryCode }));
+            }
+            if (h.province && h.province.toLowerCase().includes(destinationQuery.toLowerCase()) && h.province.toLowerCase() !== h.city?.toLowerCase()) {
+              uniqueProvinces.add(JSON.stringify({ province: h.province, country: h.countryCode }));
+            }
+          });
+
+          // 1. Adicionar Cidades encontradas
+          Array.from(uniqueCities).slice(0, 3).forEach((itemStr, idx) => {
+            const item = JSON.parse(itemStr);
+            const subText = item.province && item.province !== item.city ? `, ${item.province}` : '';
+            restelRegionsFormatted.push({
+              id: `restel_city_${idx}`,
+              name: `${item.city}${subText} (${item.country || ''})`.trim(),
+              cleanQuery: item.city,
+              label: 'Cidade'
+            });
+          });
+
+          // 2. Adicionar Províncias encontradas
+          Array.from(uniqueProvinces).slice(0, 2).forEach((itemStr, idx) => {
+            const item = JSON.parse(itemStr);
+            restelRegionsFormatted.push({
+              id: `restel_prov_${idx}`,
+              name: `${item.province} (${item.country || ''})`,
+              cleanQuery: item.province,
+              label: 'Província'
+            });
+          });
+
+          // 3. Hotéis específicos
+          restelHotelsFormatted = restelData.map(h => ({
+            id: h.name,
+            name: `${h.name} — ${h.city || ''}, ${h.province || ''} (${h.countryCode || ''})`.replace(/,\s*,/g, '').replace(/— ,/g, '—').trim(),
+            cleanName: h.name,
+            label: 'Hotel'
           }));
         }
 
-        setRegionsResults(regions); 
-        setHotelsResults([...hotels, ...restelHotelsFormatted]);
-        setShowDropdown(regions.length > 0 || hotels.length > 0 || restelHotelsFormatted.length > 0);
+        setRegionsResults([...ratehawkRegions, ...restelRegionsFormatted]); 
+        setHotelsResults([...ratehawkHotels, ...restelHotelsFormatted]);
+        setShowDropdown(ratehawkRegions.length > 0 || ratehawkHotels.length > 0 || restelRegionsFormatted.length > 0 || restelHotelsFormatted.length > 0);
       } catch (err) {
         console.error("Erro no autocompletar:", err);
       }
@@ -275,12 +314,84 @@ export default function HotelSearch() {
     let ratehawkResults = [];
     let restelResults = [];
 
-    // 1. BUSCA RATEHAWK EM PARALELO
+   // 1. BUSCA RATEHAWK (Mantém os HIDs oficiais para auditoria, mas sem travar cidades reais)
     try {
-      const hidsToSearch = (targetDest === 'US-LAX' || destinationQuery.toLowerCase().includes('los angeles') || destinationQuery.toLowerCase().includes('conrad')) 
-        ? [10004834, 8819557] : [10004834, 8819557, 9015534, 8663536];
+      const queryLower = destinationQuery.toLowerCase();
+      
+      // Se o usuário buscar explicitamente por termos de teste ou LAX, injeta os HIDs oficiais da RateHawk para a fiscalização
+      const isTestSearch = queryLower.includes('los angeles') || queryLower.includes('conrad') || queryLower.includes('us-lax');
+      const hidsToSearch = isTestSearch ? [10004834, 8819557, 9015534, 8663536] : [];
 
-      const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-page`; 
+      let ratehawkResults = [];
+
+      if (hidsToSearch.length > 0) {
+        const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-page`; 
+        const guestsPayload = rooms.map(room => ({
+          adults: room.adults,
+          children: room.childrenAges
+        }));
+
+        const requests = hidsToSearch.map(hid => 
+          fetch(baseUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              hid: hid,
+              checkin: checkInDate,
+              checkout: checkOutDate,
+              residency: residency,
+              currency: "USD",
+              guests: guestsPayload
+            })
+          })
+        );
+
+        const responses = await Promise.all(requests);
+        const jsonResults = await Promise.all(responses.map(r => r.json()));
+
+        const combinados = [];
+        jsonResults.forEach(resData => {
+          if (resData.data && resData.data.hotels) combinados.push(...resData.data.hotels);
+        });
+
+        if (combinados.length > 0) {
+          const matchedIds = combinados.map(h => String(h.id));
+          let dbHotels = [];
+          if (matchedIds.length > 0) {
+            const { data } = await supabase.from('Hotel').select('id, images, amenities').in('id', matchedIds);
+            if (data) dbHotels = data;
+          }
+
+          ratehawkResults = combinados.map((h) => {
+            const latOffset = (Math.random() - 0.5) * 0.015;
+            const lngOffset = (Math.random() - 0.5) * 0.015;
+            const finalLat = h.latitude || (cityLat + latOffset);
+            const finalLng = h.longitude || (cityLng + lngOffset);
+            const dbInfo = dbHotels.find(dbH => dbH.id === String(h.id));
+            let imagensOficiais = dbInfo?.images?.length > 0 ? dbInfo.images : [];
+
+            return {
+              hotelId: `rh_${h.id}`, 
+              nome: h.name || `Hotel RateHawk (${h.id})`, 
+              categoria: h.star_rating || 4, 
+              endereco: h.address || 'Localização central',
+              distancia: 'RateHawk (Homologação Oficial)',
+              latitude: finalLat,
+              longitude: finalLng,
+              imagensReais: imagensOficiais,
+              ofertas: h.rates.map(r => ({
+                tipoQuarto: r.room_name || 'Quarto Standard', 
+                codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO',
+                nomeRegime: r.meal_data?.value || 'Sem refeições', 
+                precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0) * 5.1,
+                paymentTypeObj: r.payment_options?.payment_types?.[0],
+                bookHash: r.book_hash,
+                freeCancellation: r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before != null
+              }))
+            };
+          });
+        }
+      } 
       const guestsPayload = rooms.map(room => ({
         adults: room.adults,
         children: room.childrenAges
@@ -350,13 +461,16 @@ export default function HotelSearch() {
       console.error("Aviso: Falha na busca RateHawk:", err);
     }
 
-    // 2. BUSCA RESTEL EM PARALELO
+    // 2. BUSCA RESTEL EM PARALELO (Com tratamento limpo do destino)
     try {
       const functions = getFunctions(app);
       const searchRestelHotels = httpsCallable(functions, 'searchRestelHotels');
       
+      // Limpa e pega apenas o nome principal da cidade/destino digitado ou selecionado
+      const cleanDestination = destinationQuery.split(',')[0].trim();
+
       const response = await searchRestelHotels({
-        destinationCode: destinationQuery.split(',')[0],
+        destinationCode: cleanDestination,
         checkInDate: checkInDate,
         checkOutDate: checkOutDate,
         adults: rooms[0].adults,
@@ -375,7 +489,6 @@ export default function HotelSearch() {
       console.error("Aviso: Falha na busca Restel:", err);
     }
 
-    // 3. JUNTA OS DOIS MUNDOS
     const todosOsHoteis = [...ratehawkResults, ...restelResults];
 
     if (todosOsHoteis.length > 0) {
@@ -554,7 +667,7 @@ export default function HotelSearch() {
     const centerLat = mapCenterLatLon ? mapCenterLatLon.split(',')[0] : -23.5505;
     const centerLng = mapCenterLatLon ? mapCenterLatLon.split(',')[1] : -46.6333;
     
-   const pinsData = filteredResults.filter(h => h.latitude && h.longitude).map(h => {
+    const pinsData = filteredResults.filter(h => h.latitude && h.longitude).map(h => {
       const img = h.imagensReais && h.imagensReais.length > 0 
         ? (typeof h.imagensReais[0] === 'string' ? h.imagensReais[0].replace('{size}', '240x240') : h.imagensReais[0]) 
         : 'data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=='; 
@@ -577,7 +690,7 @@ export default function HotelSearch() {
         <meta charset="utf-8">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-       <style>
+        <style>
           body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
           #map { height: 100%; width: 100%; }
 
@@ -707,13 +820,17 @@ export default function HotelSearch() {
                   {showDropdown && (regionsResults.length > 0 || hotelsResults.length > 0) && (
                     <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-xl max-h-72 overflow-y-auto z-50">
                       {regionsResults.map((item, idx) => (
-                        <div key={`reg-${idx}`} onClick={() => { setDestinationQuery(item.name || item.title); setRegionId(item.id); setShowDropdown(false); }} className="px-4 py-3 text-sm text-gray-800 hover:bg-orange-50 cursor-pointer border-b border-gray-100 flex justify-between items-center">
-                          <span className="font-medium">{item.name || item.title}</span><span className="text-[10px] text-gray-500 uppercase">Região</span>
-                        </div>
-                      ))}
-                      {hotelsResults.map((item, idx) => (
-                        <div key={`hot-${idx}`} onClick={() => { setDestinationQuery(item.name || item.title); setRegionId(item.id); setShowDropdown(false); }} className="px-4 py-3 text-sm text-gray-800 hover:bg-orange-50 cursor-pointer border-b border-gray-100 flex justify-between items-center">
-                          <span className="font-medium">{item.name || item.title}</span><span className="text-[10px] text-gray-500 uppercase">Hotel</span>
+                        <div 
+                          key={`reg-${idx}`} 
+                          onClick={() => { 
+                            setDestinationQuery(item.cleanQuery || item.name.split(',')[0]); 
+                            setRegionId(item.id); 
+                            setShowDropdown(false); 
+                          }} 
+                          className="px-4 py-3 text-sm text-gray-800 hover:bg-orange-50 cursor-pointer border-b border-gray-100 flex justify-between items-center"
+                        >
+                          <span className="font-medium">{item.name}</span>
+                          <span className="text-[10px] text-gray-500 uppercase">{item.label || 'Região'}</span>
                         </div>
                       ))}
                     </div>
@@ -908,7 +1025,7 @@ export default function HotelSearch() {
         </div>
       </div>
 
-     <div className="max-w-[1400px] mx-auto px-3 mt-6">
+      <div className="max-w-[1400px] mx-auto px-3 mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
           
           <div className="lg:col-span-3 bg-white rounded-xl shadow-sm p-5 border border-gray-200 text-sm text-gray-800">
@@ -1377,9 +1494,7 @@ export default function HotelSearch() {
           className="fixed inset-0 z-[9999999] bg-black/80 backdrop-blur-sm overflow-y-auto flex items-start justify-center pt-10 sm:pt-16 pb-10 px-4" 
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
         >
-          
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full flex flex-col relative overflow-hidden my-auto border border-gray-200">
-            
             <div className="bg-gray-900 p-5 flex justify-between items-center text-white shrink-0">
               <h3 className="font-black text-sm uppercase tracking-wide">Finalizar Reserva B2B</h3>
               {bookingStep !== 'booking' && (
@@ -1392,7 +1507,6 @@ export default function HotelSearch() {
                 <div className="text-center py-6">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto mb-4"></div>
                   <p className="text-gray-800 font-black text-lg">Validando disponibilidade e tarifas...</p>
-                  <p className="text-xs text-gray-500 mt-1">Conectando com a RateHawk (Prebook)</p>
                 </div>
               )}
 
@@ -1402,18 +1516,18 @@ export default function HotelSearch() {
                     <p className="text-[10px] text-orange-600 font-black uppercase tracking-wider mb-1">Resumo do Hotel</p>
                     <p className="font-black text-gray-900 text-base leading-tight">{selectedOffer.hotelNome}</p>
                     <p className="text-xs font-medium text-gray-700 mt-1">{selectedOffer.tipoQuarto} - {selectedOffer.codigoRegime}</p>
-                    <p className="text-xl font-black text-green-700 mt-2"> {selectedOffer.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                    <p className="text-xl font-black text-green-700 mt-2">BRL {selectedOffer.precoVenda?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
                   </div>
 
                   <p className="text-xs font-black text-gray-900 mb-3 uppercase tracking-wide border-b border-gray-100 pb-2">Dados do Hóspede Principal</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                    <input type="text" placeholder="Nome" required value={guestFirstName} onChange={e => setGuestFirstName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
-                    <input type="text" placeholder="Sobrenome" required value={guestLastName} onChange={e => setGuestLastName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
+                    <input type="text" placeholder="Nome" required value={guestFirstName} onChange={e => setGuestFirstName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none focus:border-orange-500 shadow-sm" />
+                    <input type="text" placeholder="Sobrenome" required value={guestLastName} onChange={e => setGuestLastName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none focus:border-orange-500 shadow-sm" />
                   </div>
-                  <input type="email" placeholder="E-mail" required value={guestEmail} onChange={e => setGuestEmail(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium mb-3 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
-                  <input type="text" placeholder="Telefone com DDD" required value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium mb-6 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
+                  <input type="email" placeholder="E-mail" required value={guestEmail} onChange={e => setGuestEmail(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium mb-3 outline-none focus:border-orange-500 shadow-sm" />
+                  <input type="text" placeholder="Telefone com DDD" required value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium mb-6 outline-none focus:border-orange-500 shadow-sm" />
 
-                  <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-3 sm:py-4 rounded-xl shadow-lg hover:shadow-xl transition uppercase text-sm tracking-wide">
+                  <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-3 sm:py-4 rounded-xl shadow-lg transition uppercase text-sm tracking-wide">
                     Confirmar Reserva B2B
                   </button>
                 </form>
@@ -1423,29 +1537,26 @@ export default function HotelSearch() {
                 <div className="text-center py-6">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-green-600 mx-auto mb-4"></div>
                   <p className="text-gray-800 font-black text-lg">Processando sua reserva...</p>
-                  <p className="text-xs text-gray-500 mt-1">Aguardando confirmação do fornecedor</p>
                 </div>
               )}
 
               {bookingStep === 'success' && (
                 <div className="text-center py-6">
-                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">✓</div>
+                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">✓</div>
                   <h4 className="text-xl font-black text-gray-900 mb-2">Reserva Confirmada!</h4>
-                  <p className="text-sm text-gray-600 mb-5 bg-gray-50 py-2 px-4 rounded-lg border border-gray-100 inline-block">ID do Pedido: <span className="font-bold">{finalPartnerOrderId}</span></p>
-                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wide hover:bg-gray-800 transition shadow-lg">Fechar e Voltar</button>
+                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wide">Fechar e Voltar</button>
                 </div>
               )}
 
               {bookingStep === 'error' && (
                 <div className="text-center py-6">
-                  <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">✕</div>
+                  <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">✕</div>
                   <h4 className="text-xl font-black text-gray-900 mb-2">Ops! Ocorreu um problema.</h4>
                   <p className="text-sm text-red-600 mb-5 bg-red-50 p-3 rounded-lg border border-red-100 break-words">{bookingError}</p>
-                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wide hover:bg-gray-800 transition shadow-lg">Tentar Novamente</button>
+                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wide">Tentar Novamente</button>
                 </div>
               )}
             </div>
-
           </div>
         </div>,
         document.body
