@@ -5,7 +5,6 @@ import { createClient } from '@supabase/supabase-js';
 import usePackageStore from '../store/usePackageStore';
 import useCartStore from '../store/useCartStore';
 
-// IMPORTAÇÃO DO SEU BUSCADOR ORIGINAL DE TRANSFERS
 import PalastoreTransfers from '../components/PalastoreTransfers';
 
 import { 
@@ -19,6 +18,56 @@ const SUPABASE_URL = "https://vcqiilytjrrurdbscmio.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_leFg1lWGZlctiU3CXYR2Gw_FpOG2qR3"; 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const getAirlineName = (code) => {
+  const airlines = {
+    // Nacionais e Regionais / América Latina
+    'G3': 'GOL Linhas Aéreas',
+    'AD': 'Azul Linhas Aéreas',
+    'LA': 'LATAM Airlines',
+    'JJ': 'LATAM Airlines',
+    '2Z': 'Voepass Linhas Aéreas',
+    'H2': 'Sky Airline',
+    'JA': 'JetSMART',
+    'DM': 'Arajet',
+    'AV': 'Avianca',
+    'CM': 'Copa Airlines',
+    'AM': 'AeroMexico',
+    'AR': 'Aerolíneas Argentinas',
+    'OB': 'Boliviana de Aviación',
+    'PZ': 'Paranair',
+    'ZP': 'Paranair',
+
+    // América do Norte e Europa
+    'AC': 'Air Canada',
+    'TS': 'Air Transat',
+    'AA': 'American Airlines',
+    'DL': 'Delta Air Lines',
+    'UA': 'United Airlines',
+    'AF': 'Air France',
+    'KL': 'KLM Royal Dutch Airlines',
+    'LH': 'Lufthansa',
+    'LX': 'Swiss International Air Lines',
+    'OS': 'Austrian Airlines',
+    'IB': 'Iberia Airlines',
+    'UX': 'Air Europa',
+    'TP': 'TAP Portugal',
+    'AZ': 'ITA Airways',
+    'PU': 'Plus Ultra Líneas Aéreas',
+    'CA': 'Air China',
+    'TK': 'Turkish Airlines',
+    'AT': 'Royal Air Maroc',
+    'ET': 'Ethiopian Airlines',
+    'EK': 'Emirates',
+    'QF': 'Qantas',
+    'DT': 'TAAG Angola Airlines',
+    'H1': 'Hahn Air',
+    'HR': 'Hahn Air Systems',
+    'Q4': 'Euroairlines',
+    'LEVEL': 'Level'
+  };
+
+  return airlines[code] || code;
+};
 const formatTime = (dateStr) => {
   if(!dateStr) return '';
   try {
@@ -43,17 +92,6 @@ const formatDateShort = (dateStr) => {
     const d = new Date(dateStr);
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`;
   } catch(e) { return ''; }
-};
-
-const getDay = (dateStr) => {
-  if(!dateStr) return '';
-  return String(new Date(dateStr).getDate()).padStart(2, '0');
-};
-
-const getMonth = (dateStr) => {
-  if(!dateStr) return '';
-  const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-  return meses[new Date(dateStr).getMonth()];
 };
 
 const calcularNoites = (ida, volta) => {
@@ -255,7 +293,8 @@ export default function FlightHotelPackage() {
     descLines.push(`──────────────────────────────────────────`);
 
     if (selectedFlight) {
-      descLines.push(`✈️ PASSAGENS AÉREAS (${selectedFlight.ida?.companhiaPrincipal || 'Voo'}):`);
+      const ciaNome = getAirlineName(selectedFlight.ida?.companhiaPrincipal);
+      descLines.push(`✈️ PASSAGENS AÉREAS (${ciaNome}):`);
       descLines.push(`• IDA: ${selectedFlight.ida?.origem} ➔ ${selectedFlight.ida?.destino} | ${formatDateBrFull(selectedFlight.ida?.partida)}`);
       descLines.push(`  Horário: ${formatTime(selectedFlight.ida?.partida)}h às ${formatTime(selectedFlight.ida?.chegada)}h (${selectedFlight.ida?.duracao} • ${selectedFlight.ida?.escalas === 0 ? 'Direto' : selectedFlight.ida?.escalas + ' escala(s)'})`);
       if (selectedFlight.volta) {
@@ -308,7 +347,7 @@ export default function FlightHotelPackage() {
       variantName: `Período: ${formatDateShort(searchParams.dateOut)} a ${formatDateShort(searchParams.dateIn)} • ${totalPax} Viajante(s)`,
       price: totalGeral,
       quantity: 1,
-      pax: totalPax, // 🚀 A MÁGICA ACONTECE AQUI: Ensina o carrinho quantos formulários abrir!
+      pax: totalPax, 
       image: selectedHotel?.imagensReais?.[0] || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=300',
       isTravel: true, 
       description: fullRichDescription, 
@@ -396,7 +435,7 @@ export default function FlightHotelPackage() {
               </div>
             </div>
 
-            {/* COLUNA 2: VOO */}
+            {/* COLUNA 2: VOO (AGORA COM NOME DA COMPANHIA) */}
             <div className="p-5 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col justify-between">
               {selectedFlight ? (
                 <div className="space-y-4">
@@ -409,7 +448,7 @@ export default function FlightHotelPackage() {
                     <span className="text-[10px] font-bold text-gray-500 flex items-center gap-1.5 mb-2"><Plane size={12}/> Ida {formatDateBrFull(selectedFlight.ida?.partida)}</span>
                     <div className="flex items-center gap-2 mb-2">
                       <img src={`https://images.kiwi.com/airlines/64x64/${selectedFlight.ida?.companhiaPrincipal}.png`} className="w-4 h-4 rounded-full border border-gray-200 bg-white" alt="Cia"/>
-                      <span className="text-[10px] font-bold text-gray-600">{selectedFlight.ida?.companhiaPrincipal}</span>
+                      <span className="text-[10px] font-bold text-gray-600">{getAirlineName(selectedFlight.ida?.companhiaPrincipal)}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="text-center"><span className="font-black text-sm block leading-none">{formatTime(selectedFlight.ida?.partida)}</span><span className="text-[9px] text-gray-500">{selectedFlight.ida?.origem}</span></div>
@@ -426,7 +465,7 @@ export default function FlightHotelPackage() {
                       <span className="text-[10px] font-bold text-gray-500 flex items-center gap-1.5 mb-2"><Plane size={12} className="rotate-180"/> Volta {formatDateBrFull(selectedFlight.volta?.partida)}</span>
                       <div className="flex items-center gap-2 mb-2">
                         <img src={`https://images.kiwi.com/airlines/64x64/${selectedFlight.volta?.companhiaPrincipal}.png`} className="w-4 h-4 rounded-full border border-gray-200 bg-white" alt="Cia"/>
-                        <span className="text-[10px] font-bold text-gray-600">{selectedFlight.volta?.companhiaPrincipal}</span>
+                        <span className="text-[10px] font-bold text-gray-600">{getAirlineName(selectedFlight.volta?.companhiaPrincipal)}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="text-center"><span className="font-black text-sm block leading-none">{formatTime(selectedFlight.volta?.partida)}</span><span className="text-[9px] text-gray-500">{selectedFlight.volta?.origem}</span></div>
@@ -579,14 +618,14 @@ export default function FlightHotelPackage() {
                 <h3 className="font-black text-lg mb-4 text-gray-900">Itinerário Completo do Voo</h3>
                 <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
                    <div className="bg-gray-50 p-4 rounded-xl border">
-                      <p className="font-bold text-xs text-purple-700 uppercase mb-2">Voo de Ida</p>
+                      <p className="font-bold text-xs text-purple-700 uppercase mb-2">Voo de Ida ({getAirlineName(selectedFlight.ida?.companhiaPrincipal)})</p>
                       <p className="text-sm font-bold">{selectedFlight.ida?.origem} ➔ {selectedFlight.ida?.destino}</p>
                       <p className="text-xs text-gray-600 mt-1">Partida: {formatDateBrFull(selectedFlight.ida?.partida)} às {formatTime(selectedFlight.ida?.partida)}</p>
                       <p className="text-xs text-gray-600">Duração: {selectedFlight.ida?.duracao} • {selectedFlight.ida?.escalas === 0 ? 'Direto' : selectedFlight.ida?.escalas+' paradas'}</p>
                    </div>
                    {selectedFlight.volta && (
                       <div className="bg-gray-50 p-4 rounded-xl border">
-                         <p className="font-bold text-xs text-orange-700 uppercase mb-2">Voo de Volta</p>
+                         <p className="font-bold text-xs text-orange-700 uppercase mb-2">Voo de Volta ({getAirlineName(selectedFlight.volta?.companhiaPrincipal)})</p>
                          <p className="text-sm font-bold">{selectedFlight.volta?.origem} ➔ {selectedFlight.volta?.destino}</p>
                          <p className="text-xs text-gray-600 mt-1">Partida: {formatDateBrFull(selectedFlight.volta?.partida)} às {formatTime(selectedFlight.volta?.partida)}</p>
                          <p className="text-xs text-gray-600">Duração: {selectedFlight.volta?.duracao} • {selectedFlight.volta?.escalas === 0 ? 'Direto' : selectedFlight.volta?.escalas+' paradas'}</p>
@@ -653,7 +692,7 @@ export default function FlightHotelPackage() {
                 </div>
               )}
 
-              {/* RENDERIZAÇÃO DOS VOOS */}
+              {/* RENDERIZAÇÃO DOS VOOS (COM A COMPANHIA EM TEXTO) */}
               {activeView === 'flight' && (
                 <div className="space-y-4">
                   {displayFlights.map((voo) => {
@@ -664,11 +703,13 @@ export default function FlightHotelPackage() {
                         <div className="flex-1 space-y-3">
                           <div className="flex items-center gap-3">
                             <img src={`https://images.kiwi.com/airlines/64x64/${voo.ida?.companhiaPrincipal}.png`} className="w-6 h-6 rounded-full border bg-white" alt="Cia"/>
+                            <span className="text-[10px] font-black text-gray-700 bg-gray-100 px-2 py-0.5 rounded">{getAirlineName(voo.ida?.companhiaPrincipal)}</span>
                             <span className="text-xs font-bold text-gray-800">Ida: {formatTime(voo.ida?.partida)} ({voo.ida?.origem}) ➔ {formatTime(voo.ida?.chegada)} ({voo.ida?.destino}) • {voo.ida?.duracao}</span>
                           </div>
                           {voo.volta && (
                             <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
                               <img src={`https://images.kiwi.com/airlines/64x64/${voo.volta?.companhiaPrincipal}.png`} className="w-6 h-6 rounded-full border bg-white" alt="Cia"/>
+                              <span className="text-[10px] font-black text-gray-700 bg-gray-100 px-2 py-0.5 rounded">{getAirlineName(voo.volta?.companhiaPrincipal)}</span>
                               <span className="text-xs font-bold text-gray-800">Volta: {formatTime(voo.volta?.partida)} ({voo.volta?.origem}) ➔ {formatTime(voo.volta?.chegada)} ({voo.volta?.destino}) • {voo.volta?.duracao}</span>
                             </div>
                           )}

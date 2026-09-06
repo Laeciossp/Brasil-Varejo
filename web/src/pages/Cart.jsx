@@ -17,6 +17,56 @@ const client = createClient({
   token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
 });
 
+const getAirlineName = (code) => {
+  const airlines = {
+    // Nacionais e Regionais / América Latina
+    'G3': 'GOL Linhas Aéreas',
+    'AD': 'Azul Linhas Aéreas',
+    'LA': 'LATAM Airlines',
+    'JJ': 'LATAM Airlines',
+    '2Z': 'Voepass Linhas Aéreas',
+    'H2': 'Sky Airline',
+    'JA': 'JetSMART',
+    'DM': 'Arajet',
+    'AV': 'Avianca',
+    'CM': 'Copa Airlines',
+    'AM': 'AeroMexico',
+    'AR': 'Aerolíneas Argentinas',
+    'OB': 'Boliviana de Aviación',
+    'PZ': 'Paranair',
+    'ZP': 'Paranair',
+
+    // América do Norte e Europa
+    'AC': 'Air Canada',
+    'TS': 'Air Transat',
+    'AA': 'American Airlines',
+    'DL': 'Delta Air Lines',
+    'UA': 'United Airlines',
+    'AF': 'Air France',
+    'KL': 'KLM Royal Dutch Airlines',
+    'LH': 'Lufthansa',
+    'LX': 'Swiss International Air Lines',
+    'OS': 'Austrian Airlines',
+    'IB': 'Iberia Airlines',
+    'UX': 'Air Europa',
+    'TP': 'TAP Portugal',
+    'AZ': 'ITA Airways',
+    'PU': 'Plus Ultra Líneas Aéreas',
+    'CA': 'Air China',
+    'TK': 'Turkish Airlines',
+    'AT': 'Royal Air Maroc',
+    'ET': 'Ethiopian Airlines',
+    'EK': 'Emirates',
+    'QF': 'Qantas',
+    'DT': 'TAAG Angola Airlines',
+    'H1': 'Hahn Air',
+    'HR': 'Hahn Air Systems',
+    'Q4': 'Euroairlines',
+    'LEVEL': 'Level'
+  };
+
+  return airlines[code] || code;
+};
 const MercadoPagoTrust = () => (
   <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col items-center gap-2">
     <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
@@ -437,24 +487,23 @@ export default function Cart() {
         body: JSON.stringify({ 
             items: items.map(i => {
                 
-                // 🚀 RESUMO CURTO E SEGURO APENAS PARA O MERCADO PAGO NÃO CORTAR O TEXTO (MAX 250 CARACTERES)
                 let descForMP = i.description;
                 
+                // 🚀 TRADUÇÃO DE COMPANHIAS AÉREAS APLICADA AQUI E RESUMO PARA O MP:
                 if (i.packageDetails) {
                     let shortParts = [];
-                    if (i.packageDetails.flight) shortParts.push(`✈️ Voo ${i.packageDetails.flight.ida?.companhiaPrincipal || ''} (${i.packageDetails.flight.ida?.origem}➔${i.packageDetails.flight.ida?.destino})`);
+                    if (i.packageDetails.flight) shortParts.push(`✈️ Voo ${getAirlineName(i.packageDetails.flight.ida?.companhiaPrincipal)} (${i.packageDetails.flight.ida?.origem}➔${i.packageDetails.flight.ida?.destino})`);
                     if (i.packageDetails.hotel) shortParts.push(`🏨 Hotel ${i.packageDetails.hotel.nome || i.packageDetails.hotel.name || ''}`);
                     if (i.packageDetails.transfer) shortParts.push(`🚘 Transfer Vip`);
                     
                     const paxCount = i.pax || i.quantity || 1;
                     descForMP = `${shortParts.join(' | ')} - ${paxCount} Viajante(s)`;
                 } else if (i.flightDetails && !i.transferPayload) {
-                    descForMP = `✈️ Voo: ${i.flightDetails.ida.origem} ➔ ${i.flightDetails.ida.destino}`;
+                    descForMP = `✈️ Voo ${getAirlineName(i.flightDetails.ida?.companhiaPrincipal)}: ${i.flightDetails.ida.origem} ➔ ${i.flightDetails.ida.destino}`;
                 } else if (i.transferPayload) {
                     descForMP = `🚘 Transfer: ${i.transferPayload.pickupName} ➔ ${i.transferPayload.dropoffName}`;
                 }
 
-                // Limite de segurança para o Mercado Pago
                 const safeDesc = (descForMP || i.title || i.name || '').substring(0, 250);
 
                 return {
