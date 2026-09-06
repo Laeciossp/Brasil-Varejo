@@ -239,7 +239,6 @@ export default function FlightSearch({ prefilledData }) {
     setLastHoldIdaCount(parseInt(holdBagsIda, 10) || 0);
     setLastHoldVoltaCount(parseInt(holdBagsVolta, 10) || 0);
 
-    // TRATAMENTO PARA "A QUALQUER MOMENTO" OU DATAS ESPECÍFICAS
     let effectiveDateFrom = getTodayStr();
     let searchDateToRange = getSixMonthsStr();
 
@@ -270,7 +269,6 @@ export default function FlightSearch({ prefilledData }) {
         if (!allowOvernight) processed = processed.filter(v => !hasOvernightLayover(v));
         setRenderedFlights(processed); 
       } else { 
-        // Silencia alertas visuais indesejados e mostra apenas tabela limpa ou array vazio
         setRenderedFlights([]); 
       }
     } catch (err) { 
@@ -328,25 +326,26 @@ export default function FlightSearch({ prefilledData }) {
  return (
     <div className="max-w-6xl mx-auto font-sans pb-10">
       
-      {/* ✅ CORREÇÃO: Alterado de z-50 para z-10 */}
-      <div className="relative z-10 rounded-3xl mb-8 shadow-xl">
+      {/* 🚀 CORREÇÃO DO EMPILHAMENTO (Z-INDEX): Alterado de z-10 para z-20 */}
+      <div className="relative z-20 rounded-3xl mb-8 shadow-xl">
         <div className="absolute inset-0 overflow-hidden rounded-3xl">
           <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2000&auto=format&fit=crop" alt="Voos" className="w-full h-full object-cover brightness-[0.55]" />
         </div>
         
-        <div className="relative z-10 p-6 md:p-10 lg:p-14">
+        <div className="relative z-20 p-6 md:p-10 lg:p-14">
           <h2 className="text-3xl md:text-5xl font-black text-white mb-2 drop-shadow-lg">Para onde vamos hoje?</h2>
           <p className="text-white/90 font-medium text-sm md:text-lg mb-8 drop-shadow">Encontre as melhores passagens com segurança, rapidez e flexibilidade.</p>
           
-          {/* ✅ CORREÇÃO: Alterado de z-40 para z-20 */}
-          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 p-5 relative z-20">
-            <div className="flex flex-wrap items-center gap-4 mb-5 relative z-50">
+          {/* 🚀 CORREÇÃO DO EMPILHAMENTO (Z-INDEX): Alterado de z-20 para z-30 para sobrepor o menu de filtros abaixo */}
+         {/* 🚀 CORREÇÃO DO EMPILHAMENTO (Z-INDEX): Ajustado para manter menus superiores sempre acima */}
+          <div className="bg-white/95 rounded-2xl shadow-2xl border border-white/40 p-5 relative z-10">
+            <div className="flex flex-wrap items-center gap-4 mb-5 relative z-[100]">
               <div className="relative" ref={tripRef}>
                 <button onClick={() => setShowTripMenu(!showTripMenu)} className="flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-purple-50 text-sm font-bold text-gray-700 transition">
                   {tripNames[tripType]} <span className="text-[10px] text-purple-600">▼</span>
                 </button>
                 {showTripMenu && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50">
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-[999]">
                     <label className="flex items-center gap-3 mb-3 cursor-pointer group">
                       <input type="radio" checked={tripType === 'return'} onChange={() => {setTripType('return'); executeSearch();}} className="w-4 h-4 text-purple-600" />
                       <span className="text-sm font-bold text-gray-800">Ida e volta</span>
@@ -368,7 +367,7 @@ export default function FlightSearch({ prefilledData }) {
                   </div>
                 </button>
                 {showPaxMenu && (
-                  <div className="absolute top-full left-0 mt-2 w-[280px] bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50">
+                  <div className="absolute top-full left-0 mt-2 w-[280px] bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-[999]">
                     <h4 className="font-black text-[10px] uppercase tracking-wider text-purple-900 mb-1 border-b border-gray-100 pb-1.5">Passageiros</h4>
                     <div className="mb-3">
                       <Counter label="Adultos" subLabel="Mais de 11" value={adults} onChange={setAdults} min={1} icon="👤" />
@@ -397,7 +396,7 @@ export default function FlightSearch({ prefilledData }) {
                   {cabinNames[cabin]} <span className="text-[10px] text-purple-600">▼</span>
                 </button>
                 {showCabinMenu && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50">
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-[999]">
                     {Object.keys(cabinNames).map(k => (
                       <label key={k} className="flex items-center gap-3 mb-3 cursor-pointer group">
                         <input type="radio" checked={cabin === k} onChange={() => {setCabin(k); setShowCabinMenu(false); executeSearch();}} className="w-4 h-4 text-purple-600" />
@@ -409,7 +408,7 @@ export default function FlightSearch({ prefilledData }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-auto md:h-[50px] relative z-40">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-auto md:h-[50px] relative z-10">
               
               <div className="relative col-span-1 md:col-span-3 flex items-center border border-gray-300 rounded-md px-3 hover:border-purple-600 bg-white z-50 h-12 md:h-full" ref={originRef}>
                 <span className="text-gray-400 font-medium mr-2 text-sm">De</span>
@@ -452,7 +451,7 @@ export default function FlightSearch({ prefilledData }) {
                 )}
               </div>
 
-              <div className="col-span-1 md:col-span-4 z-50 h-12 md:h-full relative" ref={dateRef}>
+             <div className="col-span-1 md:col-span-4 z-50 h-12 md:h-full relative" ref={dateRef}>
                 <div onClick={() => setShowDateMenu(!showDateMenu)} className="flex items-center justify-between border border-gray-300 rounded-md px-4 h-full cursor-pointer hover:border-purple-600 bg-white">
                   <div className="flex flex-col justify-center">
                     <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Partida</span>
@@ -466,20 +465,34 @@ export default function FlightSearch({ prefilledData }) {
                 </div>
 
                 {showDateMenu && (
-                  <div className="absolute top-full right-0 left-0 md:left-auto md:w-[450px] mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl p-5 flex flex-col z-50">
+                  <div className="absolute bottom-full left-0 md:w-[450px] mb-2 bg-white border border-gray-200 rounded-xl shadow-2xl p-5 flex flex-col z-[999]">
                     <div className="flex gap-4 border-b border-gray-200 pb-3 mb-4">
                       <button onClick={()=>setDateType('anytime')} className={`flex-1 py-2 rounded font-bold text-sm transition ${dateType==='anytime'?'bg-purple-100 text-purple-700':'text-gray-500 hover:bg-gray-100'}`}>A qualquer momento</button>
                       <button onClick={()=>setDateType('specific')} className={`flex-1 py-2 rounded font-bold text-sm transition ${dateType==='specific'?'bg-purple-100 text-purple-700':'text-gray-500 hover:bg-gray-100'}`}>Datas Específicas</button>
                     </div>
                     {dateType === 'specific' && (
                       <div className="flex gap-4 mb-4">
-                        <div className="flex-1">
-                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Partida</label>
-                          <input type="date" min={getTodayStr()} value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600"/>
+                        <div className="flex-1 cursor-pointer">
+                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1 cursor-pointer">Partida</label>
+                          <input 
+                            type="date" 
+                            min={getTodayStr()} 
+                            value={dateFrom} 
+                            onChange={e=>setDateFrom(e.target.value)} 
+                            onClick={(e) => e.target.showPicker && e.target.showPicker()}
+                            className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600 cursor-pointer"
+                          />
                         </div>
-                        <div className={`flex-1 ${tripType==='oneway'?'opacity-30 pointer-events-none':''}`}>
-                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Regresso</label>
-                          <input type="date" min={dateFrom || getTodayStr()} value={dateTo} onChange={e=>setDateTo(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600"/>
+                        <div className={`flex-1 cursor-pointer ${tripType==='oneway'?'opacity-30 pointer-events-none':''}`}>
+                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1 cursor-pointer">Regresso</label>
+                          <input 
+                            type="date" 
+                            min={dateFrom || getTodayStr()} 
+                            value={dateTo} 
+                            onChange={e=>setDateTo(e.target.value)} 
+                            onClick={(e) => e.target.showPicker && e.target.showPicker()}
+                            className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600 cursor-pointer"
+                          />
                         </div>
                       </div>
                     )}
@@ -500,7 +513,8 @@ export default function FlightSearch({ prefilledData }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 relative z-10">
+      {/* 🚀 CORREÇÃO DO EMPILHAMENTO (Z-INDEX): Alterado de z-10 para z-0 */}
+      <div className="flex flex-wrap items-center justify-between bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 relative z-0">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-gray-500 uppercase">Escalas:</span>

@@ -1,56 +1,70 @@
 import { create } from 'zustand';
 
-const usePackageStore = create((set) => ({
-  // Qual lista exibir embaixo? 'hotel' ou 'flight'
-  activeView: 'hotel',
+const usePackageStore = create((set, get) => ({
+  activeView: 'none', // 'none' (recolhido), 'hotel', 'flight'
   setActiveView: (view) => set({ activeView: view }),
 
-  // 1. Dados da Busca Superior
   searchParams: {
-    orig: 'SSA', dest: 'JPA',
-    origName: 'Salvador', destName: 'João Pessoa',
-    dateOut: 'sex. 5 de fev. de 2027', dateIn: 'qui. 11 de fev. de 2027',
-    pax: 1
+    origin: { id: 'SAO', name: 'São Paulo' }, 
+    destination: { id: 'RIO', name: 'Rio de Janeiro' }, 
+    dateOut: '2026-12-18',
+    dateIn: '2026-12-20',
+    adults: 2,
+    children: 0,
+    infants: 0,
+    rooms: 1,
+    holdBagsIda: 0,
+    holdBagsVolta: 0
   },
+  setSearchParams: (params) => set((state) => ({ searchParams: { ...state.searchParams, ...params } })),
 
-  // 2. Voo Selecionado no Topo
-  selectedFlight: {
-    id: 1,
-    cia: 'GOL',
-    outbound: { departure: '14:40', arrival: '16:05', duration: '1h 25m', type: 'Direto' },
-    inbound: { departure: '12:05', arrival: '13:40', duration: '1h 35m', type: 'Direto' },
-    priceDiff: 0, // Diferença de preço em relação ao pacote base
-    basePrice: 1500
-  },
+  flightsResults: [],
+  hotelsResults: [],
+  transfersResult: null, 
 
-  // 3. Hotel Selecionado no Topo
-  selectedHotel: {
-    id: 1,
-    name: 'Guarany Hotel Express',
-    stars: 3,
-    image: 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=300',
-    mealPlan: 'Café da manhã',
-    price: 2489 
-  },
+  setFlightsResults: (results) => set({ flightsResults: results }),
+  setHotelsResults: (results) => set({ hotelsResults: results }),
+  setTransfersResult: (result) => set({ transfersResult: result }),
 
-  // 4. Listas de Opções (Simulando API Restel e Kiwi)
-  hotelsList: [
-    { id: 1, name: 'Guarany Hotel Express', stars: 3, price: 2489, mealPlan: 'Café da manhã', image: 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=300' },
-    { id: 2, name: 'Nord Luxxor Tambaú', stars: 4, price: 3200, mealPlan: 'Meia pensão', image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=300' },
-  ],
+  selectedFlight: null,
+  selectedHotel: null,
+  selectedTransfer: null,
+
+  changeSelectedFlight: (flight) => set({ selectedFlight: flight, activeView: 'none' }),
+  changeSelectedHotel: (hotel) => set({ selectedHotel: hotel, activeView: 'none' }),
+  changeSelectedTransfer: (transfer) => set({ selectedTransfer: transfer, activeView: 'none' }),
   
-  flightsList: [
-    { id: 1, cia: 'GOL', priceDiff: 0, outbound: { departure: '14:40', arrival: '16:05', duration: '1h 25m', type: 'Direto' }, inbound: { departure: '12:05', arrival: '13:40', duration: '1h 35m', type: 'Direto' } },
-    { id: 2, cia: 'AZUL', priceDiff: 250, outbound: { departure: '09:15', arrival: '10:45', duration: '1h 30m', type: 'Direto' }, inbound: { departure: '15:20', arrival: '16:50', duration: '1h 30m', type: 'Direto' } },
-  ],
+  removeFlight: () => set({ selectedFlight: null }),
+  removeHotel: () => set({ selectedHotel: null }),
+  removeTransfer: () => set({ selectedTransfer: null }),
 
-  // 5. Filtros Atuais
-  filters: { text: '' },
-  setSearchText: (text) => set((state) => ({ filters: { ...state.filters, text } })),
-  
-  // Ações de Troca
-  changeSelectedHotel: (hotel) => set({ selectedHotel: hotel }),
-  changeSelectedFlight: (flight) => set({ selectedFlight: flight })
+  flightFilters: { stops: 'all' },
+  setFlightFilters: (filters) => set((state) => ({ flightFilters: { ...state.flightFilters, ...filters } })),
+
+  hotelFilters: { stars: [], meals: [], freeCancellation: false },
+  setHotelFilters: (filters) => set((state) => ({ hotelFilters: { ...state.hotelFilters, ...filters } })),
+
+  isLoading: false,
+  setLoading: (loading) => set({ isLoading: loading }),
+  error: null,
+  setError: (error) => set({ error }),
+
+  getPackageTotals: () => {
+    const { selectedFlight, selectedHotel, selectedTransfer, searchParams } = get();
+    const totalPax = Math.max(1, (searchParams.adults || 0) + (searchParams.children || 0));
+
+    // Calcula custo de bagagem extra se houver
+    const bagCost = ((searchParams.holdBagsIda || 0) + (searchParams.holdBagsVolta || 0)) * 120;
+
+    const flightTotal = selectedFlight ? (Number(selectedFlight.precoBase || selectedFlight.safeTotal || selectedFlight.precoFinal || selectedFlight.price) || 0) + bagCost : 0;
+    const hotelTotal = selectedHotel ? (Number(selectedHotel.ofertas?.[0]?.precoVenda || selectedHotel.price) || 0) : 0;
+    const transferTotal = selectedTransfer ? (Number(selectedTransfer.precoFinal || selectedTransfer.price) || 0) : 0;
+
+    const totalGeral = flightTotal + hotelTotal + transferTotal;
+    const precoPorPessoa = totalGeral / totalPax;
+
+    return { totalGeral, precoPorPessoa, totalPax, bagCost };
+  }
 }));
 
 export default usePackageStore;
