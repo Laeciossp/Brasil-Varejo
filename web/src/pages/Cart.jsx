@@ -52,11 +52,9 @@ export default function Cart() {
   const hasTravelItems = travelItems.length > 0;
   const isOnlyDigital = hasTravelItems && physicalItems.length === 0;
   
-  // 🚀 A MÁGICA DOS FORMULÁRIOS ESTÁ AQUI (FOOLPROOF FALLBACK)
   const totalTickets = travelItems.reduce((max, item) => {
     let itemPax = item.quantity || 1;
 
-    // 1. Tenta ler as propriedades diretas se existirem
     if (item.packageDetails?.pax) {
       itemPax = item.packageDetails.pax * (item.quantity || 1);
     } else if (item.pax) {
@@ -67,7 +65,6 @@ export default function Cart() {
       itemPax = item.flightDetails.pax * (item.quantity || 1);
     }
 
-    // 2. Se a store travou ou é do cache antigo, extrai do texto "2 Viajante(s)" 
     if (itemPax === (item.quantity || 1)) {
       const textToMatch = `${item.variantName || ''} ${item.title || ''} ${item.description || ''}`;
       const match = textToMatch.match(/(\d+)\s*(pax|viajante)/i);
@@ -439,16 +436,31 @@ export default function Cart() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             items: items.map(i => {
-                let desc = i.description;
-                if (i.flightDetails && !desc && !i.transferPayload) {
-                    desc = `Voo Ida/Volta: ${i.flightDetails.ida.origem} -> ${i.flightDetails.ida.destino}`;
-                } else if (i.transferPayload && !desc) {
-                    desc = `Transfer: ${i.transferPayload.pickupName} -> ${i.transferPayload.dropoffName}`;
+                
+                // 🚀 RESUMO CURTO E SEGURO APENAS PARA O MERCADO PAGO NÃO CORTAR O TEXTO (MAX 250 CARACTERES)
+                let descForMP = i.description;
+                
+                if (i.packageDetails) {
+                    let shortParts = [];
+                    if (i.packageDetails.flight) shortParts.push(`✈️ Voo ${i.packageDetails.flight.ida?.companhiaPrincipal || ''} (${i.packageDetails.flight.ida?.origem}➔${i.packageDetails.flight.ida?.destino})`);
+                    if (i.packageDetails.hotel) shortParts.push(`🏨 Hotel ${i.packageDetails.hotel.nome || i.packageDetails.hotel.name || ''}`);
+                    if (i.packageDetails.transfer) shortParts.push(`🚘 Transfer Vip`);
+                    
+                    const paxCount = i.pax || i.quantity || 1;
+                    descForMP = `${shortParts.join(' | ')} - ${paxCount} Viajante(s)`;
+                } else if (i.flightDetails && !i.transferPayload) {
+                    descForMP = `✈️ Voo: ${i.flightDetails.ida.origem} ➔ ${i.flightDetails.ida.destino}`;
+                } else if (i.transferPayload) {
+                    descForMP = `🚘 Transfer: ${i.transferPayload.pickupName} ➔ ${i.transferPayload.dropoffName}`;
                 }
+
+                // Limite de segurança para o Mercado Pago
+                const safeDesc = (descForMP || i.title || i.name || '').substring(0, 250);
+
                 return {
                     id: String(i._id || i.id || `item-${Date.now()}`).replace(/[^a-zA-Z0-9_.-]/g, "_"), 
                     title: i.title || i.name, 
-                    description: desc || (i.title || i.name),
+                    description: safeDesc,
                     quantity: i.quantity, 
                     price: i.price, 
                     picture_url: i.image 
