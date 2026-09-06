@@ -20,32 +20,20 @@ function urlFor(source) {
 // COMPONENTE: HERO BANNER (TOPO)
 // ==========================================
 // ==========================================
+// ==========================================
 // COMPONENTE: HERO BANNER (TOPO) - BLINDADO
 // ==========================================
 const HeroBlock = ({ data }) => {
   const [current, setCurrent] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true); 
   const slides = data.slides || [];
 
   useEffect(() => {
-    if (slides.length <= 1 || !isPlaying) return;
+    if (slides.length <= 1) return;
     const timer = setInterval(() => {
       setCurrent(c => (c === slides.length - 1 ? 0 : c + 1));
     }, 6000);
     return () => clearInterval(timer);
-  }, [slides.length, isPlaying]);
-
-  const nextSlide = () => {
-    setCurrent(c => (c === slides.length - 1 ? 0 : c + 1));
-    setIsPlaying(false); 
-  };
-
-  const prevSlide = () => {
-    setCurrent(c => (c === 0 ? slides.length - 1 : c - 1));
-    setIsPlaying(false); 
-  };
-
-  const togglePlay = () => setIsPlaying(!isPlaying);
+  }, [slides.length]);
 
   if (!slides.length) return null;
 
@@ -157,39 +145,6 @@ const HeroBlock = ({ data }) => {
             </div>
           );
         })}
-      </div>
-      
-      <button 
-        onClick={prevSlide}
-        className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/20 hover:bg-white/90 backdrop-blur-md text-white hover:text-purple-900 shadow-lg transition-all opacity-0 group-hover:opacity-100 z-50 cursor-pointer"
-      >
-        <ChevronLeft size={28} />
-      </button>
-      
-      <button 
-        onClick={nextSlide}
-        className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/20 hover:bg-white/90 backdrop-blur-md text-white hover:text-purple-900 shadow-lg transition-all opacity-0 group-hover:opacity-100 z-50 cursor-pointer"
-      >
-        <ChevronRight size={28} />
-      </button>
-
-      <div className="absolute bottom-6 left-0 right-0 flex items-center justify-center gap-4 pointer-events-none z-50">
-        <button 
-          onClick={togglePlay}
-          className="pointer-events-auto p-2 rounded-full bg-black/30 hover:bg-black/50 text-white backdrop-blur-sm transition-all shadow-sm cursor-pointer"
-        >
-          {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
-        </button>
-
-        <div className="flex gap-2 pointer-events-auto bg-black/20 px-3 py-1.5 rounded-full backdrop-blur-sm">
-          {slides.map((_, idx) => (
-            <button 
-              key={idx} 
-              onClick={() => { setCurrent(idx); setIsPlaying(false); }}
-              className={`h-2 rounded-full transition-all duration-300 shadow-sm cursor-pointer ${current === idx ? 'bg-white w-8' : 'bg-white/50 w-2 hover:bg-white'}`} 
-            />
-          ))}
-        </div>
       </div>
     </div>
   );

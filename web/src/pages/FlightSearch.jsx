@@ -325,10 +325,11 @@ export default function FlightSearch({ prefilledData }) {
   const tripNames = { 'return': 'Ida e volta', 'oneway': 'Só ida' };
   const cabinNames = { 'M': 'Economia', 'W': 'Premium', 'C': 'Negócios', 'F': 'Primeira' };
 
-  return (
+ return (
     <div className="max-w-6xl mx-auto font-sans pb-10">
       
-      <div className="relative z-50 rounded-3xl mb-8 shadow-xl">
+      {/* ✅ CORREÇÃO: Alterado de z-50 para z-10 */}
+      <div className="relative z-10 rounded-3xl mb-8 shadow-xl">
         <div className="absolute inset-0 overflow-hidden rounded-3xl">
           <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2000&auto=format&fit=crop" alt="Voos" className="w-full h-full object-cover brightness-[0.55]" />
         </div>
@@ -337,7 +338,8 @@ export default function FlightSearch({ prefilledData }) {
           <h2 className="text-3xl md:text-5xl font-black text-white mb-2 drop-shadow-lg">Para onde vamos hoje?</h2>
           <p className="text-white/90 font-medium text-sm md:text-lg mb-8 drop-shadow">Encontre as melhores passagens com segurança, rapidez e flexibilidade.</p>
           
-          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 p-5 relative z-40">
+          {/* ✅ CORREÇÃO: Alterado de z-40 para z-20 */}
+          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 p-5 relative z-20">
             <div className="flex flex-wrap items-center gap-4 mb-5 relative z-50">
               <div className="relative" ref={tripRef}>
                 <button onClick={() => setShowTripMenu(!showTripMenu)} className="flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-purple-50 text-sm font-bold text-gray-700 transition">
