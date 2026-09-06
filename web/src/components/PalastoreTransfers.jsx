@@ -12,7 +12,7 @@ function useDebounce(value, delay) {
   return debouncedValue;
 }
 
-export default function PalastoreTransfers() {
+export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSelectForPackage }) {
   const navigate = useNavigate();
   const { addItem } = useCartStore(); 
   const [tripType, setTripType] = useState('oneway'); 
@@ -34,16 +34,16 @@ export default function PalastoreTransfers() {
   };
   const minDepartureDate = getMinDepartureDate();
 
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(pacoteParams?.dateOut || '');
   const [time, setTime] = useState('12:00');
-  const [returnDate, setReturnDate] = useState('');
+  const [returnDate, setReturnDate] = useState(pacoteParams?.dateIn || '');
   const [returnTime, setReturnTime] = useState('12:00');
   
   const [flightNumber, setFlightNumber] = useState('');
   const [needsChildSeat, setNeedsChildSeat] = useState(false);
   const [hasBabyStroller, setHasBabyStroller] = useState(false);
   
-  const [adults, setAdults] = useState(1);
+  const [adults, setAdults] = useState(pacoteParams?.adults || 1);
   const [children, setChildren] = useState(0);
   const [largeBags, setLargeBags] = useState(1); 
   const [smallBags, setSmallBags] = useState(0); 
@@ -136,100 +136,106 @@ export default function PalastoreTransfers() {
   };
 
   const handleAddToCart = (veiculo) => {
-    const totalPax = Number(adults) + Number(children);
-    
-    let descriptionText = `TRANSFER ${tripType === 'roundtrip' ? 'IDA E VOLTA' : 'SÓ IDA'}\n`;
-    descriptionText += `📍 De: ${searchResult.origemNome}\n`;
-    descriptionText += `🏁 Para: ${searchResult.destinoNome}\n`;
-    descriptionText += `📆 Ida: ${date.split('-').reverse().join('/')} às ${time}h\n`;
-    if (tripType === 'roundtrip') {
-      descriptionText += `📆 Volta: ${returnDate.split('-').reverse().join('/')} às ${returnTime}h\n`;
+    try {
+      const totalPax = Number(adults) + Number(children);
+      
+      let descriptionText = `TRANSFER ${tripType === 'roundtrip' ? 'IDA E VOLTA' : 'SÓ IDA'}\n`;
+      descriptionText += `📍 De: ${searchResult.origemNome}\n`;
+      descriptionText += `🏁 Para: ${searchResult.destinoNome}\n`;
+      descriptionText += `📆 Ida: ${date.split('-').reverse().join('/')} às ${time}h\n`;
+      if (tripType === 'roundtrip') {
+        descriptionText += `📆 Volta: ${returnDate.split('-').reverse().join('/')} às ${returnTime}h\n`;
+      }
+      descriptionText += `🗺️ Distância: ${searchResult.distancia} km (~${searchResult.duracao} min)\n`;
+      descriptionText += `✈️ Voo: ${flightNumber || 'Nenhum'}\n`;
+      descriptionText += `👶 Cadeirinha: ${needsChildSeat ? 'Sim' : 'Não'}\n`;
+      descriptionText += `🍼 Carrinho de Bebê: ${hasBabyStroller ? 'Sim' : 'Não'}\n`;
+      descriptionText += `👥 Passageiros: ${adults} Adultos, ${children} Crianças\n`;
+      descriptionText += `🧳 Malas do Cliente: ${largeBags} G (23kg), ${smallBags} P (12kg)`;
+
+      const bagsStr = (Number(largeBags) > 0 || Number(smallBags) > 0) ? ` • 🧳 ${largeBags}G, ${smallBags}P` : ' • Sem Bagagem';
+      const variantStr = `${tripType === 'roundtrip' ? 'Ida e Volta' : 'Só Ida'} • 👥 ${totalPax} Pax${bagsStr}`;
+
+      let customTier = `${veiculo.name} • ${tripType === 'roundtrip' ? 'Ida e Volta' : 'Só Ida'}`;
+      if (needsChildSeat || flightNumber || hasBabyStroller) {
+          let extras = [];
+          if (flightNumber) extras.push(`Voo ${flightNumber}`);
+          if (needsChildSeat) extras.push(`Cadeirinha`);
+          if (hasBabyStroller) extras.push(`Carrinho`);
+          customTier += ` [ + ${extras.join(' | ')} ]`;
+      }
+
+      const uniqueHash = `${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+      const cartItem = {
+        _id: `transfer-${veiculo.id}-${uniqueHash}`,
+        sku: `TRF-${veiculo.id}-${uniqueHash}`, 
+        title: `Transfer VIP: ${veiculo.name}`,
+        name: `Transfer VIP: ${veiculo.name} (${tripType === 'roundtrip' ? 'Ida e Volta' : 'Só Ida'})`,
+        variantName: variantStr, 
+        price: veiculo.precoFinal,
+        quantity: 1, 
+        image: veiculo.image,
+        isTravel: true,
+        description: descriptionText,
+        flightDetails: {
+            tier: customTier,
+            holdBagsIda: Number(largeBags), 
+            holdBagsVolta: Number(smallBags), 
+            ida: { 
+              origem: searchResult.origemNome, 
+              destino: searchResult.destinoNome, 
+              partida: `${date.split('-').reverse().join('/')} às ${time}h`, 
+              duracao: `~${searchResult.duracao} min (${searchResult.distancia} km)` 
+            },
+            volta: tripType === 'roundtrip' ? { 
+              origem: searchResult.destinoNome, 
+              destino: searchResult.origemNome, 
+              partida: `${returnDate.split('-').reverse().join('/')} às ${returnTime}h`, 
+              duracao: `~${searchResult.duracao} min (${searchResult.distancia} km)` 
+            } : null
+        },
+        transferPayload: {
+            tripType, 
+            adults: Number(adults), 
+            children: Number(children), 
+            largeBags: Number(largeBags), 
+            smallBags: Number(smallBags), 
+            flightNumber, 
+            needsChildSeat, 
+            hasBabyStroller,
+            pickupName: searchResult.origemNome,
+            dropoffName: searchResult.destinoNome,
+            date: date.split('-').reverse().join('/'),
+            time,
+            returnDate: returnDate ? returnDate.split('-').reverse().join('/') : null,
+            returnTime
+        },
+        addedAt: Date.now()
+      };
+
+      // 🚀 A TRAVA DE SEGURANÇA: Se estiver no modo pacote, atua aqui
+      if (isPackageMode && typeof onSelectForPackage === 'function') {
+        onSelectForPackage(cartItem);
+        return; 
+      }
+
+      // Se não for pacote, envia pro carrinho
+      addItem(cartItem);
+      navigate('/cart');
+    } catch (err) {
+      alert("Ocorreu um erro ao montar seu transfer: " + err.message);
     }
-    descriptionText += `🗺️ Distância: ${searchResult.distancia} km (~${searchResult.duracao} min)\n`;
-    descriptionText += `✈️ Voo: ${flightNumber || 'Nenhum'}\n`;
-    descriptionText += `👶 Cadeirinha: ${needsChildSeat ? 'Sim' : 'Não'}\n`;
-    descriptionText += `🍼 Carrinho de Bebê: ${hasBabyStroller ? 'Sim' : 'Não'}\n`;
-    descriptionText += `👥 Passageiros: ${adults} Adultos, ${children} Crianças\n`;
-    descriptionText += `🧳 Malas do Cliente: ${largeBags} G (23kg), ${smallBags} P (12kg)`;
-
-    const bagsStr = (Number(largeBags) > 0 || Number(smallBags) > 0) ? ` • 🧳 ${largeBags}G, ${smallBags}P` : ' • Sem Bagagem';
-    const variantStr = `${tripType === 'roundtrip' ? 'Ida e Volta' : 'Só Ida'} • 👥 ${totalPax} Pax${bagsStr}`;
-
-    let customTier = `${veiculo.name} • ${tripType === 'roundtrip' ? 'Ida e Volta' : 'Só Ida'}`;
-    if (needsChildSeat || flightNumber || hasBabyStroller) {
-        let extras = [];
-        if (flightNumber) extras.push(`Voo ${flightNumber}`);
-        if (needsChildSeat) extras.push(`Cadeirinha`);
-        if (hasBabyStroller) extras.push(`Carrinho`);
-        customTier += ` [ + ${extras.join(' | ')} ]`;
-    }
-
-    const uniqueHash = `${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-
-    const cartItem = {
-      _id: `transfer-${veiculo.id}-${uniqueHash}`,
-      sku: `TRF-${veiculo.id}-${uniqueHash}`, 
-      title: `Transfer VIP: ${veiculo.name}`,
-      variantName: variantStr, 
-      price: veiculo.precoFinal,
-      quantity: 1, 
-      image: veiculo.image,
-      isTravel: true,
-      description: descriptionText,
-      flightDetails: {
-          tier: customTier,
-          holdBagsIda: Number(largeBags), 
-          holdBagsVolta: Number(smallBags), 
-          ida: { 
-            origem: searchResult.origemNome, 
-            destino: searchResult.destinoNome, 
-            partida: `${date.split('-').reverse().join('/')} às ${time}h`, 
-            duracao: `~${searchResult.duracao} min (${searchResult.distancia} km)` 
-          },
-          volta: tripType === 'roundtrip' ? { 
-            origem: searchResult.destinoNome, 
-            destino: searchResult.origemNome, 
-            partida: `${returnDate.split('-').reverse().join('/')} às ${returnTime}h`, 
-            duracao: `~${searchResult.duracao} min (${searchResult.distancia} km)` 
-          } : null
-      },
-      transferPayload: {
-          tripType, 
-          adults: Number(adults), 
-          children: Number(children), 
-          largeBags: Number(largeBags), 
-          smallBags: Number(smallBags), 
-          flightNumber, 
-          needsChildSeat, 
-          hasBabyStroller,
-          pickupName: searchResult.origemNome,
-          dropoffName: searchResult.destinoNome,
-          date: date.split('-').reverse().join('/'),
-          time,
-          returnDate: returnDate ? returnDate.split('-').reverse().join('/') : null,
-          returnTime
-      },
-      addedAt: Date.now()
-    };
-
-    addItem(cartItem);
-    navigate('/cart');
   };
 
   return (
-    <div className="w-full flex flex-col items-center pb-20 bg-gray-50 min-h-screen font-sans">
+    <div className="w-full flex flex-col items-center pb-20 bg-white font-sans">
       
-      <div className="w-full bg-[url('/images/bg-transfers.jpg')] bg-cover bg-center bg-no-repeat relative flex justify-center px-4 pt-12 pb-24 shadow-inner">
-        <div className="absolute inset-0 bg-slate-900/65"></div>
-        
-        <div className="relative z-10 w-full max-w-[1100px] mt-4">
-          <h2 className="text-3xl md:text-5xl font-black text-white mb-6 drop-shadow-lg text-center md:text-left">
-            Encontre o transfer perfeito
-          </h2>
-
-          <form onSubmit={handleSearch} className="w-full bg-[#E65100] p-4 md:p-6 rounded-2xl shadow-2xl flex flex-col gap-4">
+      <div className="w-full relative flex justify-center px-2 pt-6 pb-10">
+        <div className="relative z-10 w-full max-w-[1000px]">
+          
+          <form onSubmit={handleSearch} className="w-full bg-[#E65100] p-4 md:p-6 rounded-2xl shadow-xl flex flex-col gap-4">
             
-            {/* DESIGN MODERNO: Botões em pílula ao invés de radios HTML clássicos */}
             <div className="flex justify-center md:justify-start gap-3 mb-1">
               <button 
                 type="button" 
@@ -293,31 +299,34 @@ export default function PalastoreTransfers() {
               </div>
             </div>
 
-            {/* MARGEM ADICIONADA (mt-3) E LAYOUT ESPAÇOSO PARA NÃO SOBREPOR AS ETIQUETAS */}
             <div className="flex flex-col md:flex-row gap-4 md:gap-3 mt-3">
-              <div className="flex bg-white rounded-xl h-14 flex-1 relative shadow-sm border-2 border-transparent focus-within:border-orange-200 transition-all">
+              <div 
+                onClick={(e) => { const input = e.currentTarget.querySelector('input[type="date"]'); if(input && input.showPicker) input.showPicker(); }}
+                className="flex bg-white rounded-xl h-14 flex-1 relative shadow-sm border-2 border-transparent focus-within:border-orange-200 transition-all cursor-pointer items-center"
+              >
                 <div className="absolute -top-3 left-4 bg-[#1e293b] text-white px-2 py-0.5 text-[10px] font-black uppercase rounded shadow-sm tracking-widest">Partida (Mín. 48h)</div>
-                <div className="flex-1 flex items-center px-4 border-r border-gray-100">
-                  <Calendar size={20} className="text-[#E65100] mr-2 shrink-0"/>
+                <div className="flex-1 flex items-center px-4 border-r border-gray-100 h-full">
+                  <Calendar size={20} className="text-[#E65100] mr-2 shrink-0 pointer-events-none"/>
                   <input type="date" required min={minDepartureDate} value={date} onChange={(e) => { setDate(e.target.value); if (returnDate && e.target.value > returnDate) setReturnDate(''); }} className="w-full text-sm md:text-base font-bold outline-none text-gray-800 bg-transparent cursor-pointer" />
                 </div>
-                <div className="w-[120px] md:w-[140px] flex items-center px-3">
+                <div className="w-[120px] md:w-[140px] flex items-center px-3 h-full" onClick={(e) => e.stopPropagation()}>
                   <Clock size={20} className="text-[#E65100] mr-1 shrink-0"/>
-                  {/* CORREÇÃO: Input Time nativo para abrir o relógio redondo no celular */}
                   <input type="time" required value={time} onChange={(e) => setTime(e.target.value)} className="w-full text-sm md:text-base font-bold outline-none text-gray-800 bg-transparent cursor-pointer" />
                 </div>
               </div>
 
               {tripType === 'roundtrip' && (
-                <div className="flex bg-white rounded-xl h-14 flex-1 relative shadow-sm border-2 border-transparent focus-within:border-orange-200 transition-all">
+                <div 
+                  onClick={(e) => { const input = e.currentTarget.querySelector('input[type="date"]'); if(input && input.showPicker) input.showPicker(); }}
+                  className="flex bg-white rounded-xl h-14 flex-1 relative shadow-sm border-2 border-transparent focus-within:border-orange-200 transition-all cursor-pointer items-center"
+                >
                   <div className="absolute -top-3 left-4 bg-[#1e293b] text-white px-2 py-0.5 text-[10px] font-black uppercase rounded shadow-sm tracking-widest">Retorno</div>
-                  <div className="flex-1 flex items-center px-4 border-r border-gray-100">
-                    <Calendar size={20} className="text-[#E65100] mr-2 shrink-0"/>
+                  <div className="flex-1 flex items-center px-4 border-r border-gray-100 h-full">
+                    <Calendar size={20} className="text-[#E65100] mr-2 shrink-0 pointer-events-none"/>
                     <input type="date" required min={date || minDepartureDate} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className="w-full text-sm md:text-base font-bold outline-none text-gray-800 bg-transparent cursor-pointer" />
                   </div>
-                  <div className="w-[120px] md:w-[140px] flex items-center px-3">
+                  <div className="w-[120px] md:w-[140px] flex items-center px-3 h-full" onClick={(e) => e.stopPropagation()}>
                     <Clock size={20} className="text-[#E65100] mr-1 shrink-0"/>
-                    {/* CORREÇÃO: Input Time nativo para abrir o relógio redondo no celular */}
                     <input type="time" required value={returnTime} onChange={(e) => setReturnTime(e.target.value)} className="w-full text-sm md:text-base font-bold outline-none text-gray-800 bg-transparent cursor-pointer" />
                   </div>
                 </div>
@@ -325,33 +334,32 @@ export default function PalastoreTransfers() {
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
-              <div className="bg-white rounded-xl h-14 px-4 flex items-center justify-between shadow-sm border-2 border-transparent focus-within:border-orange-200 transition-all">
+              <div className="bg-white rounded-xl h-14 px-4 flex items-center justify-between shadow-sm">
                 <span className="text-sm font-bold text-gray-700 flex items-center gap-2"><Users size={18} className="text-[#E65100]"/> Adultos</span>
-                <select value={adults} onChange={(e) => setAdults(Number(e.target.value))} className="font-black text-base text-gray-900 bg-gray-50 px-2 py-1.5 rounded-lg outline-none cursor-pointer border border-gray-100">
+                <select value={adults} onChange={(e) => setAdults(Number(e.target.value))} className="font-black text-base text-gray-900 bg-gray-50 px-2 py-1.5 rounded-lg outline-none cursor-pointer">
                   {[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
-              <div className="bg-white rounded-xl h-14 px-4 flex items-center justify-between shadow-sm border-2 border-transparent focus-within:border-orange-200 transition-all">
+              <div className="bg-white rounded-xl h-14 px-4 flex items-center justify-between shadow-sm">
                 <span className="text-sm font-bold text-gray-700 flex items-center gap-2"><Baby size={18} className="text-[#E65100]"/> Crianças</span>
-                <select value={children} onChange={(e) => setChildren(Number(e.target.value))} className="font-black text-base text-gray-900 bg-gray-50 px-2 py-1.5 rounded-lg outline-none cursor-pointer border border-gray-100">
+                <select value={children} onChange={(e) => setChildren(Number(e.target.value))} className="font-black text-base text-gray-900 bg-gray-50 px-2 py-1.5 rounded-lg outline-none cursor-pointer">
                   {[0,1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
-              <div className="bg-white rounded-xl h-14 px-4 flex items-center justify-between shadow-sm border-2 border-transparent focus-within:border-orange-200 transition-all" title="Até 23kg">
+              <div className="bg-white rounded-xl h-14 px-4 flex items-center justify-between shadow-sm">
                 <span className="text-sm font-bold text-gray-700 flex items-center gap-2"><Briefcase size={18} className="text-[#E65100]"/> Mala G</span>
-                <select value={largeBags} onChange={(e) => setLargeBags(Number(e.target.value))} className="font-black text-base text-gray-900 bg-gray-50 px-2 py-1.5 rounded-lg outline-none cursor-pointer border border-gray-100">
+                <select value={largeBags} onChange={(e) => setLargeBags(Number(e.target.value))} className="font-black text-base text-gray-900 bg-gray-50 px-2 py-1.5 rounded-lg outline-none cursor-pointer">
                   {[0,1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
-              <div className="bg-white rounded-xl h-14 px-4 flex items-center justify-between shadow-sm border-2 border-transparent focus-within:border-orange-200 transition-all" title="Até 12kg">
+              <div className="bg-white rounded-xl h-14 px-4 flex items-center justify-between shadow-sm">
                 <span className="text-sm font-bold text-gray-700 flex items-center gap-2"><Luggage size={18} className="text-[#E65100]"/> Mala P</span>
-                <select value={smallBags} onChange={(e) => setSmallBags(Number(e.target.value))} className="font-black text-base text-gray-900 bg-gray-50 px-2 py-1.5 rounded-lg outline-none cursor-pointer border border-gray-100">
+                <select value={smallBags} onChange={(e) => setSmallBags(Number(e.target.value))} className="font-black text-base text-gray-900 bg-gray-50 px-2 py-1.5 rounded-lg outline-none cursor-pointer">
                   {[0,1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
             </div>
 
-            {/* ÁREA DE EXTRAS COM BOTÕES MAIS LARGOS E FÁCEIS DE TOCAR NO CELULAR */}
             <div className="flex flex-col md:flex-row flex-wrap items-stretch md:items-center gap-3 md:gap-4 mt-2 bg-white/10 p-4 rounded-2xl border border-white/20">
               <div className="bg-white rounded-xl h-14 md:h-12 px-4 flex items-center flex-1 min-w-full md:min-w-[250px] shadow-sm border-2 border-transparent focus-within:border-orange-300 transition-all">
                 <Plane size={20} className="text-[#E65100] mr-3 shrink-0" />
@@ -378,83 +386,32 @@ export default function PalastoreTransfers() {
         </div>
       </div>
 
-      <div className="w-full max-w-[1100px] px-4 mt-6 md:-mt-8 relative z-20">
+      <div className="w-full max-w-[1000px] px-4 mt-4">
         {searchResult && (
-          <div className="flex flex-col lg:flex-row gap-6">
-            
-            <div className="w-full lg:w-1/3">
-              <div className="bg-white border border-gray-200 rounded-2xl p-6 sticky top-4 shadow-md">
-                <h3 className="font-bold text-xl mb-5 text-gray-900">Resumo do trajeto</h3>
-                <div className="relative pl-7 border-l-2 border-gray-200 space-y-6 mb-6">
-                  <div className="relative">
-                    <div className="absolute -left-[35px] top-1 bg-white border-4 border-[#E65100] w-4 h-4 rounded-full"></div>
-                    <p className="text-base font-bold text-gray-800 leading-tight">{searchResult.origemNome}</p>
-                    <p className="text-sm font-semibold text-gray-500 mt-1">Ida: {date.split('-').reverse().join('/')} às {time}h</p>
-                  </div>
-                  <div className="relative">
-                    <div className="absolute -left-[35px] top-1 bg-[#E65100] w-4 h-4 rounded-full shadow-[0_0_0_2px_white]"></div>
-                    <p className="text-base font-bold text-gray-800 leading-tight">{searchResult.destinoNome}</p>
-                    {tripType === 'roundtrip' ? (
-                      <p className="text-sm font-bold text-[#E65100] mt-1">Volta: {returnDate.split('-').reverse().join('/')} às {returnTime}h</p>
-                    ) : (
-                      <p className="text-sm font-semibold text-gray-500 mt-1">Estimativa: ~{searchResult.duracao} min</p>
-                    )}
-                  </div>
+          <div className="flex flex-col gap-4 w-full">
+            <h3 className="font-black text-xl text-gray-900 mb-2">Veículos Disponíveis para o Trajeto</h3>
+            {searchResult.veiculos.map((v) => (
+              <div key={v.id} className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-col sm:flex-row gap-5 shadow-sm hover:shadow-lg transition-all items-center">
+                <div className="w-full sm:w-[180px] p-2 bg-gray-50 rounded-xl flex items-center justify-center">
+                  <img src={v.image} alt={v.name} className="h-20 object-contain" />
                 </div>
-                <div className="bg-orange-50 p-4 rounded-xl flex justify-between items-center border border-orange-100">
-                  <span className="text-xs font-black text-[#E65100] uppercase tracking-wider">Distância da Rota</span>
-                  <span className="text-xl font-black text-[#E65100]">{searchResult.distancia} km</span>
+                <div className="flex-1">
+                  <h4 className="text-xl font-black text-gray-900 mb-1">{v.name}</h4>
+                  <p className="text-xs font-bold text-gray-600">Até {v.pax} passageiros e {v.bags} malas</p>
+                  <p className="text-xs font-bold text-green-700 mt-2">✓ Cancelamento grátis • Placa no desembarque</p>
+                </div>
+                <div className="sm:w-[180px] text-right flex flex-col items-end shrink-0">
+                  <p className="text-2xl font-black text-gray-900 mb-2">R$ {v.precoFinal}</p>
+                  <button 
+                    type="button" 
+                    onClick={(e) => { e.preventDefault(); handleAddToCart(v); }}
+                    className="w-full bg-[#E65100] hover:bg-orange-700 text-white font-black py-3.5 rounded-xl shadow transition text-xs uppercase tracking-wide"
+                  >
+                    {isPackageMode ? 'Adicionar ao Pacote' : 'Reservar Agora'}
+                  </button>
                 </div>
               </div>
-            </div>
-
-            <div className="w-full lg:w-2/3 flex flex-col gap-4">
-              {searchResult.veiculos.map((v) => (
-                <div key={v.id} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col sm:flex-row gap-5 shadow-sm hover:shadow-lg hover:border-orange-200 transition-all">
-                  
-                  <div className="w-full sm:w-[220px] flex items-center justify-center p-4 bg-gray-50 rounded-xl shrink-0 border border-gray-100">
-                    <img src={v.image} alt={v.name} className="w-full h-28 object-contain drop-shadow-sm" />
-                  </div>
-
-                  <div className="flex-1 flex flex-col justify-between">
-                    <div>
-                      <h4 className="text-2xl font-black text-gray-900 mb-3">{v.name}</h4>
-                      
-                      <div className="mb-4 bg-gray-50 border border-gray-100 p-3 rounded-xl inline-block w-full md:w-auto">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Capacidade Máxima:</span>
-                        <div className="flex flex-wrap gap-5">
-                          <span className="flex items-center gap-2 text-sm font-bold text-gray-700"><Users size={18} className="text-[#E65100]"/> Até {v.pax} passageiros</span>
-                          <span className="flex items-center gap-2 text-sm font-bold text-gray-700"><Briefcase size={18} className="text-[#E65100]"/> Até {v.bags} malas</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5 mt-2">
-                        <p className="flex items-center gap-2 text-sm font-bold text-[#008009]"><Check size={18}/> Cancelamento grátis até 24h antes</p>
-                        <p className="flex items-center gap-2 text-sm font-bold text-[#008009]"><Check size={18}/> Motorista com placa de identificação</p>
-                        {needsChildSeat && <p className="flex items-center gap-2 text-sm font-bold text-[#008009]"><Check size={18}/> Cadeirinha Inclusa</p>}
-                        {hasBabyStroller && <p className="flex items-center gap-2 text-sm font-bold text-[#00897B]"><Check size={18}/> Espaço para Carrinho</p>}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="sm:w-[200px] flex flex-col justify-end sm:items-end border-t sm:border-t-0 sm:border-l border-gray-100 pt-5 sm:pt-0 sm:pl-5 mt-3 sm:mt-0 shrink-0">
-                    <div className="text-left sm:text-right mb-5">
-                      {tripType === 'roundtrip' && <span className="text-[10px] bg-orange-100 text-[#E65100] px-3 py-1 rounded-full font-black uppercase mb-2 inline-block tracking-wider">Ida e Volta Inclusos</span>}
-                      <p className="text-3xl font-black text-gray-900">R$ {v.precoFinal}</p>
-                      <p className="text-xs font-semibold text-gray-500 mt-1">Impostos inclusos</p>
-                    </div>
-                    
-                    <button 
-                      onClick={() => handleAddToCart(v)}
-                      className="w-full bg-[#E65100] hover:bg-orange-700 text-white font-black py-3.5 rounded-xl shadow-md transition-colors text-base"
-                    >
-                      Reservar Agora
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
+            ))}
           </div>
         )}
       </div>

@@ -46,19 +46,36 @@ export default function Cart() {
     addSavedPassenger
   } = useCartStore();
   
-  const isItemTravel = (item) => item.isTravel === true || !!item.flightDetails || !!item.transferPayload;
+  const isItemTravel = (item) => item.isTravel === true || !!item.flightDetails || !!item.transferPayload || !!item.packageDetails;
   const travelItems = items.filter(isItemTravel);
   const physicalItems = items.filter(i => !isItemTravel(i));
   const hasTravelItems = travelItems.length > 0;
   const isOnlyDigital = hasTravelItems && physicalItems.length === 0;
   
+  // 🚀 A MÁGICA DOS FORMULÁRIOS ESTÁ AQUI (FOOLPROOF FALLBACK)
   const totalTickets = travelItems.reduce((max, item) => {
     let itemPax = item.quantity || 1;
-    if (item.transferPayload) {
-      itemPax = (item.transferPayload.adults || 0) + (item.transferPayload.children || 0);
-    } else if (item.flightDetails && item.flightDetails.pax) {
-      itemPax = item.flightDetails.pax;
+
+    // 1. Tenta ler as propriedades diretas se existirem
+    if (item.packageDetails?.pax) {
+      itemPax = item.packageDetails.pax * (item.quantity || 1);
+    } else if (item.pax) {
+      itemPax = item.pax * (item.quantity || 1);
+    } else if (item.transferPayload) {
+      itemPax = ((item.transferPayload.adults || 0) + (item.transferPayload.children || 0)) * (item.quantity || 1);
+    } else if (item.flightDetails?.pax) {
+      itemPax = item.flightDetails.pax * (item.quantity || 1);
     }
+
+    // 2. Se a store travou ou é do cache antigo, extrai do texto "2 Viajante(s)" 
+    if (itemPax === (item.quantity || 1)) {
+      const textToMatch = `${item.variantName || ''} ${item.title || ''} ${item.description || ''}`;
+      const match = textToMatch.match(/(\d+)\s*(pax|viajante)/i);
+      if (match) {
+        itemPax = parseInt(match[1], 10) * (item.quantity || 1);
+      }
+    }
+
     return Math.max(max, itemPax);
   }, 0);
 
@@ -152,7 +169,7 @@ export default function Cart() {
             cpf: cpf, 
             relationship: 'Titular',
             nationality: 'Brasileira',
-            seatPreference: isDuffelFlight ? '' : newArr[index].seatPreference // TRAVA 1
+            seatPreference: isDuffelFlight ? '' : newArr[index].seatPreference
           };
           return newArr;
       });
@@ -176,7 +193,7 @@ export default function Cart() {
                 passportExpiry: paxData.passportExpiry || paxData.validadePassaporte || '',
                 email: paxData.email || paxData.correo || '',
                 phone: paxData.phone || paxData.telefone || paxData.celular || '',
-                seatPreference: isDuffelFlight ? '' : (paxData.seatPreference || paxData.assento || paxData.preferenciaAssento || '') // TRAVA 2
+                seatPreference: isDuffelFlight ? '' : (paxData.seatPreference || paxData.assento || paxData.preferenciaAssento || '')
             };
             return newArr;
         });
@@ -364,7 +381,10 @@ export default function Cart() {
             let sType = '📦 Produto Físico';
             let desc = item.description || '';
 
-            if (item.transferPayload) {
+            if (item.packageDetails) {
+                sType = '🎒 Pacote de Viagem';
+            }
+            else if (item.transferPayload) {
                 sType = '🚐 Transfer / Transporte';
                 const tp = item.transferPayload;
                 desc = `📍 ORIGEM: ${tp.pickupName}\n🏁 DESTINO: ${tp.dropoffName}\n\n📆 IDA: ${tp.date} às ${tp.time}\n`;
@@ -522,7 +542,7 @@ export default function Cart() {
           <div className="flex-1 space-y-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-0 overflow-hidden space-y-0">
                 {items.map((item) => (
-                    item.flightDetails ? (
+                    item.flightDetails && !item.packageDetails ? (
                         <div key={item.sku || item._id} className="bg-white border border-purple-100 p-0 flex flex-col relative shadow-sm">
                             <div className="bg-purple-600 text-white p-4 flex justify-between items-center">
                                 <div className="flex items-center gap-3">
@@ -581,53 +601,31 @@ export default function Cart() {
                                             <div className="flex justify-between">
                                                 <span>Passageiros:</span> 
                                                 <span className="font-bold">
-                                                    {item.transferPayload ? (item.transferPayload.adults + item.transferPayload.children) : (item.flightDetails.pax || item.quantity)}
+                                                    {item.flightDetails.pax || item.quantity}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between"><span>Tarifa / Categoria:</span> <span className="font-bold text-right">{item.flightDetails.tier}</span></div>
-                                            
-                                            {item.transferPayload ? (
-                                                <div className="pt-2 border-t border-purple-200 mt-3">
-                                                    <span className="flex items-center gap-1 font-bold text-purple-900 mb-2"><Luggage size={14}/> Bagagem do Veículo:</span>
-                                                    <div className="flex flex-col gap-1.5 text-[10px]">
-                                                        {item.transferPayload.largeBags > 0 && (
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="text-purple-700">Mala(s) G (até 23kg)</span>
-                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.transferPayload.largeBags}x</span>
-                                                            </div>
-                                                        )}
-                                                        {item.transferPayload.smallBags > 0 && (
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="text-purple-700">Mala(s) P (até 12kg)</span>
-                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.transferPayload.smallBags}x</span>
-                                                            </div>
-                                                        )}
+                                            <div className="pt-2 border-t border-purple-200 mt-3">
+                                                <span className="flex items-center gap-1 font-bold text-purple-900 mb-2"><Luggage size={14}/> Franquia de Bagagem:</span>
+                                                <div className="flex flex-col gap-1.5 text-[10px]">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-purple-700">Mochila + Cabine 10kg</span>
+                                                        <span className="font-bold text-green-800 bg-green-100 px-2 rounded-full">Incluso</span>
                                                     </div>
-                                                </div>
-                                            ) : (
-                                                <div className="pt-2 border-t border-purple-200 mt-3">
-                                                    <span className="flex items-center gap-1 font-bold text-purple-900 mb-2"><Luggage size={14}/> Franquia de Bagagem:</span>
-                                                    <div className="flex flex-col gap-1.5 text-[10px]">
+                                                    {item.flightDetails.holdBagsIda > 0 && (
                                                         <div className="flex justify-between items-center">
-                                                            <span className="text-purple-700">Mochila + Cabine 10kg</span>
-                                                            <span className="font-bold text-green-800 bg-green-100 px-2 rounded-full">Incluso</span>
+                                                            <span className="text-purple-700">Porão (Ida)</span>
+                                                            <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsIda}x</span>
                                                         </div>
-                                                        {item.flightDetails.holdBagsIda > 0 && (
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="text-purple-700">Porão (Ida)</span>
-                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsIda}x</span>
-                                                            </div>
-                                                        )}
-                                                        {item.flightDetails.holdBagsVolta > 0 && (
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="text-purple-700">Porão (Volta)</span>
-                                                                <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsVolta}x</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                    )}
+                                                    {item.flightDetails.holdBagsVolta > 0 && (
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-purple-700">Porão (Volta)</span>
+                                                            <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsVolta}x</span>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-
+                                            </div>
                                         </div>
                                     </div>
                                     <div className="mt-4 pt-3 border-t border-purple-200 flex justify-between items-end">
@@ -638,29 +636,33 @@ export default function Cart() {
                             </div>
                         </div>
                     ) : (
-                        <div key={item.sku || item._id} className="flex gap-4 p-6 border-b border-gray-100 last:border-0">
-                          <div className="w-20 h-20 bg-white border rounded-lg p-2 relative">
-                              <img src={item.image || item.imageUrl} className="w-full h-full object-contain mix-blend-multiply" alt={item.title} />
+                        <div key={item.sku || item._id} className="flex flex-col sm:flex-row gap-5 p-6 border-b border-gray-100 last:border-0">
+                          <div className="w-full sm:w-28 h-28 bg-white border border-gray-100 rounded-xl p-2 relative shrink-0 flex items-center justify-center overflow-hidden">
+                              <img src={item.image || item.imageUrl} className="max-w-full max-h-full object-contain mix-blend-multiply" alt={item.title} />
                               {item.freeShipping && !isItemTravel(item) && (
-                                   <div className="absolute bottom-0 left-0 right-0 bg-green-600 text-white text-[8px] font-bold text-center py-0.5">FRETE GRÁTIS</div>
+                                   <div className="absolute bottom-0 left-0 right-0 bg-green-600 text-white text-[9px] font-bold text-center py-1">FRETE GRÁTIS</div>
                                )}
                           </div>
                           <div className="flex-1 flex flex-col justify-between">
-                            <div className="flex justify-between">
-                                <div>
-                                    <span className="font-medium text-gray-900 line-clamp-2">{item.title}</span>
-                                    {item.description && <p className="text-xs text-gray-500 mt-1 line-clamp-1">{item.description}</p>}
-                                    {item.variantName && <p className="text-xs text-blue-600 font-bold mt-1">{item.variantName}</p>}
+                            <div className="flex justify-between items-start">
+                                <div className="w-full pr-4">
+                                    <span className="text-lg font-black text-gray-900">{item.title}</span>
+                                    {item.variantName && <p className="text-xs text-blue-600 font-bold mt-1 mb-3">{item.variantName}</p>}
+                                    {item.description && (
+                                        <div className="text-[11px] md:text-xs text-gray-700 whitespace-pre-line leading-relaxed bg-gray-50 p-4 rounded-xl border border-gray-100 mb-4 shadow-inner font-medium">
+                                            {item.description}
+                                        </div>
+                                    )}
                                 </div>
-                                <button onClick={() => removeItem(item._id, item.sku)} className="text-red-500"><Trash2 size={18}/></button>
+                                <button onClick={() => removeItem(item._id, item.sku)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors shrink-0" title="Remover Item"><Trash2 size={20}/></button>
                             </div>
                             <div className="flex justify-between items-end mt-2">
-                                <div className="flex items-center border rounded-lg">
-                                  <button onClick={() => updateQuantity(item._id, item.quantity - 1, item.sku)} disabled={item.quantity <= 1} className="px-3 py-1 disabled:opacity-50">-</button>
-                                  <span className="px-2 text-sm font-bold">{item.quantity}</span>
-                                  <button onClick={() => updateQuantity(item._id, item.quantity + 1, item.sku)} className="px-3 py-1 hover:bg-gray-100 transition-colors">+</button>
+                                <div className="flex items-center border rounded-lg bg-white shadow-sm">
+                                  <button onClick={() => updateQuantity(item._id, item.quantity - 1, item.sku)} disabled={item.quantity <= 1} className="px-3 py-1.5 disabled:opacity-50 font-bold">-</button>
+                                  <span className="px-3 text-sm font-black border-x border-gray-100">{item.quantity}</span>
+                                  <button onClick={() => updateQuantity(item._id, item.quantity + 1, item.sku)} className="px-3 py-1.5 hover:bg-gray-50 transition-colors font-bold">+</button>
                                 </div>
-                                <p className="text-lg font-bold text-gray-900">{formatCurrency(item.price * item.quantity)}</p>
+                                <p className="text-xl font-black text-gray-900">{formatCurrency(item.price * item.quantity)}</p>
                             </div>
                           </div>
                         </div>
@@ -713,7 +715,7 @@ export default function Cart() {
                         </h2>
                         
                         <div className="bg-orange-50 border border-orange-100 p-3 rounded-lg text-sm text-orange-800 font-medium">
-                           A emissão do e-ticket depende da exatidão destes dados. Preencha conforme o documento oficial.
+                           A emissão do e-ticket/voucher depende da exatidão destes dados. Preencha conforme o documento oficial.
                         </div>
 
                         <div className="space-y-4">
@@ -764,9 +766,6 @@ export default function Cart() {
                                        <option value="Outro">Outro</option>
                                     </select>
                                     
-                                    {/* ========================================== */}
-                                    {/* LÓGICA BLINDADA DO ASSENTO DUFFEL VS KIWI  */}
-                                    {/* ========================================== */}
                                     {isDuffelFlight ? (
                                         <div className="md:col-span-2 mt-2">
                                             <AirplaneSeatMap 

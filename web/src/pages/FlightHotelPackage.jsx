@@ -11,7 +11,7 @@ import PalastoreTransfers from '../components/PalastoreTransfers';
 import { 
   Calendar, Users, Check, AlertCircle, 
   Plane, Building, Car, X, 
-  Briefcase, Luggage, Info, ArrowRightLeft, MapPin, Coffee, ShoppingCart, ShieldCheck
+  Briefcase, Luggage, Info, ArrowRightLeft, MapPin, Clock, ShoppingCart, ShieldCheck
 } from 'lucide-react';
 
 const WORKER_URL = "https://palastore-flights-api.laeciossp.workers.dev";
@@ -71,7 +71,7 @@ export default function FlightHotelPackage() {
     flightsResults, hotelsResults, 
     setFlightsResults, setHotelsResults, 
     selectedFlight, selectedHotel, selectedTransfer,
-    changeSelectedFlight, changeSelectedHotel, 
+    changeSelectedFlight, changeSelectedHotel, changeSelectedTransfer,
     removeTransfer, removeFlight, removeHotel,
     flightFilters, setFlightFilters,
     hotelFilters, setHotelFilters,
@@ -83,7 +83,6 @@ export default function FlightHotelPackage() {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [expandedFlightId, setExpandedFlightId] = useState(null);
 
-  // States do Modal de Alteração de Busca com Autocomplete funcional
   const [tempOrigin, setTempOrigin] = useState(searchParams?.origin?.name || 'São Paulo');
   const [selectedOriginObj, setSelectedOriginObj] = useState(searchParams?.origin || { id: 'SAO', name: 'São Paulo' });
   const [originResults, setOriginResults] = useState([]);
@@ -101,11 +100,14 @@ export default function FlightHotelPackage() {
   const [tempBagsVolta, setTempBagsVolta] = useState(searchParams?.holdBagsVolta || 0);
 
   const { totalGeral, precoPorPessoa, totalPax, bagCost } = getPackageTotals();
-  const taxasEImpostos = Math.ceil(precoPorPessoa * 0.12); 
+  const taxasEImpostos = Math.ceil(precoPorPessoa * 0.12);
   const precoBasePessoa = Math.max(0, precoPorPessoa - taxasEImpostos);
   const noites = calcularNoites(searchParams?.dateOut, searchParams?.dateIn);
 
-  // Autocomplete de Origem via Worker API[cite: 1]
+  const flightTotal = selectedFlight ? (Number(selectedFlight.precoBase || selectedFlight.safeTotal || selectedFlight.precoFinal || selectedFlight.price) || 0) + (bagCost || 0) : 0;
+  const hotelTotal = selectedHotel ? (Number(selectedHotel.ofertas?.[0]?.precoVenda || selectedHotel.price) || 0) : 0;
+  const transferTotal = selectedTransfer ? (Number(selectedTransfer.price) || 0) : 0;
+
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (tempOrigin.trim().length >= 2) {
@@ -123,7 +125,6 @@ export default function FlightHotelPackage() {
     return () => clearTimeout(timer);
   }, [tempOrigin]);
 
-  // Autocomplete de Destino via Worker API[cite: 1]
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (tempDest.trim().length >= 2) {
@@ -141,7 +142,6 @@ export default function FlightHotelPackage() {
     return () => clearTimeout(timer);
   }, [tempDest]);
 
-  // Executar Busca Completa
   const executarBuscaCompleta = async (origObj, destObj, dateOutStr, dateInStr, paxNum, bagsIda, bagsVolta) => {
     setLoading(true); setError(null);
     try {
@@ -193,7 +193,7 @@ export default function FlightHotelPackage() {
       if (hoteis.length > 0) changeSelectedHotel(hoteis[0]);
 
     } catch (err) {
-      setError("Erro ao processar busca nas APIs de turismo[cite: 1].");
+      setError("Erro ao processar busca nas APIs de turismo.");
     } finally {
       setLoading(false);
     }
@@ -241,23 +241,86 @@ export default function FlightHotelPackage() {
   });
 
   const handleCheckoutPackage = () => {
-    if (!selectedFlight || !selectedHotel) return alert("Selecione Voo e Hotel para fechar o pacote.");
+    if (!selectedFlight && !selectedHotel && !selectedTransfer) {
+      return alert("Selecione pelo menos um serviço para fechar o pacote.");
+    }
+    
     setLoadingCart(true);
     const packageSku = `PK-${Date.now()}`;
     const destName = searchParams.destination?.name?.split(',')[0] || 'Destino';
     
-    let desc = `PACOTE DE VIAGEM\nDestino: ${destName}\nPassageiros: ${totalPax}\nIda: ${searchParams.dateOut} | Volta: ${searchParams.dateIn}\n`;
-    desc += `Hotel: ${selectedHotel.nome || selectedHotel.name}\nVoo: ${selectedFlight.ida?.companhiaPrincipal}\n`;
-    if (searchParams.holdBagsIda > 0 || searchParams.holdBagsVolta > 0) {
-      desc += `Bagagem Porão: ${searchParams.holdBagsIda} Ida | ${searchParams.holdBagsVolta} Volta\n`;
+    let descLines = [];
+    descLines.push(`📋 PACOTE COMPLETO: ${destName.toUpperCase()}`);
+    descLines.push(`👥 Viajantes: ${totalPax} passageiro(s) | 📅 ${formatDateShort(searchParams.dateOut)} até ${formatDateShort(searchParams.dateIn)} (${noites} noites)`);
+    descLines.push(`──────────────────────────────────────────`);
+
+    if (selectedFlight) {
+      descLines.push(`✈️ PASSAGENS AÉREAS (${selectedFlight.ida?.companhiaPrincipal || 'Voo'}):`);
+      descLines.push(`• IDA: ${selectedFlight.ida?.origem} ➔ ${selectedFlight.ida?.destino} | ${formatDateBrFull(selectedFlight.ida?.partida)}`);
+      descLines.push(`  Horário: ${formatTime(selectedFlight.ida?.partida)}h às ${formatTime(selectedFlight.ida?.chegada)}h (${selectedFlight.ida?.duracao} • ${selectedFlight.ida?.escalas === 0 ? 'Direto' : selectedFlight.ida?.escalas + ' escala(s)'})`);
+      if (selectedFlight.volta) {
+        descLines.push(`• VOLTA: ${selectedFlight.volta?.origem} ➔ ${selectedFlight.volta?.destino} | ${formatDateBrFull(selectedFlight.volta?.partida)}`);
+        descLines.push(`  Horário: ${formatTime(selectedFlight.volta?.partida)}h às ${formatTime(selectedFlight.volta?.chegada)}h (${selectedFlight.volta?.duracao} • ${selectedFlight.volta?.escalas === 0 ? 'Direto' : selectedFlight.volta?.escalas + ' escala(s)'})`);
+      }
+      descLines.push(`• BAGAGENS: 1 mala de mão (10kg) por passageiro${(searchParams.holdBagsIda > 0 || searchParams.holdBagsVolta > 0) ? ` | Malas de porão (23kg): ${searchParams.holdBagsIda} ida / ${searchParams.holdBagsVolta} volta` : ' | Sem bagagem de porão inclusa'}`);
+      descLines.push(`• Subtotal Voo: R$ ${flightTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
+      descLines.push(`──────────────────────────────────────────`);
     }
-    if (selectedTransfer) desc += `Transfer: ${selectedTransfer.name}\n`;
-    
+
+    if (selectedHotel) {
+      descLines.push(`🏨 HOSPEDAGEM:`);
+      descLines.push(`• Hotel: ${selectedHotel.nome || selectedHotel.name} (${'⭐'.repeat(selectedHotel.categoria || selectedHotel.stars || 3)})`);
+      if (selectedHotel.endereco) descLines.push(`• Endereço: ${selectedHotel.endereco}`);
+      descLines.push(`• Quarto: ${selectedHotel.ofertas?.[0]?.tipoQuarto || 'Standard'}`);
+      descLines.push(`• Regime: ${selectedHotel.ofertas?.[0]?.nomeRegime || selectedHotel.mealPlan || 'Sem refeições'}`);
+      descLines.push(`• Estadia: ${noites} noites (${formatDateShort(searchParams.dateOut)} a ${formatDateShort(searchParams.dateIn)})`);
+      descLines.push(`• Subtotal Hotel: R$ ${hotelTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
+      descLines.push(`──────────────────────────────────────────`);
+    }
+
+    if (selectedTransfer) {
+      const trf = selectedTransfer.transferPayload || {};
+      descLines.push(`🚘 TRANSFER PRIVATIVO:`);
+      descLines.push(`• Categoria: ${selectedTransfer.title || selectedTransfer.name}`);
+      descLines.push(`• Trajeto: De ${trf.pickupName || 'Origem'} ➔ Para ${trf.dropoffName || 'Destino'}`);
+      descLines.push(`• Ida: ${trf.date || formatDateShort(searchParams.dateOut)} às ${trf.time || '12:00'}h`);
+      if (trf.tripType === 'roundtrip') {
+        descLines.push(`• Volta: ${trf.returnDate || formatDateShort(searchParams.dateIn)} às ${trf.returnTime || '12:00'}h`);
+      }
+      descLines.push(`• Ocupação: ${trf.adults || totalPax} Adulto(s)${trf.children ? `, ${trf.children} Criança(s)` : ''} | Bagagens: ${trf.largeBags || 0} Mala(s) G, ${trf.smallBags || 0} Mala(s) P`);
+      if (trf.flightNumber) descLines.push(`• Rastreio: Voo nº ${trf.flightNumber}`);
+      if (trf.needsChildSeat) descLines.push(`• Opcional: Cadeirinha infantil inclusa`);
+      if (trf.hasBabyStroller) descLines.push(`• Opcional: Espaço para carrinho de bebê`);
+      descLines.push(`• Subtotal Transfer: R$ ${transferTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
+      descLines.push(`──────────────────────────────────────────`);
+    }
+
+    descLines.push(`💰 TOTAL DO PACOTE: R$ ${totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})} (R$ ${precoPorPessoa.toLocaleString('pt-BR', {minimumFractionDigits: 2})} por passageiro)`);
+    descLines.push(`• Inclui R$ ${(taxasEImpostos || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})} de taxas e tributos por pessoa.`);
+    descLines.push(`• Condição: 5% de desconto à vista ou em até 12x.`);
+
+    const fullRichDescription = descLines.join('\n');
+
     addItem({
-      _id: packageSku, sku: packageSku, title: `Pacote: ${destName}`, variantName: `(${totalPax} pax)`,
-      price: precoPorPessoa, quantity: totalPax, image: selectedHotel?.imagensReais?.[0] || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=300',
-      isTravel: true, description: desc, packageDetails: { flight: selectedFlight, hotel: selectedHotel, transfer: selectedTransfer }, addedAt: Date.now()
+      _id: packageSku, 
+      sku: packageSku, 
+      title: `Pacote: ${destName}`, 
+      variantName: `Período: ${formatDateShort(searchParams.dateOut)} a ${formatDateShort(searchParams.dateIn)} • ${totalPax} Viajante(s)`,
+      price: totalGeral,
+      quantity: 1,
+      pax: totalPax, // 🚀 A MÁGICA ACONTECE AQUI: Ensina o carrinho quantos formulários abrir!
+      image: selectedHotel?.imagensReais?.[0] || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=300',
+      isTravel: true, 
+      description: fullRichDescription, 
+      packageDetails: { 
+        flight: selectedFlight, 
+        hotel: selectedHotel, 
+        transfer: selectedTransfer,
+        totals: { totalGeral, precoPorPessoa, taxasEImpostos, flightTotal, hotelTotal, transferTotal }
+      }, 
+      addedAt: Date.now()
     });
+    
     setTimeout(() => { setLoadingCart(false); navigate('/cart'); }, 600);
   };
 
@@ -328,7 +391,7 @@ export default function FlightHotelPackage() {
               )}
 
               <div className="mt-5 flex gap-2">
-                <button onClick={() => setActiveView(activeView === 'hotel' ? 'none' : 'hotel')} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded font-bold text-xs hover:bg-gray-50 transition">Alterar hotel</button>
+                <button onClick={() => { setActiveView('hotel'); window.scrollTo({top: window.innerHeight, behavior: 'smooth'}); }} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded font-bold text-xs hover:bg-gray-50 transition">Alterar hotel</button>
                 <button onClick={() => selectedHotel && setActiveGalleryHotel(selectedHotel)} className="flex-1 py-2 border border-transparent text-blue-600 rounded font-bold text-xs hover:underline transition">Detalhes hotel</button>
               </div>
             </div>
@@ -337,6 +400,11 @@ export default function FlightHotelPackage() {
             <div className="p-5 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col justify-between">
               {selectedFlight ? (
                 <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-2">
+                     <div className="flex items-center gap-1.5 text-green-600 bg-green-50 w-fit px-2 py-0.5 rounded font-bold text-[10px] uppercase tracking-widest"><Check size={12}/> Selecionado</div>
+                     <span className="font-black text-[#4C1D95] text-sm">R$ {flightTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                  </div>
+
                   <div className="bg-gray-50/50 p-2 rounded-lg border border-gray-100">
                     <span className="text-[10px] font-bold text-gray-500 flex items-center gap-1.5 mb-2"><Plane size={12}/> Ida {formatDateBrFull(selectedFlight.ida?.partida)}</span>
                     <div className="flex items-center gap-2 mb-2">
@@ -369,26 +437,66 @@ export default function FlightHotelPackage() {
                       </div>
                     </div>
                   )}
-                  {bagCost > 0 && <p className="text-[10px] text-purple-700 font-bold">📦 Inclui {searchParams.holdBagsIda + searchParams.holdBagsVolta} mala(s) de porão</p>}
+                  {bagCost > 0 && <p className="text-[10px] text-purple-700 font-bold">📦 Inclui {searchParams.holdBagsIda + searchParams.holdBagsVolta} mala(s) extra(s)</p>}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2"><Plane size={32}/><span>Nenhum voo</span></div>
               )}
 
               <div className="mt-5 flex gap-2">
-                <button onClick={() => setActiveView(activeView === 'flight' ? 'none' : 'flight')} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded font-bold text-xs hover:bg-gray-50 transition">Alterar voo</button>
+                <button onClick={() => { setActiveView('flight'); window.scrollTo({top: window.innerHeight, behavior: 'smooth'}); }} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded font-bold text-xs hover:bg-gray-50 transition">Alterar voo</button>
                 <button onClick={() => selectedFlight && setExpandedFlightId(expandedFlightId === selectedFlight.id ? null : selectedFlight.id)} className="flex-1 py-2 border border-transparent text-blue-600 rounded font-bold text-xs hover:underline transition">Detalhes voo</button>
               </div>
             </div>
 
-            {/* COLUNA 3: SERVIÇOS (Transfer) */}
+            {/* COLUNA 3: SERVIÇOS (Transfer COM DADOS RICOS) */}
             <div className="p-5 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col justify-between">
               {selectedTransfer ? (
                 <div>
-                  <div className="flex items-center gap-1.5 mb-2 text-green-600 bg-green-50 w-fit px-2 py-0.5 rounded font-bold text-[10px] uppercase tracking-widest"><Check size={12}/> Selecionado</div>
-                  <h3 className="font-black text-gray-900 text-sm mb-2">{selectedTransfer.name}</h3>
-                  <p className="text-[11px] text-gray-600 mb-1">Aeroporto ↔ Hotel</p>
-                  <p className="text-[11px] text-gray-600 font-bold">R$ {selectedTransfer.price}</p>
+                  <div className="flex items-center justify-between mb-2">
+                     <div className="flex items-center gap-1.5 text-green-600 bg-green-50 w-fit px-2 py-0.5 rounded font-bold text-[10px] uppercase tracking-widest"><Check size={12}/> Selecionado</div>
+                     <span className="font-black text-[#E65100] text-sm">R$ {selectedTransfer.price}</span>
+                  </div>
+                  <h3 className="font-bold text-gray-900 text-[13px] leading-tight mb-3">{selectedTransfer.title || selectedTransfer.name}</h3>
+                  
+                  {selectedTransfer.transferPayload && (
+                    <ul className="space-y-2 text-[10px] text-gray-600 leading-tight">
+                      <li className="flex items-start gap-1.5">
+                        <MapPin size={12} className="text-[#E65100] shrink-0 mt-0.5"/> 
+                        <div className="flex flex-col gap-0.5">
+                          <span><b>De:</b> {selectedTransfer.transferPayload.pickupName}</span>
+                          <span><b>Para:</b> {selectedTransfer.transferPayload.dropoffName}</span>
+                        </div>
+                      </li>
+                      <li className="flex items-start gap-1.5">
+                        <Clock size={12} className="text-gray-400 shrink-0 mt-0.5"/> 
+                        <div className="flex flex-col gap-0.5">
+                          <span><b>Ida:</b> {selectedTransfer.transferPayload.date} às {selectedTransfer.transferPayload.time}h</span>
+                          {selectedTransfer.transferPayload.tripType === 'roundtrip' && (
+                            <span><b>Volta:</b> {selectedTransfer.transferPayload.returnDate} às {selectedTransfer.transferPayload.returnTime}h</span>
+                          )}
+                        </div>
+                      </li>
+                      <li className="flex items-start gap-1.5">
+                         <Users size={12} className="text-gray-400 shrink-0"/> 
+                         <span>{selectedTransfer.transferPayload.adults + selectedTransfer.transferPayload.children} Passageiros</span>
+                      </li>
+                      <li className="flex items-start gap-1.5">
+                         <Briefcase size={12} className="text-gray-400 shrink-0"/> 
+                         <span>{selectedTransfer.transferPayload.largeBags} Mala(s) G • {selectedTransfer.transferPayload.smallBags} Mala(s) P</span>
+                      </li>
+                      {(selectedTransfer.transferPayload.needsChildSeat || selectedTransfer.transferPayload.hasBabyStroller || selectedTransfer.transferPayload.flightNumber) && (
+                        <li className="flex items-start gap-1.5 text-green-700 font-bold mt-1">
+                          <ShieldCheck size={12} className="shrink-0 mt-0.5"/>
+                          <span>
+                            {selectedTransfer.transferPayload.flightNumber && `Voo: ${selectedTransfer.transferPayload.flightNumber} `}
+                            {selectedTransfer.transferPayload.needsChildSeat && '• Cadeirinha '}
+                            {selectedTransfer.transferPayload.hasBabyStroller && '• Carrinho '}
+                          </span>
+                        </li>
+                      )}
+                    </ul>
+                  )}
                 </div>
               ) : (
                 <div className="text-center my-auto px-2">
@@ -399,35 +507,58 @@ export default function FlightHotelPackage() {
               )}
 
               <div className="mt-5 flex gap-2">
-                <button onClick={() => setActiveView(activeView === 'transfer' ? 'none' : 'transfer')} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded font-bold text-xs hover:bg-gray-50 transition">{selectedTransfer ? 'Alterar serviço' : 'Adicionar serviços'}</button>
+                <button onClick={() => { setActiveView('transfer'); window.scrollTo({top: window.innerHeight, behavior: 'smooth'}); }} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded font-bold text-xs hover:bg-gray-50 transition">{selectedTransfer ? 'Alterar serviço' : 'Adicionar serviços'}</button>
                 {selectedTransfer && <button onClick={removeTransfer} className="flex-1 py-2 border border-transparent text-red-600 rounded font-bold text-xs hover:underline transition">Remover</button>}
               </div>
             </div>
 
-            {/* COLUNA 4: RESUMO (COMPRAR) */}
+            {/* COLUNA 4: RESUMO (COMPRAR COM SUBTOTAL TRANSPARENTE) */}
             <div className="p-5 bg-white flex flex-col justify-between">
               <div>
-                <p className="text-[11px] text-gray-500 mb-4">Para {totalPax} viajantes</p>
-                <div className="flex justify-between items-center mb-2">
+                <p className="text-[11px] text-gray-500 mb-3 font-bold uppercase tracking-wider">Subtotais do Pacote</p>
+                
+                <div className="space-y-1 mb-4 pb-3 border-b border-gray-100">
+                  {selectedFlight && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] text-gray-600 flex items-center gap-1"><Plane size={10}/> Voo</span>
+                      <span className="text-[11px] font-bold text-gray-800">R$ {flightTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                    </div>
+                  )}
+                  {selectedHotel && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] text-gray-600 flex items-center gap-1"><Building size={10}/> Hospedagem</span>
+                      <span className="text-[11px] font-bold text-gray-800">R$ {hotelTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                    </div>
+                  )}
+                  {selectedTransfer && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] text-gray-600 flex items-center gap-1"><Car size={10}/> Transfer</span>
+                      <span className="text-[11px] font-bold text-gray-800">R$ {transferTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-gray-500 mb-2">Para {totalPax} viajante(s)</p>
+                <div className="flex justify-between items-center mb-1">
                   <span className="text-xs text-gray-600">Preço por viajante</span>
                   <span className="text-sm font-medium text-gray-900">R$ {precoBasePessoa.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                 </div>
                 <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100">
-                  <span className="text-xs text-gray-600">Taxas e impostos</span>
+                  <span className="text-xs text-gray-600">Taxas e impostos (por viajante)</span>
                   <span className="text-sm font-medium text-gray-900">R$ {(taxasEImpostos || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                 </div>
               </div>
 
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs text-gray-900">Valor final para {totalPax} viajantes</span>
+                  <span className="text-xs text-gray-900">Valor final</span>
                   <span className="text-2xl font-black text-gray-900">R$ {totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                 </div>
-                <p className="text-[10px] text-right text-gray-500 mb-4">Em até 10x sem juros</p>
+                <p className="text-[10px] text-right font-bold text-green-600 mb-4">5% de desconto à vista ou em até 12x</p>
 
                 <button 
                   onClick={handleCheckoutPackage}
-                  disabled={loadingCart || (!selectedFlight && !selectedHotel)}
+                  disabled={loadingCart || (!selectedFlight && !selectedHotel && !selectedTransfer)}
                   className="w-full bg-[#FFD700] hover:bg-[#e5c100] text-gray-900 font-bold py-3 rounded shadow-sm transition flex items-center justify-center gap-2 text-sm"
                 >
                   {loadingCart ? 'Processando...' : <><ShoppingCart size={16}/> Comprar pacote</>}
@@ -478,18 +609,20 @@ export default function FlightHotelPackage() {
               <h3 className="font-bold text-sm">
                 {activeView === 'hotel' ? 'Escolha sua nova hospedagem' : activeView === 'flight' ? 'Escolha seu novo voo' : 'Adicionar Transfer Opcional'}
               </h3>
-              <button onClick={() => setActiveView('none')} className="text-white hover:text-gray-300 font-bold text-lg">✕ Fechar</button>
+              <button onClick={() => { setActiveView('none'); window.scrollTo({top:0, behavior:'smooth'}); }} className="text-white hover:text-gray-300 font-bold text-lg">✕ Fechar</button>
             </div>
 
             <div className="p-6">
               
-              {/* SE FOR TRANSFER */}
+              {/* 🚘 SE FOR TRANSFER */}
               {activeView === 'transfer' && (
                 <PalastoreTransfers 
                   isPackageMode={true}
                   pacoteParams={searchParams}
                   onSelectForPackage={(transferObj) => {
                     changeSelectedTransfer(transferObj);
+                    setActiveView('none'); 
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                 />
               )}
@@ -510,7 +643,7 @@ export default function FlightHotelPackage() {
                         </div>
                         <div className="w-full sm:w-40 text-right">
                           <span className="text-xl font-black block text-gray-900 mb-2">R$ {hotel.ofertas?.[0]?.precoVenda || 0}</span>
-                          <button onClick={() => changeSelectedHotel(hotel)} className="w-full bg-[#4C1D95] text-white font-bold py-2 rounded text-xs hover:bg-purple-900 transition">
+                          <button onClick={() => { changeSelectedHotel(hotel); setActiveView('none'); window.scrollTo({top:0, behavior:'smooth'}); }} className="w-full bg-[#4C1D95] text-white font-bold py-2 rounded text-xs hover:bg-purple-900 transition">
                             {isSelected ? 'Selecionado' : 'Selecionar'}
                           </button>
                         </div>
@@ -520,7 +653,7 @@ export default function FlightHotelPackage() {
                 </div>
               )}
 
-              {/* RENDERIZAÇÃO DOS VOOS (COM LOGOS E BOTÃO DE DETALHES) */}
+              {/* RENDERIZAÇÃO DOS VOOS */}
               {activeView === 'flight' && (
                 <div className="space-y-4">
                   {displayFlights.map((voo) => {
@@ -543,7 +676,7 @@ export default function FlightHotelPackage() {
                         </div>
                         <div className="w-full sm:w-40 text-right">
                           <span className="text-xl font-black block text-gray-900 mb-2">R$ {baseFare}</span>
-                          <button onClick={() => changeSelectedFlight(voo)} className="w-full bg-[#4C1D95] text-white font-bold py-2 rounded text-xs hover:bg-purple-900 transition">
+                          <button onClick={() => { changeSelectedFlight(voo); setActiveView('none'); window.scrollTo({top:0, behavior:'smooth'}); }} className="w-full bg-[#4C1D95] text-white font-bold py-2 rounded text-xs hover:bg-purple-900 transition">
                             {isSelected ? 'Selecionado' : 'Selecionar'}
                           </button>
                         </div>
@@ -559,7 +692,7 @@ export default function FlightHotelPackage() {
         )}
       </div>
 
-      {/* MODAL: ALTERAR BUSCA COM AUTOCOMPLETE FUNCIONAL */}
+      {/* MODAL: ALTERAR BUSCA COM AUTOCOMPLETE */}
       {isSearchModalOpen && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative">
@@ -568,7 +701,6 @@ export default function FlightHotelPackage() {
             
             <form onSubmit={handleConfirmNewSearch} className="space-y-4">
               
-              {/* ORIGEM COM AUTOCOMPLETE */}
               <div className="relative">
                 <label className="text-xs font-bold text-gray-700 block mb-1">Origem (Ex: São Paulo - GRU)</label>
                 <input 
@@ -598,7 +730,6 @@ export default function FlightHotelPackage() {
                 )}
               </div>
 
-              {/* DESTINO COM AUTOCOMPLETE */}
               <div className="relative">
                 <label className="text-xs font-bold text-gray-700 block mb-1">Destino (Ex: Rio de Janeiro - GIG)</label>
                 <input 
