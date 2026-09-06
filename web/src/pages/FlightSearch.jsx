@@ -451,55 +451,59 @@ export default function FlightSearch({ prefilledData }) {
                 )}
               </div>
 
-             <div className="col-span-1 md:col-span-4 z-50 h-12 md:h-full relative" ref={dateRef}>
+            <div className="col-span-1 md:col-span-4 z-[200] h-12 relative" ref={dateRef}>
                 <div onClick={() => setShowDateMenu(!showDateMenu)} className="flex items-center justify-between border border-gray-300 rounded-md px-4 h-full cursor-pointer hover:border-purple-600 bg-white">
                   <div className="flex flex-col justify-center">
                     <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Partida</span>
-                    <span className="text-sm font-bold text-gray-900 leading-tight">{dateType==='specific' && dateFrom ? formatSafeDate(dateFrom) : 'A qualquer momento'}</span>
+                    <span className="xs:text-xs md:text-sm font-bold text-gray-900 leading-tight">{dateType==='specific' && dateFrom ? formatSafeDate(dateFrom) : 'A qualquer momento'}</span>
                   </div>
                   <div className="w-px h-6 bg-gray-200 mx-2"></div>
                   <div className={`flex flex-col justify-center ${tripType==='oneway'?'opacity-30':''}`}>
                     <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Regresso</span>
-                    <span className="text-sm font-bold text-gray-900 leading-tight">{tripType==='return' && dateType==='specific' && dateTo ? formatSafeDate(dateTo) : 'A qualquer momento'}</span>
+                    <span className="xs:text-xs md:text-sm font-bold text-gray-900 leading-tight">{tripType==='return' && dateType==='specific' && dateTo ? formatSafeDate(dateTo) : 'A qualquer momento'}</span>
                   </div>
                 </div>
 
                 {showDateMenu && (
-                  <div className="absolute bottom-full left-0 md:w-[450px] mb-2 bg-white border border-gray-200 rounded-xl shadow-2xl p-5 flex flex-col z-[999]">
-                    <div className="flex gap-4 border-b border-gray-200 pb-3 mb-4">
-                      <button onClick={()=>setDateType('anytime')} className={`flex-1 py-2 rounded font-bold text-sm transition ${dateType==='anytime'?'bg-purple-100 text-purple-700':'text-gray-500 hover:bg-gray-100'}`}>A qualquer momento</button>
-                      <button onClick={()=>setDateType('specific')} className={`flex-1 py-2 rounded font-bold text-sm transition ${dateType==='specific'?'bg-purple-100 text-purple-700':'text-gray-500 hover:bg-gray-100'}`}>Datas Específicas</button>
-                    </div>
-                    {dateType === 'specific' && (
-                      <div className="flex gap-4 mb-4">
-                        <div className="flex-1 cursor-pointer">
-                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1 cursor-pointer">Partida</label>
-                          <input 
-                            type="date" 
-                            min={getTodayStr()} 
-                            value={dateFrom} 
-                            onChange={e=>setDateFrom(e.target.value)} 
-                            onClick={(e) => e.target.showPicker && e.target.showPicker()}
-                            className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600 cursor-pointer"
-                          />
-                        </div>
-                        <div className={`flex-1 cursor-pointer ${tripType==='oneway'?'opacity-30 pointer-events-none':''}`}>
-                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1 cursor-pointer">Regresso</label>
-                          <input 
-                            type="date" 
-                            min={dateFrom || getTodayStr()} 
-                            value={dateTo} 
-                            onChange={e=>setDateTo(e.target.value)} 
-                            onClick={(e) => e.target.showPicker && e.target.showPicker()}
-                            className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600 cursor-pointer"
-                          />
-                        </div>
+                  <>
+                    <div className="fixed inset-0 z-[998] bg-black/50 backdrop-blur-sm md:hidden" onClick={() => setShowDateMenu(false)}></div>
+                    
+                    <div className="fixed md:absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 md:translate-x-0 md:translate-y-0 md:top-full md:left-0 w-[92%] max-w-[450px] md:w-[450px] bg-white border border-gray-200 rounded-2xl md:rounded-xl shadow-2xl p-5 flex flex-col z-[999]">
+                      <div className="flex gap-2 md:gap-4 border-b border-gray-200 pb-3 mb-4">
+                        <button onClick={()=>setDateType('anytime')} className={`flex-1 py-2 rounded font-bold text-xs md:text-sm transition ${dateType==='anytime'?'bg-purple-100 text-purple-700':'text-gray-500 hover:bg-gray-100'}`}>A qualquer momento</button>
+                        <button onClick={()=>setDateType('specific')} className={`flex-1 py-2 rounded font-bold text-xs md:text-sm transition ${dateType==='specific'?'bg-purple-100 text-purple-700':'text-gray-500 hover:bg-gray-100'}`}>Datas Específicas</button>
                       </div>
-                    )}
-                    <div className="flex justify-end pt-2">
-                      <button onClick={(e) => { setShowDateMenu(false); executeSearch(e); }} className="px-6 py-2 bg-[#00a698] text-white font-bold rounded hover:bg-[#008f82]">Definir Datas</button>
+                      {dateType === 'specific' && (
+                        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                          <div className="flex-1 cursor-pointer">
+                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1 cursor-pointer">Partida</label>
+                            <input 
+                              type="date" 
+                              min={getTodayStr()} 
+                              value={dateFrom} 
+                              onChange={e=>setDateFrom(e.target.value)} 
+                              onClick={(e) => e.target.showPicker && e.target.showPicker()}
+                              className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600 cursor-pointer"
+                            />
+                          </div>
+                          <div className={`flex-1 cursor-pointer ${tripType==='oneway'?'opacity-30 pointer-events-none':''}`}>
+                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1 cursor-pointer">Regresso</label>
+                            <input 
+                              type="date" 
+                              min={dateFrom || getTodayStr()} 
+                              value={dateTo} 
+                              onChange={e=>setDateTo(e.target.value)} 
+                              onClick={(e) => e.target.showPicker && e.target.showPicker()}
+                              className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600 cursor-pointer"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex justify-end pt-2">
+                        <button onClick={(e) => { setShowDateMenu(false); executeSearch(e); }} className="w-full md:w-auto px-6 py-2.5 bg-[#00a698] text-white font-bold rounded-lg hover:bg-[#008f82] transition">Definir Datas</button>
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
 
