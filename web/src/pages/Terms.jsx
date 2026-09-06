@@ -3,31 +3,28 @@ import React from 'react';
 export default function Terms() {
   return (
     <div className="container mx-auto px-4 py-16 max-w-4xl">
-      <h1 className="text-3xl font-black text-slate-900 mb-8 uppercase tracking-tighter text-center">Termos de Uso</h1>
+      <h1 className="text-3xl font-black text-slate-900 mb-8 uppercase tracking-tighter text-center">Termos de Uso e Condições Gerais</h1>
       
       <div className="bg-white p-10 rounded-[32px] shadow-sm border border-gray-100 text-sm text-gray-600 leading-relaxed space-y-6">
-        <p>Estes Termos de Uso regem o acesso e a utilização do site e aplicativos da <strong>Palastore</strong>, operado por <strong>42.361.289 LAECIO SANTOS SÃO PEDRO</strong> (CNPJ 42.361.289/0001-14). Ao acessar, comprar em nosso site ou utilizar nossos softwares, você concorda com estes termos.</p>
+        <p>Estes Termos de Uso regem o acesso, a navegação e a utilização dos serviços da plataforma <strong>Palastore Viagens</strong> e do software <strong>Mozi GPS</strong>, operados por <strong>LAECIO S S PEDRO E-COMMERCE</strong> (CNPJ 42.361.289/0001-14). Ao acessar nosso site, contratar pacotes de viagens, reservas de hotéis, passagens, transfers ou utilizar nossos aplicativos, você declara estar de acordo com as disposições abaixo, em total conformidade com a Lei nº 8.078/1990 (Código de Defesa do Consumidor - CDC) e demais legislações aplicáveis.</p>
 
-        <h3 className="text-lg font-bold text-slate-900">1. Produtos e Serviços</h3>
-        <p>A Palastore dedica-se à venda de produtos nacionais e importados, bem como ao licenciamento de softwares proprietários. Garantimos que as descrições, imagens e especificações dos produtos sejam as mais precisas possíveis. No entanto, pequenas variações de cor podem ocorrer devido à calibração do monitor.</p>
+        <h3 className="text-lg font-bold text-slate-900">1. Natureza dos Serviços (Agência de Viagens)</h3>
+        <p>A Palastore Viagens atua na intermediação e fornecimento de serviços turísticos, abrangendo reservas de hospedagem, emissão de passagens aéreas, transfers e pacotes de viagens nacionais e internacionais. As condições específicas de cada fornecedor parceiro (companhias aéreas, redes hoteleiras e operadoras de mobilidade) são informadas de forma clara no momento da contratação.</p>
 
-        <h3 className="text-lg font-bold text-slate-900">2. Preços e Pagamentos</h3>
-        <p>Os preços exibidos estão em Reais (BRL). Reservamo-nos o direito de alterar os preços a qualquer momento, sem aviso prévio. As compras físicas e assinaturas digitais podem ser pagas via Cartão de Crédito, Boleto ou PIX, processadas de forma segura através do gateway <strong>Mercado Pago</strong>.</p>
+        <h3 className="text-lg font-bold text-slate-900">2. Preços, Taxas e Formas de Pagamento</h3>
+        <p>Todos os preços exibidos estão em Reais (BRL) e contemplam as tarifas e taxas obrigatórias informadas no fechamento do pedido. Reservamo-nos o direito de alterar os valores sem aviso prévio para novas consultas. Os pagamentos são processados em ambiente seguro por meio de gateways homologados.</p>
 
-        <h3 className="text-lg font-bold text-slate-900">3. Entregas e Prazos (Produtos Físicos)</h3>
-        <p>O prazo de entrega varia de acordo com o endereço do cliente e a modalidade de frete escolhida. O prazo é contado em dias úteis a partir da confirmação do pagamento. A Palastore não se responsabiliza por atrasos decorrentes de greves, catástrofes naturais ou força maior.</p>
+        <h3 className="text-lg font-bold text-slate-900">3. Cancelamentos, Alterações e Direito de Arrependimento (CDC)</h3>
+        <p>Em conformidade com o Artigo 49 do Código de Defesa do Consumidor, o cliente poderá exercer o <strong>direito de arrependimento</strong> no prazo de até 7 (sete) dias corridos a contar da data da confirmação da compra realizada fora do estabelecimento comercial (como em nosso site), desde que os serviços turísticos não tenham tido seu início de execução dentro desse período. Para cancelamentos ou alterações fora deste prazo, aplicam-se as regras específicas de reembolso e eventuais penalidades contratuais estipuladas pelos fornecedores e pela regulamentação do setor de turismo.</p>
 
-        <h3 className="text-lg font-bold text-slate-900">4. Trocas e Devoluções (Direito de Arrependimento)</h3>
-        <p>Em conformidade com o Artigo 49 do Código de Defesa do Consumidor (CDC), o cliente tem o prazo de <strong>7 (sete) dias corridos</strong>, a contar do recebimento do produto físico, para desistir da compra. O produto deve ser devolvido em sua embalagem original, sem indícios de uso.</p>
+        <h3 className="text-lg font-bold text-slate-900">4. Licenciamento e Uso do Software (Mozi GPS)</h3>
+        <p>O aplicativo <strong>Mozi GPS</strong> é licenciado de forma não exclusiva, intransferível e destinada estritamente ao uso lícito. <strong>O software constitui um auxílio tecnológico à navegação.</strong> O condutor do veículo assume total e exclusiva responsabilidade por sua conduta e segurança no trânsito, devendo obrigatoriamente respeitar as leis de trânsito vigentes, sinalizações, limites de velocidade e condições físicas das vias, independentemente das rotas ou orientações visuais e sonoras sugeridas pelo aplicativo.</p>
 
-        <h3 className="text-lg font-bold text-slate-900">5. Garantia (Produtos Físicos)</h3>
-        <p>Todos os produtos físicos possuem garantia legal de 90 dias contra defeitos de fabricação, conforme estabelecido pelo CDC.</p>
+        <h3 className="text-lg font-bold text-slate-900">5. Limitação de Responsabilidade</h3>
+        <p>A Palastore Viagens e os desenvolvedores do Mozi GPS não se responsabilizam por falhas de conectividade de rede de terceiros, interrupções por força maior, eventos fortuitos (condições climáticas extremas, greves ou determinações governamentais) ou atrasos operacionais imputáveis exclusivamente aos prestadores finais de serviços de transporte e hospedagem, prestando todo o suporte e assistência previstos na legislação de regência.</p>
 
-        <h3 className="text-lg font-bold text-slate-900">6. Licenciamento e Uso do Software (Aplicativo de Navegação GPS)</h3>
-        <p>A Palastore desenvolve e opera softwares de navegação GPS. <strong>O aplicativo é licenciado, não vendido.</strong> O usuário compreende e concorda que o software serve estritamente como um <strong>auxílio à navegação</strong>. O condutor é sempre e exclusivamente responsável por sua conduta no trânsito. Você deve obedecer à sinalização local, limites de velocidade, condições das vias e regras de trânsito vigentes, independentemente das rotas ou instruções visuais e sonoras sugeridas pelo aplicativo.</p>
-
-        <h3 className="text-lg font-bold text-slate-900">7. Contato</h3>
-        <p>Para dúvidas sobre estes termos ou sobre o nosso software, entre em contato pelo e-mail <strong>laeciossp@gmail.com</strong>.</p>
+        <h3 className="text-lg font-bold text-slate-900">6. Canais de Atendimento e Suporte</h3>
+        <p>Para dúvidas, suporte técnico, solicitações de alterações ou acionamento de garantias e direitos previstos nestes termos, o usuário poderá contatar nossa equipe através do canal oficial de atendimento por e-mail: <strong>contato@palastore.com.br</strong>.</p>
       </div>
     </div>
   );
