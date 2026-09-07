@@ -292,19 +292,28 @@ export default function FlightHotelPackage() {
     descLines.push(`👥 Viajantes: ${totalPax} passageiro(s) | 📅 ${formatDateShort(searchParams.dateOut)} até ${formatDateShort(searchParams.dateIn)} (${noites} noites)`);
     descLines.push(`──────────────────────────────────────────`);
 
+    // ⬇️ SUBSTITUA A PARTIR DAQUI ATÉ O FECHAMENTO DESTE IF ⬇️
     if (selectedFlight) {
-      const ciaNome = getAirlineName(selectedFlight.ida?.companhiaPrincipal);
-      descLines.push(`✈️ PASSAGENS AÉREAS (${ciaNome}):`);
-      descLines.push(`• IDA: ${selectedFlight.ida?.origem} ➔ ${selectedFlight.ida?.destino} | ${formatDateBrFull(selectedFlight.ida?.partida)}`);
+      const ciaIda = getAirlineName(selectedFlight.ida?.companhiaPrincipal);
+      const ciaVolta = selectedFlight.volta?.companhiaPrincipal ? getAirlineName(selectedFlight.volta.companhiaPrincipal) : null;
+      
+      let ciaStr = ciaIda;
+      if (ciaVolta && ciaVolta !== ciaIda) {
+        ciaStr = `Ida: ${ciaIda} / Volta: ${ciaVolta}`;
+      }
+
+      descLines.push(`✈️ PASSAGENS AÉREAS (${ciaStr}):`);
+      descLines.push(`• IDA (${ciaIda}): ${selectedFlight.ida?.origem} ➔ ${selectedFlight.ida?.destino} | ${formatDateBrFull(selectedFlight.ida?.partida)}`);
       descLines.push(`  Horário: ${formatTime(selectedFlight.ida?.partida)}h às ${formatTime(selectedFlight.ida?.chegada)}h (${selectedFlight.ida?.duracao} • ${selectedFlight.ida?.escalas === 0 ? 'Direto' : selectedFlight.ida?.escalas + ' escala(s)'})`);
       if (selectedFlight.volta) {
-        descLines.push(`• VOLTA: ${selectedFlight.volta?.origem} ➔ ${selectedFlight.volta?.destino} | ${formatDateBrFull(selectedFlight.volta?.partida)}`);
+        descLines.push(`• VOLTA (${ciaVolta || ciaIda}): ${selectedFlight.volta?.origem} ➔ ${selectedFlight.volta?.destino} | ${formatDateBrFull(selectedFlight.volta?.partida)}`);
         descLines.push(`  Horário: ${formatTime(selectedFlight.volta?.partida)}h às ${formatTime(selectedFlight.volta?.chegada)}h (${selectedFlight.volta?.duracao} • ${selectedFlight.volta?.escalas === 0 ? 'Direto' : selectedFlight.volta?.escalas + ' escala(s)'})`);
       }
       descLines.push(`• BAGAGENS: 1 mala de mão (10kg) por passageiro${(searchParams.holdBagsIda > 0 || searchParams.holdBagsVolta > 0) ? ` | Malas de porão (23kg): ${searchParams.holdBagsIda} ida / ${searchParams.holdBagsVolta} volta` : ' | Sem bagagem de porão inclusa'}`);
       descLines.push(`• Subtotal Voo: R$ ${flightTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
       descLines.push(`──────────────────────────────────────────`);
     }
+    // ⬆️ FIM DO TRECHO A SER SUBSTITUÍDO ⬆️
 
     if (selectedHotel) {
       descLines.push(`🏨 HOSPEDAGEM:`);

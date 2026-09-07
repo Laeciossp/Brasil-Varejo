@@ -487,24 +487,39 @@ export default function Cart() {
         body: JSON.stringify({ 
             items: items.map(i => {
                 
+                // ⬇️ SUBSTITUA ESTE BLOCO INTERNO DE DESCRIÇÃO DO MP ⬇️
                 let descForMP = i.description;
                 
-                // 🚀 TRADUÇÃO DE COMPANHIAS AÉREAS APLICADA AQUI E RESUMO PARA O MP:
                 if (i.packageDetails) {
                     let shortParts = [];
-                    if (i.packageDetails.flight) shortParts.push(`✈️ Voo ${getAirlineName(i.packageDetails.flight.ida?.companhiaPrincipal)} (${i.packageDetails.flight.ida?.origem}➔${i.packageDetails.flight.ida?.destino})`);
+                    if (i.packageDetails.flight) {
+                        const fIda = getAirlineName(i.packageDetails.flight.ida?.companhiaPrincipal);
+                        const fVolta = i.packageDetails.flight.volta?.companhiaPrincipal ? getAirlineName(i.packageDetails.flight.volta.companhiaPrincipal) : null;
+                        let cStr = fIda;
+                        if (fVolta && fVolta !== fIda) {
+                            cStr = `Ida: ${fIda} / Volta: ${fVolta}`;
+                        }
+                        shortParts.push(`✈️ Voo ${cStr} (${i.packageDetails.flight.ida?.origem}➔${i.packageDetails.flight.ida?.destino})`);
+                    }
                     if (i.packageDetails.hotel) shortParts.push(`🏨 Hotel ${i.packageDetails.hotel.nome || i.packageDetails.hotel.name || ''}`);
                     if (i.packageDetails.transfer) shortParts.push(`🚘 Transfer Vip`);
                     
                     const paxCount = i.pax || i.quantity || 1;
                     descForMP = `${shortParts.join(' | ')} - ${paxCount} Viajante(s)`;
                 } else if (i.flightDetails && !i.transferPayload) {
-                    descForMP = `✈️ Voo ${getAirlineName(i.flightDetails.ida?.companhiaPrincipal)}: ${i.flightDetails.ida.origem} ➔ ${i.flightDetails.ida.destino}`;
+                    const fIda = getAirlineName(i.flightDetails.ida?.companhiaPrincipal);
+                    const fVolta = i.flightDetails.volta?.companhiaPrincipal ? getAirlineName(i.flightDetails.volta.companhiaPrincipal) : null;
+                    let cStr = fIda;
+                    if (fVolta && fVolta !== fIda) {
+                        cStr = `Ida: ${fIda}, Volta: ${fVolta}`;
+                    }
+                    descForMP = `✈️ Voo ${cStr}: ${i.flightDetails.ida.origem} ➔ ${i.flightDetails.ida.destino}`;
                 } else if (i.transferPayload) {
                     descForMP = `🚘 Transfer: ${i.transferPayload.pickupName} ➔ ${i.transferPayload.dropoffName}`;
                 }
 
                 const safeDesc = (descForMP || i.title || i.name || '').substring(0, 250);
+                // ⬆️ FIM DO BLOCO A SER SUBSTITUÍDO ⬆️
 
                 return {
                     id: String(i._id || i.id || `item-${Date.now()}`).replace(/[^a-zA-Z0-9_.-]/g, "_"), 
