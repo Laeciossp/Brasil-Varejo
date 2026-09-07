@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useCartStore from '../store/useCartStore'; 
-import { MapPin, Calendar, Clock, Users, Briefcase, Check, AlertCircle, Plane, Baby, Luggage } from 'lucide-react';
+import { MapPin, Calendar, Clock, Users, Briefcase, Check, AlertCircle, Plane, Baby, Luggage, Globe } from 'lucide-react';
 
 function useDebounce(value, delay) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -52,29 +52,49 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
   const [error, setError] = useState('');
   const [searchResult, setSearchResult] = useState(null);
 
+  // 💱 TABELA DE PREÇOS: Nacional (EUR) vs Exterior (USD)
   const COTACAO_EURO = 6.00; 
   const TARIFA_EUR_KM = 1.0;
   const MINIMO_EUR = 25.0;
 
+  const COTACAO_USD = 5.50; 
+  const TARIFA_USD_KM = 5.0; // $5 USD por km no exterior
+  const MINIMO_USD = 50.0;   // Mínimo de $50 USD para exterior
+
+  // 🌍 BUSCA GLOBAL NO NOMINATIM (Com detalhes de endereço para identificar o país)
   useEffect(() => {
-    if (debouncedPickup.length > 3 && !pickupCoords) {
-      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(debouncedPickup)}&limit=4&countrycodes=br`)
+    let isMounted = true;
+    if (debouncedPickup && debouncedPickup.length > 2 && !pickupCoords) {
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(debouncedPickup)}&limit=5`)
         .then(res => res.json())
-        .then(data => setPickupSuggestions(data)).catch(() => {});
+        .then(data => { if (isMounted) setPickupSuggestions(data || []); })
+        .catch(() => { if (isMounted) setPickupSuggestions([]); });
     } else { setPickupSuggestions([]); }
+    return () => { isMounted = false; };
   }, [debouncedPickup, pickupCoords]);
 
   useEffect(() => {
-    if (debouncedDropoff.length > 3 && !dropoffCoords) {
-      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(debouncedDropoff)}&limit=4&countrycodes=br`)
+    let isMounted = true;
+    if (debouncedDropoff && debouncedDropoff.length > 2 && !dropoffCoords) {
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(debouncedDropoff)}&limit=5`)
         .then(res => res.json())
-        .then(data => setDropoffSuggestions(data)).catch(() => {});
+        .then(data => { if (isMounted) setDropoffSuggestions(data || []); })
+        .catch(() => { if (isMounted) setDropoffSuggestions([]); });
     } else { setDropoffSuggestions([]); }
+    return () => { isMounted = false; };
   }, [debouncedDropoff, dropoffCoords]);
 
-  const calcularValorCarro = (distanciaKm, multiplicadorCategoria) => {
-    let valorEuro = Math.max(MINIMO_EUR * multiplicadorCategoria, distanciaKm * (TARIFA_EUR_KM * multiplicadorCategoria));
-    let valorFinalReais = Math.ceil(valorEuro * COTACAO_EURO);
+  const calcularValorCarro = (distanciaKm, multiplicadorCategoria, isInternational) => {
+    let valorFinalReais = 0;
+
+    if (isInternational) {
+      let valorDolar = Math.max(MINIMO_USD * multiplicadorCategoria, distanciaKm * (TARIFA_USD_KM * multiplicadorCategoria));
+      valorFinalReais = Math.ceil(valorDolar * COTACAO_USD);
+    } else {
+      let valorEuro = Math.max(MINIMO_EUR * multiplicadorCategoria, distanciaKm * (TARIFA_EUR_KM * multiplicadorCategoria));
+      valorFinalReais = Math.ceil(valorEuro * COTACAO_EURO);
+    }
+
     if (tripType === 'roundtrip') valorFinalReais = valorFinalReais * 2; 
     return valorFinalReais;
   };
@@ -114,6 +134,9 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
       const distanciaKm = parseFloat((dataRoute.routes[0].distance / 1000).toFixed(1));
       const duracaoMin = Math.round(dataRoute.routes[0].duration / 60);
 
+      // Identifica se a rota envolve o exterior (fora do Brasil)
+      const isInternational = pickupCoords.country_code !== 'br' || dropoffCoords.country_code !== 'br';
+
       const frotaCompleta = [
         { id: '1', name: 'Minivan', pax: 4, bags: 4, multiplicador: 1.0, image: '/images/minivan.svg' },
         { id: '2', name: 'Executivo', pax: 3, bags: 3, multiplicador: 1.04, image: '/images/executivo.svg' },
@@ -128,8 +151,15 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
       if (frotaFiltrada.length === 0) throw new Error(`Nenhum veículo suporta ${totalPax} passageiros com esse volume de bagagem. Divida o grupo ou contate-nos.`);
 
       setSearchResult({
-        distancia: distanciaKm, duracao: duracaoMin, origemNome: pickupCoords.name, destinoNome: dropoffCoords.name,
-        veiculos: frotaFiltrada.map(v => ({ ...v, precoFinal: calcularValorCarro(distanciaKm, v.multiplicador) }))
+        distancia: distanciaKm, 
+        duracao: duracaoMin, 
+        origemNome: pickupCoords.name, 
+        destinoNome: dropoffCoords.name,
+        isInternational,
+        veiculos: frotaFiltrada.map(v => ({ 
+          ...v, 
+          precoFinal: calcularValorCarro(distanciaKm, v.multiplicador, isInternational) 
+        }))
       });
 
     } catch (err) { setError(err.message || 'Erro ao calcular rota.'); } finally { setLoading(false); }
@@ -139,7 +169,7 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
     try {
       const totalPax = Number(adults) + Number(children);
       
-      let descriptionText = `TRANSFER ${tripType === 'roundtrip' ? 'IDA E VOLTA' : 'SÓ IDA'}\n`;
+      let descriptionText = `TRANSFER ${tripType === 'roundtrip' ? 'IDA E VOLTA' : 'SÓ IDA'} (${searchResult.isInternational ? '🌍 INTERNACIONAL - USD' : '🇧🇷 NACIONAL - EUR'})\n`;
       descriptionText += `📍 De: ${searchResult.origemNome}\n`;
       descriptionText += `🏁 Para: ${searchResult.destinoNome}\n`;
       descriptionText += `📆 Ida: ${date.split('-').reverse().join('/')} às ${time}h\n`;
@@ -170,7 +200,7 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
       const cartItem = {
         _id: `transfer-${veiculo.id}-${uniqueHash}`,
         sku: `TRF-${veiculo.id}-${uniqueHash}`, 
-        title: `Transfer VIP: ${veiculo.name}`,
+        title: `Transfer VIP${searchResult.isInternational ? ' Internacional' : ''}: ${veiculo.name}`,
         name: `Transfer VIP: ${veiculo.name} (${tripType === 'roundtrip' ? 'Ida e Volta' : 'Só Ida'})`,
         variantName: variantStr, 
         price: veiculo.precoFinal,
@@ -214,13 +244,11 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
         addedAt: Date.now()
       };
 
-      // 🚀 A TRAVA DE SEGURANÇA: Se estiver no modo pacote, atua aqui
       if (isPackageMode && typeof onSelectForPackage === 'function') {
         onSelectForPackage(cartItem);
         return; 
       }
 
-      // Se não for pacote, envia pro carrinho
       addItem(cartItem);
       navigate('/cart');
     } catch (err) {
@@ -236,21 +264,26 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
           
           <form onSubmit={handleSearch} className="w-full bg-[#E65100] p-4 md:p-6 rounded-2xl shadow-xl flex flex-col gap-4">
             
-            <div className="flex justify-center md:justify-start gap-3 mb-1">
-              <button 
-                type="button" 
-                onClick={() => setTripType('oneway')} 
-                className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all shadow-sm ${tripType === 'oneway' ? 'bg-white text-[#E65100] scale-105' : 'bg-white/20 text-white hover:bg-white/30'}`}
-              >
-                Só ida
-              </button>
-              <button 
-                type="button" 
-                onClick={() => setTripType('roundtrip')} 
-                className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all shadow-sm ${tripType === 'roundtrip' ? 'bg-white text-[#E65100] scale-105' : 'bg-white/20 text-white hover:bg-white/30'}`}
-              >
-                Ida e volta
-              </button>
+            <div className="flex justify-between items-center mb-1">
+              <div className="flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setTripType('oneway')} 
+                  className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all shadow-sm ${tripType === 'oneway' ? 'bg-white text-[#E65100] scale-105' : 'bg-white/20 text-white hover:bg-white/30'}`}
+                >
+                  Só ida
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setTripType('roundtrip')} 
+                  className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all shadow-sm ${tripType === 'roundtrip' ? 'bg-white text-[#E65100] scale-105' : 'bg-white/20 text-white hover:bg-white/30'}`}
+                >
+                  Ida e volta
+                </button>
+              </div>
+              <div className="hidden sm:flex items-center gap-1.5 text-white/90 text-xs font-bold bg-black/20 px-3 py-1.5 rounded-full">
+                <Globe size={14} className="text-orange-200" /> Busca Global (Nacional & Exterior)
+              </div>
             </div>
 
             {error && <div className="p-3 bg-red-50 text-red-700 rounded-xl text-sm font-bold flex items-center gap-2 shadow-sm"><AlertCircle size={18} />{error}</div>}
@@ -263,16 +296,35 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
                   required 
                   value={pickupQuery} 
                   onChange={(e) => { setPickupQuery(e.target.value); setPickupCoords(null); }} 
-                  placeholder="Aeroporto, hotel ou endereço de origem" 
+                  placeholder="Aeroporto, hotel ou origem (Ex: CDG Paris, GRU...)" 
                   className="w-full h-full text-base font-bold outline-none text-gray-800 placeholder:text-gray-400 placeholder:font-normal bg-transparent truncate" 
                 />
                 {pickupSuggestions.length > 0 && !pickupCoords && (
                   <ul className="absolute left-0 top-16 z-30 w-full bg-white border border-gray-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
-                    {pickupSuggestions.map(place => ( 
-                      <li key={place.place_id} onClick={() => { setPickupQuery(place.display_name.split(',')[0]); setPickupCoords({ lat: parseFloat(place.lat), lon: parseFloat(place.lon), name: place.display_name.split(',')[0] }); setPickupSuggestions([]); }} className="p-4 border-b text-sm font-bold cursor-pointer hover:bg-orange-50 text-gray-800 transition-colors">
-                        {place.display_name}
-                      </li> 
-                    ))}
+                    {pickupSuggestions.map(place => {
+                      const countryCode = place.address?.country_code || '';
+                      return (
+                        <li 
+                          key={place.place_id} 
+                          onClick={() => { 
+                            setPickupQuery(place.display_name.split(',')[0]); 
+                            setPickupCoords({ 
+                              lat: parseFloat(place.lat), 
+                              lon: parseFloat(place.lon), 
+                              name: place.display_name.split(',')[0],
+                              country_code: countryCode
+                            }); 
+                            setPickupSuggestions([]); 
+                          }} 
+                          className="p-4 border-b text-sm font-bold cursor-pointer hover:bg-orange-50 text-gray-800 transition-colors flex justify-between items-center"
+                        >
+                          <span className="truncate">{place.display_name}</span>
+                          <span className="text-[10px] uppercase bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2 shrink-0">
+                            {countryCode ? countryCode : 'global'}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -284,16 +336,35 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
                   required 
                   value={dropoffQuery} 
                   onChange={(e) => { setDropoffQuery(e.target.value); setDropoffCoords(null); }} 
-                  placeholder="Destino final" 
+                  placeholder="Destino final (Ex: Hotel em Paris, Roma...)" 
                   className="w-full h-full text-base font-bold outline-none text-gray-800 placeholder:text-gray-400 placeholder:font-normal bg-transparent truncate" 
                 />
                 {dropoffSuggestions.length > 0 && !dropoffCoords && (
                   <ul className="absolute left-0 top-16 z-30 w-full bg-white border border-gray-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
-                    {dropoffSuggestions.map(place => ( 
-                      <li key={place.place_id} onClick={() => { setDropoffQuery(place.display_name.split(',')[0]); setDropoffCoords({ lat: parseFloat(place.lat), lon: parseFloat(place.lon), name: place.display_name.split(',')[0] }); setDropoffSuggestions([]); }} className="p-4 border-b text-sm font-bold cursor-pointer hover:bg-orange-50 text-gray-800 transition-colors">
-                        {place.display_name}
-                      </li> 
-                    ))}
+                    {dropoffSuggestions.map(place => {
+                      const countryCode = place.address?.country_code || '';
+                      return (
+                        <li 
+                          key={place.place_id} 
+                          onClick={() => { 
+                            setDropoffQuery(place.display_name.split(',')[0]); 
+                            setDropoffCoords({ 
+                              lat: parseFloat(place.lat), 
+                              lon: parseFloat(place.lon), 
+                              name: place.display_name.split(',')[0],
+                              country_code: countryCode
+                            }); 
+                            setDropoffSuggestions([]); 
+                          }} 
+                          className="p-4 border-b text-sm font-bold cursor-pointer hover:bg-orange-50 text-gray-800 transition-colors flex justify-between items-center"
+                        >
+                          <span className="truncate">{place.display_name}</span>
+                          <span className="text-[10px] uppercase bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2 shrink-0">
+                            {countryCode ? countryCode : 'global'}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -389,7 +460,12 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
       <div className="w-full max-w-[1000px] px-4 mt-4">
         {searchResult && (
           <div className="flex flex-col gap-4 w-full">
-            <h3 className="font-black text-xl text-gray-900 mb-2">Veículos Disponíveis para o Trajeto</h3>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-black text-xl text-gray-900">Veículos Disponíveis para o Trajeto</h3>
+              <span className={`text-xs font-bold px-3 py-1 rounded-full ${searchResult.isInternational ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
+                {searchResult.isInternational ? '🌍 Tarifa Internacional (USD)' : '🇧🇷 Tarifa Nacional (EUR)'}
+              </span>
+            </div>
             {searchResult.veiculos.map((v) => (
               <div key={v.id} className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-col sm:flex-row gap-5 shadow-sm hover:shadow-lg transition-all items-center">
                 <div className="w-full sm:w-[180px] p-2 bg-gray-50 rounded-xl flex items-center justify-center">
