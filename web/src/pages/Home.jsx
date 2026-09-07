@@ -17,10 +17,6 @@ function urlFor(source) {
 }
 
 // ==========================================
-// COMPONENTE: HERO BANNER (TOPO)
-// ==========================================
-// ==========================================
-// ==========================================
 // COMPONENTE: HERO BANNER (TOPO) - BLINDADO
 // ==========================================
 const HeroBlock = ({ data }) => {
@@ -149,6 +145,7 @@ const HeroBlock = ({ data }) => {
     </div>
   );
 };
+
 // ==========================================
 // HOME: AGÊNCIA PURA DE VIAGENS
 // ==========================================
@@ -194,6 +191,32 @@ export default function Home() {
 
   return (
     <div className="w-full bg-gray-50 min-h-screen pb-20">
+      
+      {/* ========================================================
+          CUSTOMIZAÇÃO GLOBAL DA BARRA DE ROLAGEM
+          A imagem barra_seta.png deve estar na pasta "public"
+      ======================================================== */}
+      <style>{`
+        ::-webkit-scrollbar {
+          width: 24px;
+        }
+        ::-webkit-scrollbar-track {
+          background: #f4f6f8;
+          border-left: 1px solid #e2e8f0;
+        }
+        ::-webkit-scrollbar-thumb {
+          background-color: #4C1D95;
+          background-image: url('/barra_seta.png');
+          background-size: contain;
+          background-position: center;
+          background-repeat: no-repeat;
+          border-radius: 12px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background-color: #E65100;
+        }
+      `}</style>
+
       {pageData.pageBuilder
         .filter((section) => section._type === 'hero')
         .map((section) => (
