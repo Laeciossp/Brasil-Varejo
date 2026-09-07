@@ -22,6 +22,10 @@ export default function HotelDetails() {
   const [filterCancelamento, setFilterCancelamento] = useState('todas');
   const [activeRoomDetail, setActiveRoomDetail] = useState(null);
 
+  // 🚀 NOVO: Estados para armazenar as tarifas frescas geradas pelo /search/hp/ (Passo 2 RateHawk)
+  const [ofertasAtuais, setOfertasAtuais] = useState(hotel?.ofertas || []);
+  const [buscandoTarifas, setBuscandoTarifas] = useState(true);
+
   // ==========================================
   // ESTADOS DO FLUXO DE RESERVA B2B
   // ==========================================
@@ -40,11 +44,10 @@ export default function HotelDetails() {
       return;
     }
 
+    const rawId = String(hotel.hotelId).replace('rh_', '').replace('restel_', '');
+
     const fetchHotelFromSupabase = async () => {
       try {
-        // 1. Remove os prefixos 'rh_' ou 'restel_' para que o Supabase encontre o ID real (ex: 10004834)
-        const rawId = String(hotel.hotelId).replace('rh_', '').replace('restel_', '');
-
         const { data, error } = await supabase
           .from('Hotel')
           .select('*')
@@ -55,7 +58,6 @@ export default function HotelDetails() {
           console.warn("Hotel não encontrado na base local do Supabase, utilizando dados básicos da busca.");
         }
 
-        // 2. Extrator seguro para evitar TELA BRANCA caso a descrição venha como Array de objetos (Padrão RateHawk: description_struct)
         const parseDescription = (descData) => {
           if (!descData) return "";
           if (typeof descData === 'string') return descData;
@@ -70,7 +72,6 @@ export default function HotelDetails() {
           return "Detalhes não disponíveis no formato padrão.";
         };
 
-        // 3. Extrator de comodidades que respeita os grupos do seu banco JSON
         const parseAmenities = (amenitiesData) => {
           if (!amenitiesData) return [];
           let parsed = amenitiesData;
@@ -79,12 +80,11 @@ export default function HotelDetails() {
           }
           if (!Array.isArray(parsed) || parsed.length === 0) return [];
           if (typeof parsed[0] === 'object' && parsed[0].group_name) {
-            return parsed; // Já está no formato de grupos do Supabase
+            return parsed; 
           }
           return [{ group_name: "Comodidades Gerais", amenities: parsed }];
         };
 
-        // 4. Extrator de métodos de pagamento (A RateHawk envia ['visa', 'master_card'])
         const parsePayments = (methods) => {
           if (!methods) return "Consultar condições na reserva";
           if (Array.isArray(methods)) return methods.join(', ').replace(/_/g, ' ').toUpperCase();
@@ -130,8 +130,54 @@ export default function HotelDetails() {
       }
     };
 
+    // 🚀 NOVO: Passo 2 da RateHawk - Busca tarifas frescas para gerar o book_hash exato para o Checkout
+    const fetchFreshRates = async () => {
+      try {
+          const guestsPayload = currentRooms.map(room => ({
+              adults: room.adults,
+              children: room.childrenAges
+          }));
+          
+          const res = await fetch('https://palastore-flights-api.laeciossp.workers.dev/hotel-page', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  hid: parseInt(rawId, 10),
+                  checkin: checkInDate,
+                  checkout: checkOutDate,
+                  residency: 'br',
+                  currency: "USD",
+                  guests: guestsPayload
+              })
+          });
+          const data = await res.json();
+          if (data.data?.hotels?.[0]?.rates) {
+              const newOffers = data.data.hotels[0].rates.map(r => ({
+                  tipoQuarto: r.room_name || 'Quarto Standard', 
+                  codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO',
+                  nomeRegime: r.meal_data?.value || 'Sem refeições', 
+                  precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0) * 5.1,
+                  paymentTypeObj: r.payment_options?.payment_types?.[0],
+                  bookHash: r.book_hash,
+                  freeCancellation: r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before != null
+              }));
+              setOfertasAtuais(newOffers);
+          }
+      } catch(e) {
+          console.error("Erro ao buscar tarifas atualizadas:", e);
+      } finally {
+          setBuscandoTarifas(false);
+      }
+    };
+
     fetchHotelFromSupabase();
-  }, [hotel, navigate]);
+    
+    if (String(hotel.hotelId).startsWith('rh_')) {
+        fetchFreshRates();
+    } else {
+        setBuscandoTarifas(false);
+    }
+  }, [hotel, navigate, checkInDate, checkOutDate, currentRooms]);
 
   // ==========================================
   // LÓGICA DE FINALIZAÇÃO DA RESERVA (PREBOOK -> BOOKING -> FINISH)
@@ -282,7 +328,6 @@ export default function HotelDetails() {
     }, 3000);
   };
 
-  // Trava de segurança no render principal para evitar erro caso location.state se perca
   if (!hotel) return null;
 
   const formatarData = (dataString) => {
@@ -302,9 +347,11 @@ export default function HotelDetails() {
   const totalAdults = currentRooms.reduce((acc, r) => acc + r.adults, 0);
   const totalChildren = currentRooms.reduce((acc, r) => acc + r.childrenAges.length, 0);
   const totalGuests = totalAdults + totalChildren;
-  const menorPreco = hotel.ofertas && hotel.ofertas.length > 0 ? Math.min(...hotel.ofertas.map(o => o.precoVenda)) : 0;
+  
+  // Usa as ofertas frescas que vieram do servidor RateHawk na hora
+  const menorPreco = ofertasAtuais && ofertasAtuais.length > 0 ? Math.min(...ofertasAtuais.map(o => o.precoVenda)) : 0;
 
-  const ofertasFiltradas = (hotel.ofertas || []).filter(oferta => {
+  const ofertasFiltradas = (ofertasAtuais || []).filter(oferta => {
     let matchRefeicao = true;
     let matchCancelamento = true;
     if (filterRefeicoes !== 'todas') matchRefeicao = oferta.codigoRegime === filterRefeicoes;
@@ -445,7 +492,10 @@ export default function HotelDetails() {
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-200">
-            <h2 className="text-lg font-black text-gray-900 mb-4">Quartos disponíveis</h2>
+            <h2 className="text-lg font-black text-gray-900 mb-4 flex items-center gap-2">
+              Quartos disponíveis
+              {buscandoTarifas && <span className="text-xs font-bold text-orange-500 flex items-center gap-1.5 animate-pulse"><div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div> Atualizando disponibilidade real...</span>}
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <select value={filterCamas} onChange={(e) => setFilterCamas(e.target.value)} className="border border-gray-300 rounded p-2 text-xs outline-none">
                 <option value="todas">Camas: todas as opções</option>
@@ -520,8 +570,8 @@ export default function HotelDetails() {
                 </div>
 
                 <div className="col-span-1 md:col-span-2 flex justify-center">
-                  <button onClick={() => setActiveRoomDetail({ oferta, roomStaticInfo })} className="w-full bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-bold px-4 py-2 rounded shadow text-xs transition uppercase">
-                    Detalhes / Reservar
+                  <button onClick={() => setActiveRoomDetail({ oferta, roomStaticInfo })} disabled={buscandoTarifas} className="w-full bg-[#ffc107] hover:bg-yellow-500 disabled:opacity-50 text-gray-900 font-bold px-4 py-2 rounded shadow text-xs transition uppercase">
+                    {buscandoTarifas ? 'Carregando...' : 'Detalhes / Reservar'}
                   </button>
                 </div>
               </div>
@@ -643,7 +693,7 @@ export default function HotelDetails() {
                   <input type="text" placeholder="Telefone com DDD" required value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium mb-6 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition shadow-sm" />
 
                   <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-3 sm:py-4 rounded-xl shadow-lg hover:shadow-xl transition uppercase text-sm tracking-wide">
-                    Confirmar Reserva 
+                    Confirmar Reserva B2B
                   </button>
                 </form>
               )}
