@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useCartStore from '../store/useCartStore'; 
-import { MapPin, Calendar, Clock, Users, Briefcase, Check, AlertCircle, Plane, Baby, Luggage, Globe } from 'lucide-react';
+import { MapPin, Calendar, Clock, Users, Briefcase, Check, AlertCircle, Plane, Baby, Luggage, Globe, ThumbsUp, Map } from 'lucide-react';
 
 function useDebounce(value, delay) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -11,6 +11,16 @@ function useDebounce(value, delay) {
   }, [value, delay]);
   return debouncedValue;
 }
+
+const formatRouteDate = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr + 'T12:00:00'); 
+    return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' }).replace('.', '');
+  } catch (e) {
+    return dateStr;
+  }
+};
 
 export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSelectForPackage }) {
   const navigate = useNavigate();
@@ -51,17 +61,16 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchResult, setSearchResult] = useState(null);
+  const [routeTab, setRouteTab] = useState('ida'); 
 
-  // 💱 TABELA DE PREÇOS: Nacional (EUR) vs Exterior (USD)
   const COTACAO_EURO = 6.00; 
   const TARIFA_EUR_KM = 1.0;
   const MINIMO_EUR = 25.0;
 
   const COTACAO_USD = 5.50; 
-  const TARIFA_USD_KM = 5.0; // $5 USD por km no exterior
-  const MINIMO_USD = 50.0;   // Mínimo de $50 USD para exterior
+  const TARIFA_USD_KM = 5.0; 
+  const MINIMO_USD = 50.0;   
 
-  // 🌍 BUSCA GLOBAL NO NOMINATIM (Com detalhes de endereço para identificar o país)
   useEffect(() => {
     let isMounted = true;
     if (debouncedPickup && debouncedPickup.length > 2 && !pickupCoords) {
@@ -104,9 +113,15 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
     setLoading(true);
     setError('');
     setSearchResult(null);
+    setRouteTab('ida'); 
 
     const totalPax = Number(adults) + Number(children);
-    const pesoBagagemEquivalente = Number(largeBags) + (Number(smallBags) * 0.5) + (hasBabyStroller ? 1 : 0); 
+    
+    // Lógica de Bagagem
+    const malasG = Number(largeBags);
+    const malasP = Number(smallBags);
+    const excedenteMalaP = Math.max(0, malasP - totalPax); 
+    const pesoBagagemEquivalente = malasG + (excedenteMalaP * 0.5) + (hasBabyStroller ? 1 : 0);
 
     if (!pickupCoords || !dropoffCoords) {
       setError('Selecione um endereço válido da lista ao digitar a Origem e o Destino.');
@@ -134,27 +149,27 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
       const distanciaKm = parseFloat((dataRoute.routes[0].distance / 1000).toFixed(1));
       const duracaoMin = Math.round(dataRoute.routes[0].duration / 60);
 
-      // Identifica se a rota envolve o exterior (fora do Brasil)
       const isInternational = pickupCoords.country_code !== 'br' || dropoffCoords.country_code !== 'br';
 
       const frotaCompleta = [
-        { id: '1', name: 'Minivan', pax: 4, bags: 4, multiplicador: 1.0, image: '/images/minivan.svg' },
-        { id: '2', name: 'Executivo', pax: 3, bags: 3, multiplicador: 1.04, image: '/images/executivo.svg' },
-        { id: '3', name: 'Van', pax: 5, bags: 4, multiplicador: 1.6, image: '/images/van.svg' },
-        { id: '4', name: 'Minivan Executiva', pax: 4, bags: 4, multiplicador: 2.24, image: '/images/minivan.svg' },
-        { id: '5', name: 'Micro-ônibus', pax: 8, bags: 8, multiplicador: 3.2, image: '/images/Micro-onibus.svg' },
-        { id: '6', name: 'Luxo', pax: 3, bags: 3, multiplicador: 3.32, image: '/images/luxo.svg' }
+        { id: '1', name: 'Padrão', pax: 3, bags: 3, multiplicador: 1.0, image: '/images/executivo.svg' },
+        { id: '3', name: 'Minivan', pax: 4, bags: 4, multiplicador: 1.4, image: '/images/minivan.svg' },
+        { id: '2', name: 'Executivo VIP', pax: 3, bags: 3, multiplicador: 1.5, image: '/images/luxo.svg' },
+        { id: '4', name: 'Van', pax: 7, bags: 7, multiplicador: 2.0, image: '/images/van.svg' },
+        { id: '5', name: 'Micro-ônibus', pax: 12, bags: 12, multiplicador: 3.5, image: '/images/Micro-onibus.svg' }
       ];
 
       const frotaFiltrada = frotaCompleta.filter(veiculo => veiculo.pax >= totalPax && veiculo.bags >= pesoBagagemEquivalente);
 
-      if (frotaFiltrada.length === 0) throw new Error(`Nenhum veículo suporta ${totalPax} passageiros com esse volume de bagagem. Divida o grupo ou contate-nos.`);
+      if (frotaFiltrada.length === 0) throw new Error(`Nenhum veículo suporta ${totalPax} passageiros com esse volume de bagagens grandes.`);
 
       setSearchResult({
         distancia: distanciaKm, 
         duracao: duracaoMin, 
         origemNome: pickupCoords.name, 
+        origemFullName: pickupCoords.fullName, // Envia o nome completo para o box
         destinoNome: dropoffCoords.name,
+        destinoFullName: dropoffCoords.fullName, // Envia o nome completo para o box
         isInternational,
         veiculos: frotaFiltrada.map(v => ({ 
           ...v, 
@@ -170,8 +185,8 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
       const totalPax = Number(adults) + Number(children);
       
       let descriptionText = `TRANSFER ${tripType === 'roundtrip' ? 'IDA E VOLTA' : 'SÓ IDA'} (${searchResult.isInternational ? '🌍 INTERNACIONAL - USD' : '🇧🇷 NACIONAL - EUR'})\n`;
-      descriptionText += `📍 De: ${searchResult.origemNome}\n`;
-      descriptionText += `🏁 Para: ${searchResult.destinoNome}\n`;
+      descriptionText += `📍 De: ${searchResult.origemFullName}\n`;
+      descriptionText += `🏁 Para: ${searchResult.destinoFullName}\n`;
       descriptionText += `📆 Ida: ${date.split('-').reverse().join('/')} às ${time}h\n`;
       if (tripType === 'roundtrip') {
         descriptionText += `📆 Volta: ${returnDate.split('-').reverse().join('/')} às ${returnTime}h\n`;
@@ -234,8 +249,8 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
             flightNumber, 
             needsChildSeat, 
             hasBabyStroller,
-            pickupName: searchResult.origemNome,
-            dropoffName: searchResult.destinoNome,
+            pickupName: searchResult.origemFullName, // Salva o nome completo
+            dropoffName: searchResult.destinoFullName, // Salva o nome completo
             date: date.split('-').reverse().join('/'),
             time,
             returnDate: returnDate ? returnDate.split('-').reverse().join('/') : null,
@@ -257,174 +272,116 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
   };
 
   return (
-    <div className="w-full flex flex-col items-center pb-20 bg-white font-sans">
+    <div className="w-full flex flex-col items-center bg-gray-50 font-sans min-h-screen pb-20">
       
-      <div className="w-full relative flex justify-center px-2 pt-6 pb-10">
-        <div className="relative z-10 w-full max-w-[1000px]">
-          
+      {/* HEADER DE BUSCA LARANJA */}
+      <div className="w-full relative flex justify-center px-4 pt-6 pb-6">
+        <div className="relative z-10 w-full max-w-[1100px]">
           <form onSubmit={handleSearch} className="w-full bg-[#E65100] p-4 md:p-6 rounded-2xl shadow-xl flex flex-col gap-4">
             
             <div className="flex justify-between items-center mb-1">
-              <div className="flex gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => setTripType('oneway')} 
-                  className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all shadow-sm ${tripType === 'oneway' ? 'bg-white text-[#E65100] scale-105' : 'bg-white/20 text-white hover:bg-white/30'}`}
-                >
+              <div className="flex gap-3 bg-white/20 p-1 rounded-full">
+                <button type="button" onClick={() => setTripType('oneway')} className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${tripType === 'oneway' ? 'bg-white text-[#E65100] shadow-sm' : 'text-white hover:bg-white/10'}`}>
                   Só ida
                 </button>
-                <button 
-                  type="button" 
-                  onClick={() => setTripType('roundtrip')} 
-                  className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all shadow-sm ${tripType === 'roundtrip' ? 'bg-white text-[#E65100] scale-105' : 'bg-white/20 text-white hover:bg-white/30'}`}
-                >
+                <button type="button" onClick={() => setTripType('roundtrip')} className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${tripType === 'roundtrip' ? 'bg-white text-[#E65100] shadow-sm' : 'text-white hover:bg-white/10'}`}>
                   Ida e volta
                 </button>
               </div>
               <div className="hidden sm:flex items-center gap-1.5 text-white/90 text-xs font-bold bg-black/20 px-3 py-1.5 rounded-full">
-                <Globe size={14} className="text-orange-200" /> Busca Global (Nacional & Exterior)
+                <Globe size={14} className="text-orange-200" /> Busca Global Integrada
               </div>
             </div>
 
             {error && <div className="p-3 bg-red-50 text-red-700 rounded-xl text-sm font-bold flex items-center gap-2 shadow-sm"><AlertCircle size={18} />{error}</div>}
 
             <div className="flex flex-col md:flex-row gap-3">
-              <div className="relative flex-1 bg-white rounded-xl flex items-center px-4 h-14 shadow-sm border-2 border-transparent focus-within:border-orange-200 transition-all">
-                <MapPin size={22} className="text-[#E65100] mr-3 shrink-0" />
-                <input 
-                  type="text" 
-                  required 
-                  value={pickupQuery} 
-                  onChange={(e) => { setPickupQuery(e.target.value); setPickupCoords(null); }} 
-                  placeholder="Aeroporto, hotel ou origem (Ex: CDG Paris, GRU...)" 
-                  className="w-full h-full text-base font-bold outline-none text-gray-800 placeholder:text-gray-400 placeholder:font-normal bg-transparent truncate" 
-                />
+              <div className="relative flex-1 bg-white rounded-xl flex items-center px-4 h-14 shadow-sm focus-within:ring-2 ring-orange-300 transition-all">
+                <MapPin size={22} className="text-gray-400 mr-3 shrink-0" />
+                <input type="text" required value={pickupQuery} onChange={(e) => { setPickupQuery(e.target.value); setPickupCoords(null); }} placeholder="Local de início (Aeroporto, hotel...)" className="w-full h-full text-sm font-bold outline-none text-gray-900 placeholder:text-gray-500 bg-transparent truncate" />
                 {pickupSuggestions.length > 0 && !pickupCoords && (
                   <ul className="absolute left-0 top-16 z-30 w-full bg-white border border-gray-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
-                    {pickupSuggestions.map(place => {
-                      const countryCode = place.address?.country_code || '';
-                      return (
-                        <li 
-                          key={place.place_id} 
-                          onClick={() => { 
-                            setPickupQuery(place.display_name.split(',')[0]); 
-                            setPickupCoords({ 
-                              lat: parseFloat(place.lat), 
-                              lon: parseFloat(place.lon), 
-                              name: place.display_name.split(',')[0],
-                              country_code: countryCode
-                            }); 
-                            setPickupSuggestions([]); 
-                          }} 
-                          className="p-4 border-b text-sm font-bold cursor-pointer hover:bg-orange-50 text-gray-800 transition-colors flex justify-between items-center"
-                        >
-                          <span className="truncate">{place.display_name}</span>
-                          <span className="text-[10px] uppercase bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2 shrink-0">
-                            {countryCode ? countryCode : 'global'}
-                          </span>
-                        </li>
-                      );
-                    })}
+                    {pickupSuggestions.map(place => (
+                      <li key={place.place_id} onClick={() => { 
+                        setPickupQuery(place.display_name.split(',')[0]); 
+                        setPickupCoords({ lat: parseFloat(place.lat), lon: parseFloat(place.lon), name: place.display_name.split(',')[0], fullName: place.display_name, country_code: place.address?.country_code || '' }); 
+                        setPickupSuggestions([]); 
+                      }} className="p-4 border-b text-sm font-bold cursor-pointer hover:bg-gray-50 text-gray-800 transition-colors flex justify-between items-center">
+                        <span className="truncate">{place.display_name}</span>
+                      </li>
+                    ))}
                   </ul>
                 )}
               </div>
 
-              <div className="relative flex-1 bg-white rounded-xl flex items-center px-4 h-14 shadow-sm border-2 border-transparent focus-within:border-orange-200 transition-all">
-                <MapPin size={22} className="text-[#E65100] mr-3 shrink-0" />
-                <input 
-                  type="text" 
-                  required 
-                  value={dropoffQuery} 
-                  onChange={(e) => { setDropoffQuery(e.target.value); setDropoffCoords(null); }} 
-                  placeholder="Destino final (Ex: Hotel em Paris, Roma...)" 
-                  className="w-full h-full text-base font-bold outline-none text-gray-800 placeholder:text-gray-400 placeholder:font-normal bg-transparent truncate" 
-                />
+              <div className="relative flex-1 bg-white rounded-xl flex items-center px-4 h-14 shadow-sm focus-within:ring-2 ring-orange-300 transition-all">
+                <MapPin size={22} className="text-gray-400 mr-3 shrink-0" />
+                <input type="text" required value={dropoffQuery} onChange={(e) => { setDropoffQuery(e.target.value); setDropoffCoords(null); }} placeholder="Destino (Hotel, endereço...)" className="w-full h-full text-sm font-bold outline-none text-gray-900 placeholder:text-gray-500 bg-transparent truncate" />
                 {dropoffSuggestions.length > 0 && !dropoffCoords && (
                   <ul className="absolute left-0 top-16 z-30 w-full bg-white border border-gray-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
-                    {dropoffSuggestions.map(place => {
-                      const countryCode = place.address?.country_code || '';
-                      return (
-                        <li 
-                          key={place.place_id} 
-                          onClick={() => { 
-                            setDropoffQuery(place.display_name.split(',')[0]); 
-                            setDropoffCoords({ 
-                              lat: parseFloat(place.lat), 
-                              lon: parseFloat(place.lon), 
-                              name: place.display_name.split(',')[0],
-                              country_code: countryCode
-                            }); 
-                            setDropoffSuggestions([]); 
-                          }} 
-                          className="p-4 border-b text-sm font-bold cursor-pointer hover:bg-orange-50 text-gray-800 transition-colors flex justify-between items-center"
-                        >
-                          <span className="truncate">{place.display_name}</span>
-                          <span className="text-[10px] uppercase bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2 shrink-0">
-                            {countryCode ? countryCode : 'global'}
-                          </span>
-                        </li>
-                      );
-                    })}
+                    {dropoffSuggestions.map(place => (
+                      <li key={place.place_id} onClick={() => { 
+                        setDropoffQuery(place.display_name.split(',')[0]); 
+                        setDropoffCoords({ lat: parseFloat(place.lat), lon: parseFloat(place.lon), name: place.display_name.split(',')[0], fullName: place.display_name, country_code: place.address?.country_code || '' }); 
+                        setDropoffSuggestions([]); 
+                      }} className="p-4 border-b text-sm font-bold cursor-pointer hover:bg-gray-50 text-gray-800 transition-colors flex justify-between items-center">
+                        <span className="truncate">{place.display_name}</span>
+                      </li>
+                    ))}
                   </ul>
                 )}
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-4 md:gap-3 mt-3">
-              <div 
-                onClick={(e) => { const input = e.currentTarget.querySelector('input[type="date"]'); if(input && input.showPicker) input.showPicker(); }}
-                className="flex bg-white rounded-xl h-14 flex-1 relative shadow-sm border-2 border-transparent focus-within:border-orange-200 transition-all cursor-pointer items-center"
-              >
-                <div className="absolute -top-3 left-4 bg-[#1e293b] text-white px-2 py-0.5 text-[10px] font-black uppercase rounded shadow-sm tracking-widest">Partida (Mín. 48h)</div>
-                <div className="flex-1 flex items-center px-4 border-r border-gray-100 h-full">
-                  <Calendar size={20} className="text-[#E65100] mr-2 shrink-0 pointer-events-none"/>
-                  <input type="date" required min={minDepartureDate} value={date} onChange={(e) => { setDate(e.target.value); if (returnDate && e.target.value > returnDate) setReturnDate(''); }} className="w-full text-sm md:text-base font-bold outline-none text-gray-800 bg-transparent cursor-pointer" />
+            <div className="flex flex-col md:flex-row gap-4 md:gap-3 mt-1">
+              <div onClick={(e) => { const input = e.currentTarget.querySelector('input[type="date"]'); if(input && input.showPicker) input.showPicker(); }} className="flex bg-white rounded-xl h-14 flex-1 relative shadow-sm transition-all cursor-pointer items-center border border-transparent focus-within:border-[#4C1D95]">
+                <div className="absolute -top-2.5 left-4 bg-[#1e293b] text-white px-2 py-0 text-[10px] font-bold uppercase rounded shadow-sm">Partida</div>
+                <div className="flex-1 flex items-center px-4 border-r border-gray-200 h-full">
+                  <Calendar size={18} className="text-gray-500 mr-2 shrink-0 pointer-events-none"/>
+                  <input type="date" required min={minDepartureDate} value={date} onChange={(e) => { setDate(e.target.value); if (returnDate && e.target.value > returnDate) setReturnDate(''); }} className="w-full text-sm font-bold outline-none text-gray-900 bg-transparent cursor-pointer" />
                 </div>
-                <div className="w-[120px] md:w-[140px] flex items-center px-3 h-full" onClick={(e) => e.stopPropagation()}>
-                  <Clock size={20} className="text-[#E65100] mr-1 shrink-0"/>
-                  <input type="time" required value={time} onChange={(e) => setTime(e.target.value)} className="w-full text-sm md:text-base font-bold outline-none text-gray-800 bg-transparent cursor-pointer" />
+                <div className="w-[110px] flex items-center px-3 h-full" onClick={(e) => e.stopPropagation()}>
+                  <Clock size={18} className="text-gray-500 mr-1 shrink-0"/>
+                  <input type="time" required value={time} onChange={(e) => setTime(e.target.value)} className="w-full text-sm font-bold outline-none text-gray-900 bg-transparent cursor-pointer" />
                 </div>
               </div>
 
               {tripType === 'roundtrip' && (
-                <div 
-                  onClick={(e) => { const input = e.currentTarget.querySelector('input[type="date"]'); if(input && input.showPicker) input.showPicker(); }}
-                  className="flex bg-white rounded-xl h-14 flex-1 relative shadow-sm border-2 border-transparent focus-within:border-orange-200 transition-all cursor-pointer items-center"
-                >
-                  <div className="absolute -top-3 left-4 bg-[#1e293b] text-white px-2 py-0.5 text-[10px] font-black uppercase rounded shadow-sm tracking-widest">Retorno</div>
-                  <div className="flex-1 flex items-center px-4 border-r border-gray-100 h-full">
-                    <Calendar size={20} className="text-[#E65100] mr-2 shrink-0 pointer-events-none"/>
-                    <input type="date" required min={date || minDepartureDate} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className="w-full text-sm md:text-base font-bold outline-none text-gray-800 bg-transparent cursor-pointer" />
+                <div onClick={(e) => { const input = e.currentTarget.querySelector('input[type="date"]'); if(input && input.showPicker) input.showPicker(); }} className="flex bg-white rounded-xl h-14 flex-1 relative shadow-sm transition-all cursor-pointer items-center border border-transparent focus-within:border-[#4C1D95]">
+                  <div className="absolute -top-2.5 left-4 bg-[#1e293b] text-white px-2 py-0 text-[10px] font-bold uppercase rounded shadow-sm">Retorno</div>
+                  <div className="flex-1 flex items-center px-4 border-r border-gray-200 h-full">
+                    <Calendar size={18} className="text-gray-500 mr-2 shrink-0 pointer-events-none"/>
+                    <input type="date" required min={date || minDepartureDate} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className="w-full text-sm font-bold outline-none text-gray-900 bg-transparent cursor-pointer" />
                   </div>
-                  <div className="w-[120px] md:w-[140px] flex items-center px-3 h-full" onClick={(e) => e.stopPropagation()}>
-                    <Clock size={20} className="text-[#E65100] mr-1 shrink-0"/>
-                    <input type="time" required value={returnTime} onChange={(e) => setReturnTime(e.target.value)} className="w-full text-sm md:text-base font-bold outline-none text-gray-800 bg-transparent cursor-pointer" />
+                  <div className="w-[110px] flex items-center px-3 h-full" onClick={(e) => e.stopPropagation()}>
+                    <Clock size={18} className="text-gray-500 mr-1 shrink-0"/>
+                    <input type="time" required value={returnTime} onChange={(e) => setReturnTime(e.target.value)} className="w-full text-sm font-bold outline-none text-gray-900 bg-transparent cursor-pointer" />
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-1">
               <div className="bg-white rounded-xl h-14 px-4 flex items-center justify-between shadow-sm">
-                <span className="text-sm font-bold text-gray-700 flex items-center gap-2"><Users size={18} className="text-[#E65100]"/> Adultos</span>
+                <span className="text-sm font-bold text-gray-600 flex items-center gap-2"><Users size={18}/> Adultos</span>
                 <select value={adults} onChange={(e) => setAdults(Number(e.target.value))} className="font-black text-base text-gray-900 bg-gray-50 px-2 py-1.5 rounded-lg outline-none cursor-pointer">
                   {[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
               <div className="bg-white rounded-xl h-14 px-4 flex items-center justify-between shadow-sm">
-                <span className="text-sm font-bold text-gray-700 flex items-center gap-2"><Baby size={18} className="text-[#E65100]"/> Crianças</span>
+                <span className="text-sm font-bold text-gray-600 flex items-center gap-2"><Baby size={18}/> Crianças</span>
                 <select value={children} onChange={(e) => setChildren(Number(e.target.value))} className="font-black text-base text-gray-900 bg-gray-50 px-2 py-1.5 rounded-lg outline-none cursor-pointer">
                   {[0,1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
               <div className="bg-white rounded-xl h-14 px-4 flex items-center justify-between shadow-sm">
-                <span className="text-sm font-bold text-gray-700 flex items-center gap-2"><Briefcase size={18} className="text-[#E65100]"/> Mala G</span>
+                <span className="text-sm font-bold text-gray-600 flex items-center gap-2"><Briefcase size={18}/> Mala G</span>
                 <select value={largeBags} onChange={(e) => setLargeBags(Number(e.target.value))} className="font-black text-base text-gray-900 bg-gray-50 px-2 py-1.5 rounded-lg outline-none cursor-pointer">
                   {[0,1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
               <div className="bg-white rounded-xl h-14 px-4 flex items-center justify-between shadow-sm">
-                <span className="text-sm font-bold text-gray-700 flex items-center gap-2"><Luggage size={18} className="text-[#E65100]"/> Mala P</span>
+                <span className="text-sm font-bold text-gray-600 flex items-center gap-2"><Luggage size={18}/> Mala P</span>
                 <select value={smallBags} onChange={(e) => setSmallBags(Number(e.target.value))} className="font-black text-base text-gray-900 bg-gray-50 px-2 py-1.5 rounded-lg outline-none cursor-pointer">
                   {[0,1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
@@ -432,7 +389,7 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
             </div>
 
             <div className="flex flex-col md:flex-row flex-wrap items-stretch md:items-center gap-3 md:gap-4 mt-2 bg-white/10 p-4 rounded-2xl border border-white/20">
-              <div className="bg-white rounded-xl h-14 md:h-12 px-4 flex items-center flex-1 min-w-full md:min-w-[250px] shadow-sm border-2 border-transparent focus-within:border-orange-300 transition-all">
+              <div className="bg-white rounded-xl h-14 md:h-12 px-4 flex items-center flex-1 min-w-full md:min-w-[250px] shadow-sm border-2 border-transparent focus-within:border-[#4C1D95] transition-all">
                 <Plane size={20} className="text-[#E65100] mr-3 shrink-0" />
                 <input type="text" value={flightNumber} onChange={(e) => setFlightNumber(e.target.value)} placeholder="Número do voo (rastreio grátis)" className="w-full text-base font-bold outline-none text-gray-800 placeholder:text-gray-400 placeholder:font-normal bg-transparent" />
               </div>
@@ -449,7 +406,7 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="mt-2 bg-[#1e293b] hover:bg-black text-white font-black h-14 md:h-16 px-10 rounded-xl text-lg transition-colors w-full shadow-xl flex items-center justify-center gap-2">
+            <button type="submit" disabled={loading} className="mt-2 bg-[#4C1D95] hover:bg-purple-900 text-white font-black h-14 rounded-xl text-lg transition-colors w-full shadow-md flex items-center justify-center gap-2">
               {loading ? 'Calculando Rota...' : 'Pesquisar Transfers'}
             </button>
 
@@ -457,40 +414,134 @@ export default function PalastoreTransfers({ isPackageMode, pacoteParams, onSele
         </div>
       </div>
 
-      <div className="w-full max-w-[1000px] px-4 mt-4">
-        {searchResult && (
-          <div className="flex flex-col gap-4 w-full">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-black text-xl text-gray-900">Veículos Disponíveis para o Trajeto</h3>
-              <span className={`text-xs font-bold px-3 py-1 rounded-full ${searchResult.isInternational ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                {searchResult.isInternational ? '🌍 Tarifa Internacional (USD)' : '🇧🇷 Tarifa Nacional (EUR)'}
-              </span>
+      {/* ÁREA DE RESULTADOS (GRID MASTER-DETAIL) */}
+      {searchResult && (
+        <div className="w-full max-w-[1100px] mx-auto px-4 flex flex-col lg:flex-row gap-8 items-start mt-4 mb-12">
+          
+          {/* COLUNA ESQUERDA: LISTA DE VEÍCULOS */}
+          <div className="flex-1 w-full flex flex-col gap-4">
+            <div className="mb-2">
+              <h2 className="text-xl font-black text-gray-900">Opções para {Number(adults) + Number(children)} passageiros</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Na próxima etapa, vamos finalizar a reserva do seu veículo local.
+                {searchResult.isInternational && <span className="ml-2 inline-block bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Tarifa Int. (USD)</span>}
+              </p>
             </div>
+
             {searchResult.veiculos.map((v) => (
-              <div key={v.id} className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-col sm:flex-row gap-5 shadow-sm hover:shadow-lg transition-all items-center">
-                <div className="w-full sm:w-[180px] p-2 bg-gray-50 rounded-xl flex items-center justify-center">
-                  <img src={v.image} alt={v.name} className="h-20 object-contain" />
+              <div key={v.id} className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col sm:flex-row gap-6 shadow-sm hover:shadow-md hover:border-[#4C1D95] transition-all items-center">
+                
+                {/* Imagem do Carro */}
+                <div className="w-full sm:w-[140px] flex justify-center shrink-0">
+                  <img src={v.image} alt={v.name} className="h-16 object-contain" />
                 </div>
-                <div className="flex-1">
-                  <h4 className="text-xl font-black text-gray-900 mb-1">{v.name}</h4>
-                  <p className="text-xs font-bold text-gray-600">Até {v.pax} passageiros e {v.bags} malas</p>
-                  <p className="text-xs font-bold text-green-700 mt-2">✓ Cancelamento grátis • Placa no desembarque</p>
+                
+                {/* Infos do Carro */}
+                <div className="flex-1 w-full text-center sm:text-left">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 gap-2">
+                    <h4 className="text-lg font-black text-gray-900">{v.name}</h4>
+                    <div className="flex items-center justify-center gap-3 text-xs font-bold text-gray-600">
+                      <span className="flex items-center gap-1"><Users size={14}/> {v.pax} lugares</span>
+                      <span className="flex items-center gap-1"><Briefcase size={14}/> {v.bags} malas</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col items-center sm:items-start gap-1.5">
+                    <p className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                      <Check size={14} className="text-green-600"/> Cancelamento grátis
+                    </p>
+                    <p className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                      <ThumbsUp size={14} className="text-[#4C1D95]"/> Motoristas confiáveis e placa de recepção
+                    </p>
+                  </div>
                 </div>
-                <div className="sm:w-[180px] text-right flex flex-col items-end shrink-0">
-                  <p className="text-2xl font-black text-gray-900 mb-2">R$ {v.precoFinal}</p>
+
+                {/* Preço e Botão */}
+                <div className="w-full sm:w-[160px] flex flex-col items-center sm:items-end shrink-0 border-t sm:border-t-0 border-gray-100 pt-4 sm:pt-0">
+                  <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider mb-1">
+                    Preço total {tripType === 'roundtrip' ? 'ida e volta' : 'só ida'}
+                  </p>
+                  <p className="text-2xl font-black text-gray-900 mb-3">R$ {v.precoFinal}</p>
+                  
                   <button 
                     type="button" 
                     onClick={(e) => { e.preventDefault(); handleAddToCart(v); }}
-                    className="w-full bg-[#E65100] hover:bg-orange-700 text-white font-black py-3.5 rounded-xl shadow transition text-xs uppercase tracking-wide"
+                    className="w-full bg-[#4C1D95] hover:bg-purple-900 text-white font-bold py-2.5 rounded-md shadow-sm transition text-sm tracking-wide"
                   >
-                    {isPackageMode ? 'Adicionar ao Pacote' : 'Reservar Agora'}
+                    {isPackageMode ? 'Adicionar pacote' : 'Selecionar'}
                   </button>
                 </div>
               </div>
             ))}
           </div>
-        )}
-      </div>
+
+          {/* COLUNA DIREITA: SEU TRAJETO (BOX FLUTUANTE) */}
+          <div className="w-full lg:w-[320px] shrink-0 sticky top-24 flex flex-col gap-4">
+            
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-gray-100">
+                <h3 className="font-black text-lg text-gray-900 mb-4">Seu trajeto</h3>
+                
+                {/* Abas Ida/Volta se for roundtrip */}
+                {tripType === 'roundtrip' && (
+                  <div className="flex border-b border-gray-200 mb-5">
+                    <button onClick={() => setRouteTab('ida')} className={`pb-2 px-2 text-sm font-bold transition-all ${routeTab === 'ida' ? 'text-[#4C1D95] border-b-2 border-[#4C1D95]' : 'text-gray-500 hover:text-gray-800'}`}>Ida</button>
+                    <button onClick={() => setRouteTab('volta')} className={`pb-2 px-4 text-sm font-bold transition-all ${routeTab === 'volta' ? 'text-[#4C1D95] border-b-2 border-[#4C1D95]' : 'text-gray-500 hover:text-gray-800'}`}>Volta</button>
+                  </div>
+                )}
+
+                {/* TIMELINE DE ROTA */}
+                <div className="relative pl-5 border-l-2 border-dashed border-gray-300 ml-2 space-y-6">
+                  
+                  {/* Ponto Origem */}
+                  <div className="relative">
+                    <div className="absolute -left-[27px] top-1 w-3.5 h-3.5 bg-white border-2 border-gray-800 rounded-full"></div>
+                    <p className="text-[11px] font-bold text-gray-500 lowercase">
+                      {routeTab === 'ida' ? formatRouteDate(date) : formatRouteDate(returnDate)} • {routeTab === 'ida' ? time : returnTime}
+                    </p>
+                    <p className="text-xs font-bold text-gray-900 leading-tight mt-1 break-words pr-2">
+                      {routeTab === 'ida' ? searchResult.origemFullName : searchResult.destinoFullName}
+                    </p>
+                  </div>
+
+                  {/* Ponto Destino */}
+                  <div className="relative">
+                    <div className="absolute -left-[27px] top-1 w-3.5 h-3.5 bg-white border-2 border-gray-800 rounded-full"></div>
+                    <p className="text-xs font-bold text-gray-900 leading-tight break-words pr-2">
+                      {routeTab === 'ida' ? searchResult.destinoFullName : searchResult.origemFullName}
+                    </p>
+                  </div>
+
+                </div>
+
+                {/* Tempo e Distância */}
+                <div className="mt-6 pt-4 border-t border-gray-100 flex items-start gap-3 text-gray-800">
+                  <Map size={18} className="text-gray-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-gray-900">Detalhes da corrida</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">Cerca de {searchResult.duracao} min ({searchResult.distancia} km)</p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* BOX DE POLÍTICAS */}
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+              <h4 className="font-bold text-base text-gray-900 mb-3">Políticas</h4>
+              <div className="flex items-start gap-3">
+                <Check size={18} className="text-green-600 shrink-0 mt-0.5"/>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">Cancelamento grátis</p>
+                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Cancele de graça até 24 horas antes do horário programado para a partida.</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      )}
 
     </div>
   );
