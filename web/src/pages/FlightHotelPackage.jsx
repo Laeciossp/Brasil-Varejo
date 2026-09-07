@@ -20,54 +20,20 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const getAirlineName = (code) => {
   const airlines = {
-    // Nacionais e Regionais / América Latina
-    'G3': 'GOL Linhas Aéreas',
-    'AD': 'Azul Linhas Aéreas',
-    'LA': 'LATAM Airlines',
-    'JJ': 'LATAM Airlines',
-    '2Z': 'Voepass Linhas Aéreas',
-    'H2': 'Sky Airline',
-    'JA': 'JetSMART',
-    'DM': 'Arajet',
-    'AV': 'Avianca',
-    'CM': 'Copa Airlines',
-    'AM': 'AeroMexico',
-    'AR': 'Aerolíneas Argentinas',
-    'OB': 'Boliviana de Aviación',
-    'PZ': 'Paranair',
-    'ZP': 'Paranair',
-
-    // América do Norte e Europa
-    'AC': 'Air Canada',
-    'TS': 'Air Transat',
-    'AA': 'American Airlines',
-    'DL': 'Delta Air Lines',
-    'UA': 'United Airlines',
-    'AF': 'Air France',
-    'KL': 'KLM Royal Dutch Airlines',
-    'LH': 'Lufthansa',
-    'LX': 'Swiss International Air Lines',
-    'OS': 'Austrian Airlines',
-    'IB': 'Iberia Airlines',
-    'UX': 'Air Europa',
-    'TP': 'TAP Portugal',
-    'AZ': 'ITA Airways',
-    'PU': 'Plus Ultra Líneas Aéreas',
-    'CA': 'Air China',
-    'TK': 'Turkish Airlines',
-    'AT': 'Royal Air Maroc',
-    'ET': 'Ethiopian Airlines',
-    'EK': 'Emirates',
-    'QF': 'Qantas',
-    'DT': 'TAAG Angola Airlines',
-    'H1': 'Hahn Air',
-    'HR': 'Hahn Air Systems',
-    'Q4': 'Euroairlines',
-    'LEVEL': 'Level'
+    'G3': 'GOL Linhas Aéreas', 'AD': 'Azul Linhas Aéreas', 'LA': 'LATAM Airlines', 'JJ': 'LATAM Airlines',
+    '2Z': 'Voepass Linhas Aéreas', 'H2': 'Sky Airline', 'JA': 'JetSMART', 'DM': 'Arajet', 'AV': 'Avianca',
+    'CM': 'Copa Airlines', 'AM': 'AeroMexico', 'AR': 'Aerolíneas Argentinas', 'OB': 'Boliviana de Aviación',
+    'PZ': 'Paranair', 'ZP': 'Paranair', 'AC': 'Air Canada', 'TS': 'Air Transat', 'AA': 'American Airlines',
+    'DL': 'Delta Air Lines', 'UA': 'United Airlines', 'AF': 'Air France', 'KL': 'KLM Royal Dutch Airlines',
+    'LH': 'Lufthansa', 'LX': 'Swiss International Air Lines', 'OS': 'Austrian Airlines', 'IB': 'Iberia Airlines',
+    'UX': 'Air Europa', 'TP': 'TAP Portugal', 'AZ': 'ITA Airways', 'PU': 'Plus Ultra Líneas Aéreas',
+    'CA': 'Air China', 'TK': 'Turkish Airlines', 'AT': 'Royal Air Maroc', 'ET': 'Ethiopian Airlines',
+    'EK': 'Emirates', 'QF': 'Qantas', 'DT': 'TAAG Angola Airlines', 'H1': 'Hahn Air', 'HR': 'Hahn Air Systems',
+    'Q4': 'Euroairlines', 'LEVEL': 'Level'
   };
-
   return airlines[code] || code;
 };
+
 const formatTime = (dateStr) => {
   if(!dateStr) return '';
   try {
@@ -198,7 +164,9 @@ export default function FlightHotelPackage() {
 
       let cityLat = -23.5505; let cityLng = -46.6333;
       const isTest = cleanDestName.toLowerCase().includes('rio') || cleanDestName.toLowerCase().includes('janeiro') || cleanDestName.toLowerCase().includes('york') || cleanDestName.toLowerCase().includes('paulo');
-      const hidsToSearch = isTest ? [10004834, 8819557, 9015534, 8663536] : [];
+      
+      // 🚀 CORREÇÃO PARA A RATEHAWK: Limitado a apenas 1 hotel no modo teste para não violar os limites de RPM do endpoint /search/hp/
+      const hidsToSearch = isTest ? [10004834] : [];
 
       if (hidsToSearch.length > 0) {
         const reqs = hidsToSearch.map(hid => fetch(`${WORKER_URL}/hotel-page`, {
@@ -292,7 +260,6 @@ export default function FlightHotelPackage() {
     descLines.push(`👥 Viajantes: ${totalPax} passageiro(s) | 📅 ${formatDateShort(searchParams.dateOut)} até ${formatDateShort(searchParams.dateIn)} (${noites} noites)`);
     descLines.push(`──────────────────────────────────────────`);
 
-    // ⬇️ SUBSTITUA A PARTIR DAQUI ATÉ O FECHAMENTO DESTE IF ⬇️
     if (selectedFlight) {
       const ciaIda = getAirlineName(selectedFlight.ida?.companhiaPrincipal);
       const ciaVolta = selectedFlight.volta?.companhiaPrincipal ? getAirlineName(selectedFlight.volta.companhiaPrincipal) : null;
@@ -313,7 +280,6 @@ export default function FlightHotelPackage() {
       descLines.push(`• Subtotal Voo: R$ ${flightTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
       descLines.push(`──────────────────────────────────────────`);
     }
-    // ⬆️ FIM DO TRECHO A SER SUBSTITUÍDO ⬆️
 
     if (selectedHotel) {
       descLines.push(`🏨 HOSPEDAGEM:`);
@@ -444,7 +410,7 @@ export default function FlightHotelPackage() {
               </div>
             </div>
 
-            {/* COLUNA 2: VOO (AGORA COM NOME DA COMPANHIA) */}
+            {/* COLUNA 2: VOO */}
             <div className="p-5 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col justify-between">
               {selectedFlight ? (
                 <div className="space-y-4">
@@ -701,7 +667,7 @@ export default function FlightHotelPackage() {
                 </div>
               )}
 
-              {/* RENDERIZAÇÃO DOS VOOS (COM A COMPANHIA EM TEXTO) */}
+              {/* RENDERIZAÇÃO DOS VOOS */}
               {activeView === 'flight' && (
                 <div className="space-y-4">
                   {displayFlights.map((voo) => {
