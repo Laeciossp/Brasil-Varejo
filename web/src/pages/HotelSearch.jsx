@@ -330,7 +330,9 @@ export default function HotelSearch() {
     try {
       const queryLower = destinationQuery.toLowerCase();
       const isTestSearch = queryLower.includes('los angeles') || queryLower.includes('conrad') || queryLower.includes('us-lax');
-      const hidsToSearch = isTestSearch ? [10004834, 8819557, 9015534, 8663536] : [];
+      // 🚀 CORREÇÃO RATEHAWK: Limitado a 1 ID no modo teste para parar o spam no endpoint /search/hp/
+// O ideal na versão de produção será criar uma rota '/serp/hotels' no seu Worker.
+const hidsToSearch = isTestSearch ? [10004834] : [];
 
       if (hidsToSearch.length > 0) {
         const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-page`; 
