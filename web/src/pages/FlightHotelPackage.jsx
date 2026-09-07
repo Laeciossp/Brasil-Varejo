@@ -165,17 +165,25 @@ export default function FlightHotelPackage() {
       let cityLat = -23.5505; let cityLng = -46.6333;
       const isTest = cleanDestName.toLowerCase().includes('rio') || cleanDestName.toLowerCase().includes('janeiro') || cleanDestName.toLowerCase().includes('york') || cleanDestName.toLowerCase().includes('paulo');
       
-      // 🚀 CORREÇÃO PARA A RATEHAWK: Limitado a apenas 1 hotel no modo teste para não violar os limites de RPM do endpoint /search/hp/
-      const hidsToSearch = isTest ? [10004834] : [];
+      // 🚀 VERSÃO DE PRODUÇÃO: Restaurando todos os IDs e usando a rota /serp-hotels
+      const hidsToSearch = isTest ? [10004834, 8819557, 9015534, 8663536] : [];
 
       if (hidsToSearch.length > 0) {
-        const reqs = hidsToSearch.map(hid => fetch(`${WORKER_URL}/hotel-page`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ hid, checkin: dateOutStr, checkout: dateInStr, residency: 'br', currency: "BRL", guests: [{ adults: paxNum, children: [] }] })
-        }));
-        const resps = await Promise.all(reqs);
-        const jsons = await Promise.all(resps.map(r => r.json()));
-        let comb = []; jsons.forEach(r => { if (r.data?.hotels) comb.push(...r.data.hotels); });
+        const response = await fetch(`${WORKER_URL}/serp-hotels`, {
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            hids: hidsToSearch, 
+            checkin: dateOutStr, 
+            checkout: dateInStr, 
+            residency: 'br', 
+            currency: "BRL", 
+            guests: [{ adults: paxNum, children: [] }] 
+          })
+        });
+        
+        const resData = await response.json();
+        let comb = resData.data?.hotels || [];
 
         if (comb.length > 0) {
           const { data: dbHotels } = await supabase.from('Hotel').select('id, images, description').in('id', comb.map(h => String(h.id)));

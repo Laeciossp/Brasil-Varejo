@@ -327,42 +327,36 @@ export default function HotelSearch() {
     let restelResults = [];
 
     // 1. BUSCA RATEHAWK
+   // 1. BUSCA RATEHAWK
     try {
       const queryLower = destinationQuery.toLowerCase();
       const isTestSearch = queryLower.includes('los angeles') || queryLower.includes('conrad') || queryLower.includes('us-lax');
-      // 🚀 CORREÇÃO RATEHAWK: Limitado a 1 ID no modo teste para parar o spam no endpoint /search/hp/
-// O ideal na versão de produção será criar uma rota '/serp/hotels' no seu Worker.
-const hidsToSearch = isTestSearch ? [10004834] : [];
+      
+      // 🚀 VERSÃO FINAL DE PRODUÇÃO: Array completo buscando na rota de lotes (/serp-hotels)
+      const hidsToSearch = isTestSearch ? [10004834, 8819557, 9015534, 8663536] : [];
 
       if (hidsToSearch.length > 0) {
-        const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/hotel-page`; 
+        const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/serp-hotels`; 
         const guestsPayload = rooms.map(room => ({
           adults: room.adults,
           children: room.childrenAges
         }));
 
-        const requests = hidsToSearch.map(hid => 
-          fetch(baseUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              hid: hid,
-              checkin: checkInDate,
-              checkout: checkOutDate,
-              residency: residency,
-              currency: "USD",
-              guests: guestsPayload
-            })
+        const response = await fetch(baseUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            hids: hidsToSearch,
+            checkin: checkInDate,
+            checkout: checkOutDate,
+            residency: residency,
+            currency: "USD",
+            guests: guestsPayload
           })
-        );
-
-        const responses = await Promise.all(requests);
-        const jsonResults = await Promise.all(responses.map(r => r.json()));
-
-        const combinados = [];
-        jsonResults.forEach(resData => {
-          if (resData.data && resData.data.hotels) combinados.push(...resData.data.hotels);
         });
+
+        const resData = await response.json();
+        const combinados = resData.data?.hotels || [];
 
         if (combinados.length > 0) {
           const matchedIds = combinados.map(h => String(h.id));
