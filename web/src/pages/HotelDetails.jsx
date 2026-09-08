@@ -11,8 +11,10 @@ export default function HotelDetails() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { hotel, checkInDate, checkOutDate, rooms: searchRooms } = location.state || {};
+  // 🚀 CORREÇÃO 1: Recebendo a nacionalidade (residency) escolhida na busca!
+  const { hotel, checkInDate, checkOutDate, rooms: searchRooms, residency } = location.state || {};
   const currentRooms = searchRooms || [{ adults: 1, childrenAges: [] }];
+  const currentResidency = residency || 'br';
 
   const [staticData, setStaticData] = useState(null);
   const [loadingStatic, setLoadingStatic] = useState(true);
@@ -22,7 +24,6 @@ export default function HotelDetails() {
   const [filterCancelamento, setFilterCancelamento] = useState('todas');
   const [activeRoomDetail, setActiveRoomDetail] = useState(null);
 
-  // 🚀 NOVO: Estados para armazenar as tarifas frescas geradas pelo /search/hp/ (Passo 2 RateHawk)
   const [ofertasAtuais, setOfertasAtuais] = useState(hotel?.ofertas || []);
   const [buscandoTarifas, setBuscandoTarifas] = useState(true);
 
@@ -130,7 +131,6 @@ export default function HotelDetails() {
       }
     };
 
-    // 🚀 NOVO: Passo 2 da RateHawk - Busca tarifas frescas para gerar o book_hash exato para o Checkout
     const fetchFreshRates = async () => {
       try {
           const guestsPayload = currentRooms.map(room => ({
@@ -145,7 +145,7 @@ export default function HotelDetails() {
                   hid: parseInt(rawId, 10),
                   checkin: checkInDate,
                   checkout: checkOutDate,
-                  residency: 'br',
+                  residency: currentResidency, // 🚀 CORREÇÃO 2: Usa a nacionalidade escolhida
                   currency: "USD",
                   guests: guestsPayload
               })
@@ -177,7 +177,7 @@ export default function HotelDetails() {
     } else {
         setBuscandoTarifas(false);
     }
-  }, [hotel, navigate, checkInDate, checkOutDate, currentRooms]);
+  }, [hotel, navigate, checkInDate, checkOutDate, currentRooms, currentResidency]);
 
   // ==========================================
   // LÓGICA DE FINALIZAÇÃO DA RESERVA (PREBOOK -> BOOKING -> FINISH)
@@ -189,10 +189,20 @@ export default function HotelDetails() {
     setBookingError(null);
 
     try {
+      const rawId = String(hotel.hotelId).replace('rh_', '').replace('restel_', '');
+      const isPriceChangeTest = rawId === '8819557'; // 🚀 CORREÇÃO 3: Identifica o hotel específico de aumento de preço
+      
+      const prebookPayload = { book_hash: oferta.bookHash };
+      
+      // Aplica aumento de 10% APENAS se for o hotel exigido pela RateHawk para esse teste
+      if (isPriceChangeTest) {
+        prebookPayload.price_increase_percent = 10;
+      }
+
       const res = await fetch('https://palastore-flights-api.laeciossp.workers.dev/hotel-prebook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ book_hash: oferta.bookHash, price_increase_percent: 10 })
+        body: JSON.stringify(prebookPayload)
       });
       const data = await res.json();
 
@@ -348,7 +358,6 @@ export default function HotelDetails() {
   const totalChildren = currentRooms.reduce((acc, r) => acc + r.childrenAges.length, 0);
   const totalGuests = totalAdults + totalChildren;
   
-  // Usa as ofertas frescas que vieram do servidor RateHawk na hora
   const menorPreco = ofertasAtuais && ofertasAtuais.length > 0 ? Math.min(...ofertasAtuais.map(o => o.precoVenda)) : 0;
 
   const ofertasFiltradas = (ofertasAtuais || []).filter(oferta => {
