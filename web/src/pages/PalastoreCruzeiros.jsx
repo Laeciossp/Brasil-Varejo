@@ -13,7 +13,8 @@ const sanityClient = createClient({
   token: 'skmLtdy7ME2lnyS0blM3IWiNv0wuWzBG4egK7jUYdVVkBktLngwz47GbsPPdq5NLX58WJEiR3bmW0TBpeMtBhPNEIxf5mk6uQ14PvbGYKlWQdSiP2uWdBDafWhVAGMw5RYh3IyKhDSmqEqSLg1bEzzYVEwcGWDZ9tEPmZhNDkljeyvY6IcEO'
 });
 
-const normalize = (s) => s ? String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim() : "";
+// AJUSTE CRÍTICO: Inserido \s na regex para preservar os espaços entre as palavras.
+const normalize = (s) => s ? String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim() : "";
 
 const hoje = new Date();
 const daqui60dias = new Date(); daqui60dias.setDate(hoje.getDate() + 60);
@@ -21,6 +22,59 @@ const daqui1Ano = new Date(); daqui1Ano.setFullYear(hoje.getFullYear() + 1);
 const formataData = (d) => d.toISOString().split('T')[0];
 
 const FOTO_CORINGA = "https://images.unsplash.com/photo-1599640842225-85d111c60e6b?q=80&w=1000&auto=format&fit=crop";
+
+// ==============================================================
+// 2. DICIONÁRIOS ROBUSTOS (COM SINÔNIMOS INGLÊS/PORTUGUÊS)
+// ==============================================================
+const DESTINOS_ROBUSTOS = [
+  { id: 'CARIBE', label: 'Caribe', keywords: ['caribe', 'caribbean'] },
+  { id: 'CARIBE_ORIENTAL', label: 'Caribe Oriental', keywords: ['caribe oriental', 'eastern caribbean'] },
+  { id: 'CARIBE_OCIDENTAL', label: 'Caribe Ocidental', keywords: ['caribe ocidental', 'western caribbean'] },
+  { id: 'CARIBE_SUL', label: 'Caribe do Sul', keywords: ['caribe do sul', 'southern caribbean', 'antillas'] },
+  { id: 'BAHAMAS', label: 'Bahamas', keywords: ['bahamas'] },
+  { id: 'AMERICA_SUL', label: 'América do Sul', keywords: ['america do sul', 'south america', 'brasil', 'argentina', 'uruguai', 'patagonia'] },
+  { id: 'MEDITERRANEO', label: 'Mediterrâneo', keywords: ['mediterraneo', 'mediterranean'] },
+  { id: 'EUROPA_NORTE', label: 'Norte da Europa', keywords: ['norte da europa', 'northern europe', 'baltico', 'baltic', 'fiordes'] },
+  { id: 'ALASCA', label: 'Alasca', keywords: ['alasca', 'alaska'] },
+  { id: 'ASIA', label: 'Ásia', keywords: ['asia', 'asian', 'japao', 'china'] },
+  { id: 'AUSTRALIA_NZ', label: 'Austrália e N. Zelândia', keywords: ['australia', 'new zealand', 'nova zelandia'] },
+  { id: 'BERMUDAS', label: 'Bermudas', keywords: ['bermuda'] },
+  { id: 'CANADA_NE', label: 'Canadá / N. Inglaterra', keywords: ['canada', 'new england', 'nova inglaterra'] },
+  { id: 'HAVAI', label: 'Havaí', keywords: ['havai', 'hawaii'] },
+  { id: 'CANAL_PANAMA', label: 'Canal do Panamá', keywords: ['panama', 'canal'] },
+  { id: 'TRANSATLANTICO', label: 'Travessia Transatlântica', keywords: ['transatlantico', 'transatlantic', 'travessia', 'ocean crossing', 'grand voyage'] },
+  { id: 'ORIENTE_MEDIO', label: 'Oriente Médio', keywords: ['oriente medio', 'middle east', 'emirados', 'dubai', 'arab'] }
+];
+
+const DICIONARIO_PORTOS = {
+  'SSZ': 'Santos', 'SANTOS': 'Santos',
+  'GIG': 'Rio de Janeiro', 'RIO DE JANEIRO': 'Rio de Janeiro', 'RIO': 'Rio de Janeiro',
+  'SSA': 'Salvador', 'SALVADOR': 'Salvador',
+  'ITJ': 'Itajaí', 'ITAJAI': 'Itajaí',
+  'MCZ': 'Maceió', 'MACEIO': 'Maceió',
+  'REC': 'Recife', 'RECIFE': 'Recife',
+  'BUE': 'Buenos Aires', 'BUENOS AIRES': 'Buenos Aires',
+  'MVD': 'Montevidéu', 'MONTEVIDEO': 'Montevidéu',
+  'MIA': 'Miami', 'MIAMI': 'Miami',
+  'FLL': 'Fort Lauderdale', 'FORT LAUDERDALE': 'Fort Lauderdale',
+  'PCN': 'Port Canaveral', 'PORT CANAVERAL': 'Port Canaveral',
+  'ROM': 'Roma (Civitavecchia)', 'CIVITAVECCHIA': 'Roma (Civitavecchia)',
+  'BCN': 'Barcelona', 'BARCELONA': 'Barcelona',
+  'LAX': 'Los Angeles', 'LOS ANGELES': 'Los Angeles',
+  'GAL': 'Galveston', 'GALVESTON': 'Galveston',
+  'KEL': 'Kiel', 'KIEL': 'Kiel',
+  'GEN': 'Gênova', 'GENOA': 'Gênova', 'GENOVA': 'Gênova',
+  'VEN': 'Veneza', 'VENICE': 'Veneza',
+  'NAP': 'Nápoles', 'NAPLES': 'Nápoles',
+  'MRS': 'Marselha', 'MARSEILLE': 'Marselha',
+  'DXB': 'Dubai', 'DUBAI': 'Dubai'
+};
+
+const traduzirPorto = (codigoBruto) => {
+  if (!codigoBruto) return 'Porto Indefinido';
+  const limpo = String(codigoBruto).trim().toUpperCase();
+  return DICIONARIO_PORTOS[limpo] || codigoBruto; 
+};
 
 export default function PalastoreCruzeiros() {
   const [sanityNavios, setSanityNavios] = useState([]); 
@@ -98,68 +152,21 @@ export default function PalastoreCruzeiros() {
   };
 
   // ==============================================================
-  // 🌍 DICIONÁRIOS
-  // ==============================================================
-  const DICIONARIO_DESTINOS = {
-    'CARIBE': 'Caribe', 'CARIBE ORIENTAL': 'Caribe Oriental', 'CARIBE OCIDENTAL': 'Caribe Ocidental',
-    'CARIBE DO SUL': 'Caribe do Sul', 'BAHAMAS': 'Bahamas', 'AMERICA DO SUL': 'América do Sul',
-    'MEDITERRANEO': 'Mediterrâneo', 'NORTE DA EUROPA': 'Norte da Europa', 'ALASCA': 'Alasca',
-    'ASIA': 'Ásia', 'AUSTRALIA E NOVA ZELANDIA': 'Austrália e N. Zelândia', 'BERMUDAS': 'Bermudas',
-    'CANADA E NOVA INGLATERRA': 'Canadá / N. Inglaterra', 'HAVAI': 'Havaí', 'CANAL DO PANAMA': 'Canal do Panamá',
-    'TRANSATLANTICO': 'Travessia Transatlântica', 'ORIENTE MEDIO': 'Oriente Médio'
-  };
-
-  const DICIONARIO_PORTOS = {
-    'SSZ': 'Santos', 'SANTOS': 'Santos',
-    'GIG': 'Rio de Janeiro', 'RIO DE JANEIRO': 'Rio de Janeiro', 'RIO': 'Rio de Janeiro',
-    'SSA': 'Salvador', 'SALVADOR': 'Salvador',
-    'ITJ': 'Itajaí', 'ITAJAI': 'Itajaí',
-    'MCZ': 'Maceió', 'MACEIO': 'Maceió',
-    'REC': 'Recife', 'RECIFE': 'Recife',
-    'BUE': 'Buenos Aires', 'BUENOS AIRES': 'Buenos Aires',
-    'MVD': 'Montevidéu', 'MONTEVIDEO': 'Montevidéu',
-    'MIA': 'Miami', 'MIAMI': 'Miami',
-    'FLL': 'Fort Lauderdale', 'FORT LAUDERDALE': 'Fort Lauderdale',
-    'PCN': 'Port Canaveral', 'PORT CANAVERAL': 'Port Canaveral',
-    'ROM': 'Roma (Civitavecchia)', 'CIVITAVECCHIA': 'Roma (Civitavecchia)',
-    'BCN': 'Barcelona', 'BARCELONA': 'Barcelona',
-    'LAX': 'Los Angeles', 'LOS ANGELES': 'Los Angeles',
-    'GAL': 'Galveston', 'GALVESTON': 'Galveston',
-    'KEL': 'Kiel', 'KIEL': 'Kiel',
-    'GEN': 'Gênova', 'GENOA': 'Gênova', 'GENOVA': 'Gênova',
-    'VEN': 'Veneza', 'VENICE': 'Veneza',
-    'NAP': 'Nápoles', 'NAPLES': 'Nápoles',
-    'MRS': 'Marselha', 'MARSEILLE': 'Marselha',
-    'DXB': 'Dubai', 'DUBAI': 'Dubai'
-  };
-
-  const traduzirPorto = (codigoBruto) => {
-    if (!codigoBruto) return 'Porto Indefinido';
-    const limpo = String(codigoBruto).trim().toUpperCase();
-    return DICIONARIO_PORTOS[limpo] || codigoBruto; 
-  };
-
-  // ==============================================================
-  // 🪄 INTELIGÊNCIA DO NAVIO (PERFIL CORINGA PARA NÃO PERDER VENDA)
+  // 🪄 INTELIGÊNCIA DO NAVIO (PERFIL CORINGA)
   // ==============================================================
   const getNavioDisplay = (cruzeiro) => {
-    // Tenta achar no Sanity primeiro
     const navioSanity = sanityNavios.find(s => s.codigoOperadora && String(s.codigoOperadora).trim().toUpperCase() === String(cruzeiro.navioId).trim().toUpperCase());
     if (navioSanity) return navioSanity;
 
-    // Se não achou, cria um perfil "Falso" seguro para o cliente clicar
     let nomeAPI = cruzeiro.navioNome || "";
     let compAPI = cruzeiro.companhiaNome || "Companhia Marítima";
 
-    // Regra de substituição pedida: "Especial" vira "Costa Preciosa"
     if (!nomeAPI || nomeAPI.toUpperCase().includes("ESPECIAL") || nomeAPI.toUpperCase().includes("SPECIAL")) {
       nomeAPI = "Costa Preciosa";
     }
 
     return {
-      nome: nomeAPI,
-      companhia: compAPI,
-      imagemPrincipal: FOTO_CORINGA,
+      nome: nomeAPI, companhia: compAPI, imagemPrincipal: FOTO_CORINGA,
       categoriasCabine: [
         { nomeAmigavel: "Interna", descricaoLimpa: "Acomodação confortável com excelente custo-benefício.", variacoes: [] },
         { nomeAmigavel: "Vista Mar / Externa", descricaoLimpa: "Cabine com janela ou escotilha para luz natural.", variacoes: [] },
@@ -169,13 +176,12 @@ export default function PalastoreCruzeiros() {
     };
   };
 
-  // Extrai listas dinâmicas com base no que realmente existe, para o filtro não ficar com opções vazias
   const companhiasUnicas = [...new Set(todosCruzeiros.map(c => getNavioDisplay(c).companhia))].filter(Boolean).sort();
   const naviosUnicos = [...new Set(todosCruzeiros.map(c => getNavioDisplay(c).nome))].filter(Boolean).sort();
   const listaDePortosFixa = [...new Set(Object.values(DICIONARIO_PORTOS))].sort();
 
   // ==============================================================
-  // 🔍 FILTRO COMPLETO 
+  // 🔍 FILTRO COMPLETO (AGORA ROBUSTO PARA DESTINOS)
   // ==============================================================
   const cruzeirosFiltrados = todosCruzeiros.filter(c => {
     const navioDisplay = getNavioDisplay(c);
@@ -183,18 +189,27 @@ export default function PalastoreCruzeiros() {
     const compAPI = normalize(navioDisplay.companhia);
     const navAPI = normalize(navioDisplay.nome);
     const portoCruzeiro = traduzirPorto(c.portoEmbarque);
-    const textoPesquisaDestino = normalize((c.destino || '') + ' ' + (c.regiao || '') + ' ' + (c.nomeRoteiro || ''));
+    
+    // Concatena as informações de destino da API
+    const textoPesquisaDestino = normalize(`${c.destino || ''} ${c.regiao || ''} ${c.nomeRoteiro || ''}`);
 
     const filtroNav = normalize(filtros.navio);
     const filtroComp = normalize(filtros.companhia);
     const filtroDuracao = filtros.duracao;
-    const filtroDest = normalize(filtros.destino);
 
     if (filtroComp && !compAPI.includes(filtroComp)) return false;
     if (filtroNav && navAPI !== filtroNav && !navAPI.includes(filtroNav)) return false;
-    
     if (filtros.portoEmbarque && portoCruzeiro !== filtros.portoEmbarque) return false;
-    if (filtroDest && !textoPesquisaDestino.includes(filtroDest)) return false;
+    
+    // LÓGICA INTELIGENTE DE DESTINO
+    if (filtros.destino) {
+      const objDestino = DESTINOS_ROBUSTOS.find(d => d.id === filtros.destino);
+      if (objDestino) {
+        // Verifica se QUALQUER UMA das palavras-chave mapeadas existe na string da API
+        const matchesKeyword = objDestino.keywords.some(kw => textoPesquisaDestino.includes(normalize(kw)));
+        if (!matchesKeyword) return false;
+      }
+    }
     
     if (filtroDuracao) {
       const noites = parseInt(c.noites, 10);
@@ -306,7 +321,7 @@ export default function PalastoreCruzeiros() {
   return (
     <div className="w-full min-h-screen bg-[#f8fafc] font-sans pb-16 flex justify-center relative">
       
-      {/* 🖼️ MODAL DE FOTO AMPLIADA (LIGHTBOX) */}
+      {/* 🖼️ MODAL DE FOTO AMPLIADA */}
       {imagemModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setImagemModal(null)}>
           <div className="relative max-w-5xl w-full flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
@@ -346,7 +361,7 @@ export default function PalastoreCruzeiros() {
                   <label className="text-[10px] text-gray-500 uppercase font-bold mb-1 block">Destino da Viagem</label>
                   <select className="w-full border-2 border-gray-200 rounded-lg p-2.5 text-xs font-semibold text-gray-700 bg-gray-50 outline-none focus:border-blue-500" value={filtros.destino} onChange={(e) => setFiltros({...filtros, destino: e.target.value})}>
                     <option value="">Qualquer Destino</option>
-                    {Object.entries(DICIONARIO_DESTINOS).map(([key, value]) => <option key={key} value={key}>{value}</option>)}
+                    {DESTINOS_ROBUSTOS.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
                   </select>
                 </div>
                 <div>
