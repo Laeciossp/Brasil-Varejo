@@ -106,20 +106,20 @@ export default function Cart() {
     let itemPax = item.quantity || 1;
 
     if (item.packageDetails?.pax) {
-      itemPax = item.packageDetails.pax * (item.quantity || 1);
+      itemPax = item.packageDetails.pax;
     } else if (item.pax) {
-      itemPax = item.pax * (item.quantity || 1);
+      itemPax = item.pax;
     } else if (item.transferPayload) {
-      itemPax = ((item.transferPayload.adults || 0) + (item.transferPayload.children || 0)) * (item.quantity || 1);
+      itemPax = (item.transferPayload.adults || 0) + (item.transferPayload.children || 0);
     } else if (item.flightDetails?.pax) {
-      itemPax = item.flightDetails.pax * (item.quantity || 1);
+      itemPax = item.flightDetails.pax; // Usa diretamente o número de passageiros sem multiplicar pela quantidade
     }
 
-    if (itemPax === (item.quantity || 1)) {
+    if (itemPax === (item.quantity || 1) && !item.flightDetails?.pax && !item.packageDetails?.pax) {
       const textToMatch = `${item.variantName || ''} ${item.title || ''} ${item.description || ''}`;
       const match = textToMatch.match(/(\d+)\s*(pax|viajante)/i);
       if (match) {
-        itemPax = parseInt(match[1], 10) * (item.quantity || 1);
+        itemPax = parseInt(match[1], 10);
       }
     }
 
@@ -443,18 +443,31 @@ export default function Cart() {
             else if (item.flightDetails) {
                 sType = '✈️ Passagem Aérea';
                 const fd = item.flightDetails;
+                
+                // Formatação direta da string para evitar recuo de fuso horário do navegador
                 const fDate = (d) => {
                     if(!d) return '';
+                    if(typeof d === 'string' && d.includes('T')) {
+                        const [dataPart, timePart] = d.split('T');
+                        const [y, m, day] = dataPart.split('-');
+                        const time = timePart.substring(0, 5);
+                        return `${day}/${m}/${y} às ${time}`;
+                    }
                     const dt = new Date(d);
                     return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} às ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
                 };
-                desc = `🛫 IDA: ${fd.ida.origem} ➔ ${fd.ida.destino}\n🕒 Embarque: ${fDate(fd.ida.partida)}\n`;
+
+                const fIda = getAirlineName(fd.ida.companhiaPrincipal);
+                desc = `🛫 IDA: ${fd.ida.origem} ➔ ${fd.ida.destino}\n✈️ Cia: ${fIda}\n🕒 Embarque: ${fDate(fd.ida.partida)}\n`;
+                
                 if (fd.volta) {
-                    desc += `\n🛬 VOLTA: ${fd.volta.origem} ➔ ${fd.volta.destino}\n🕒 Embarque: ${fDate(fd.volta.partida)}\n`;
+                    const fVolta = getAirlineName(fd.volta.companhiaPrincipal);
+                    desc += `\n🛬 VOLTA: ${fd.volta.origem} ➔ ${fd.volta.destino}\n✈️ Cia: ${fVolta}\n🕒 Embarque: ${fDate(fd.volta.partida)}\n`;
                 }
+                
                 const numMalas = (fd.holdBagsIda || 0) + (fd.holdBagsVolta || 0);
                 desc += `\n🏷️ Tarifa: ${fd.tier}\n🧳 Franquia: Mochila + Mala de Mão 10kg${numMalas > 0 ? ` + ${numMalas} Mala(s) Despachada(s)` : ''}`;
-            } 
+            }
             else if (item.isTravel) {
                 sType = '🛎️ Serviços de Turismo';
             }
