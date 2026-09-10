@@ -9,12 +9,11 @@ export default {
     { name: 'passengers', title: '👥 Viajantes (Emissão)' }, 
     { name: 'logistics', title: '🚚 Frete / Logística' },
     { name: 'billing', title: '💲 Faturamento' },
-    { name: 'admin', title: '⚙️ Admin & Fornecedores' } // <- Atualizado o nome do grupo
+    { name: 'admin', title: '⚙️ Admin & Fornecedores' }
   ],
   fields: [
     { name: 'orderNumber', title: 'Número do Pedido', type: 'string', readOnly: true, group: 'details' },
     
-    // NOVO: O Localizador Exclusivo Palastore (Gerado no seu Firebase)
     { 
       name: 'locator', 
       title: 'Localizador Palastore (Código da Reserva)', 
@@ -72,9 +71,6 @@ export default {
           type: 'object',
           title: 'Item',
           fields: [
-            // ==============================================================
-            // CHAVE SELETORA DOS FORNECEDORES
-            // ==============================================================
             {
               name: 'fornecedor',
               title: 'Fornecedor (Origem do Serviço)',
@@ -97,8 +93,21 @@ export default {
               type: 'string',
               description: 'O ID gerado pela Duffel, Kiwi ou Viator (Essencial para emissão no painel deles).'
             },
-            // ==============================================================
-
+            // 👇 NOVOS CAMPOS PARA RECEBER OS LINKS DA KIWI 👇
+            {
+              name: 'deep_link',
+              title: 'Link de Emissão Direta (Kiwi Deep Link)',
+              type: 'url',
+              description: 'URL exclusiva para a agência concluir a compra diretamente na Kiwi.'
+            },
+            {
+              name: 'booking_token',
+              title: 'Token de Reserva (Kiwi Booking Token)',
+              type: 'string',
+              description: 'Token gerado pela Kiwi usado para automatização de compra via API.'
+            },
+            // 👆 FIM DOS NOVOS CAMPOS 👆
+            
             { name: 'product', title: 'Vínculo (Produto Físico)', type: 'reference', to: [{ type: 'product' }] },
             { name: 'productName', title: 'Serviço / Produto', type: 'string' },
             { name: 'serviceType', title: 'Categoria do Serviço', type: 'string' },
@@ -111,7 +120,7 @@ export default {
           preview: {
             select: { 
               title: 'productName', 
-              subtitle: 'fornecedor', // Mostra o fornecedor no card do Sanity
+              subtitle: 'fornecedor',
               imageUrl: 'imageUrl' 
             },
             prepare({ title, subtitle, imageUrl }) {
@@ -191,9 +200,6 @@ export default {
       ]
     },
 
-    // ==============================================================
-    // LINKS E FERRAMENTAS DE ADMINISTRAÇÃO (GDS / OTAs)
-    // ==============================================================
     { 
       name: 'providerAdminLink', 
       title: 'Link de Emissão do Fornecedor (Deep Link)', 

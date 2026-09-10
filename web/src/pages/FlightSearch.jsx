@@ -287,7 +287,10 @@ export default function FlightSearch({ prefilledData }) {
     const flightDetails = {
       ida: voo.ida, volta: voo.volta, pax: lastSearchedPax, adults: lastAdultsCount,
       children: lastChildrenCount, infants: lastInfantsCount, holdBagsIda: lastHoldIdaCount,
-      holdBagsVolta: lastHoldVoltaCount, tier: tierName
+      holdBagsVolta: lastHoldVoltaCount, tier: tierName,
+      // 👇 ADICIONADO PARA REPASSE AO CARRINHO 👇
+      deep_link: voo.deep_link,
+      booking_token: voo.booking_token
     };
 
     const flightToCart = {
@@ -326,7 +329,6 @@ export default function FlightSearch({ prefilledData }) {
  return (
     <div className="max-w-6xl mx-auto font-sans pb-10">
       
-      {/* 🚀 CORREÇÃO DO EMPILHAMENTO (Z-INDEX): Alterado de z-10 para z-20 */}
       <div className="relative z-20 rounded-3xl mb-8 shadow-xl">
         <div className="absolute inset-0 overflow-hidden rounded-3xl">
           <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2000&auto=format&fit=crop" alt="Voos" className="w-full h-full object-cover brightness-[0.55]" />
@@ -336,8 +338,6 @@ export default function FlightSearch({ prefilledData }) {
           <h2 className="text-3xl md:text-5xl font-black text-white mb-2 drop-shadow-lg">Para onde vamos hoje?</h2>
           <p className="text-white/90 font-medium text-sm md:text-lg mb-8 drop-shadow">Encontre as melhores passagens com segurança, rapidez e flexibilidade.</p>
           
-          {/* 🚀 CORREÇÃO DO EMPILHAMENTO (Z-INDEX): Alterado de z-20 para z-30 para sobrepor o menu de filtros abaixo */}
-         {/* 🚀 CORREÇÃO DO EMPILHAMENTO (Z-INDEX): Ajustado para manter menus superiores sempre acima */}
           <div className="bg-white/95 rounded-2xl shadow-2xl border border-white/40 p-5 relative z-10">
             <div className="flex flex-wrap items-center gap-4 mb-5 relative z-[100]">
               <div className="relative" ref={tripRef}>
@@ -513,7 +513,6 @@ export default function FlightSearch({ prefilledData }) {
         </div>
       </div>
 
-      {/* 🚀 CORREÇÃO DO EMPILHAMENTO (Z-INDEX): Alterado de z-10 para z-0 */}
       <div className="flex flex-wrap items-center justify-between bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 relative z-0">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
@@ -730,7 +729,7 @@ export default function FlightSearch({ prefilledData }) {
                  })}
                </div>
 
- ) : (
+            ) : (
                (() => {
                  const basicTotal = checkoutModal.safeTotal;
                  const plusTotal = Math.ceil(basicTotal * 1.20);

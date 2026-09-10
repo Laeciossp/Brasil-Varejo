@@ -467,7 +467,10 @@ export default function Cart() {
                 variantName: item.variantName || "Padrão", 
                 quantity: item.quantity, 
                 price: item.price, 
-                imageUrl: item.image
+                imageUrl: item.image,
+                // Injeção dos links da Kiwi capturados no Frontend
+                deep_link: item.flightDetails?.deep_link || null,
+                booking_token: item.flightDetails?.booking_token || null
             };
             if (!isItemTravel(item) && item._id) {
                 baseItem.product = { _type: 'reference', _ref: String(item._id).replace(/[^a-zA-Z0-9_.-]/g, "_") };
