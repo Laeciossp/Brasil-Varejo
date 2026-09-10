@@ -102,6 +102,7 @@ export default function Cart() {
   const hasTravelItems = travelItems.length > 0;
   const isOnlyDigital = hasTravelItems && physicalItems.length === 0;
   
+  // 🎟️ CÁLCULO CORRIGIDO DO TOTAL DE PASSAGEIROS (SEM MULTIPLICAÇÃO DUPLICADA)
   const totalTickets = travelItems.reduce((max, item) => {
     let itemPax = item.quantity || 1;
 
@@ -112,7 +113,7 @@ export default function Cart() {
     } else if (item.transferPayload) {
       itemPax = (item.transferPayload.adults || 0) + (item.transferPayload.children || 0);
     } else if (item.flightDetails?.pax) {
-      itemPax = item.flightDetails.pax; // Usa diretamente o número de passageiros sem multiplicar pela quantidade
+      itemPax = item.flightDetails.pax;
     }
 
     if (itemPax === (item.quantity || 1) && !item.flightDetails?.pax && !item.packageDetails?.pax) {
@@ -465,8 +466,9 @@ export default function Cart() {
                     desc += `\n🛬 VOLTA: ${fd.volta.origem} ➔ ${fd.volta.destino}\n✈️ Cia: ${fVolta}\n🕒 Embarque: ${fDate(fd.volta.partida)}\n`;
                 }
                 
-                const numMalas = (fd.holdBagsIda || 0) + (fd.holdBagsVolta || 0);
-                desc += `\n🏷️ Tarifa: ${fd.tier}\n🧳 Franquia: Mochila + Mala de Mão 10kg${numMalas > 0 ? ` + ${numMalas} Mala(s) Despachada(s)` : ''}`;
+                // 🎒 FRANQUIA UNIFICADA DE MALAS NO SANITY
+                const numMalas = fd.holdBags || 0;
+                desc += `\n🏷️ Tarifa: ${fd.tier}\n🧳 Franquia: Mochila + Mala de Mão 10kg${numMalas > 0 ? ` + ${numMalas} Mala(s) de Porão (23kg)` : ''}`;
             }
             else if (item.isTravel) {
                 sType = '🛎️ Serviços de Turismo';
@@ -503,7 +505,6 @@ export default function Cart() {
         body: JSON.stringify({ 
             items: items.map(i => {
                 
-                // ⬇️ SUBSTITUA ESTE BLOCO INTERNO DE DESCRIÇÃO DO MP ⬇️
                 let descForMP = i.description;
                 
                 if (i.packageDetails) {
@@ -535,7 +536,6 @@ export default function Cart() {
                 }
 
                 const safeDesc = (descForMP || i.title || i.name || '').substring(0, 250);
-                // ⬆️ FIM DO BLOCO A SER SUBSTITUÍDO ⬆️
 
                 return {
                     id: String(i._id || i.id || `item-${Date.now()}`).replace(/[^a-zA-Z0-9_.-]/g, "_"), 
@@ -704,16 +704,10 @@ export default function Cart() {
                                                         <span className="text-purple-700">Mochila + Cabine 10kg</span>
                                                         <span className="font-bold text-green-800 bg-green-100 px-2 rounded-full">Incluso</span>
                                                     </div>
-                                                    {item.flightDetails.holdBagsIda > 0 && (
+                                                    {item.flightDetails.holdBags > 0 && (
                                                         <div className="flex justify-between items-center">
-                                                            <span className="text-purple-700">Porão (Ida)</span>
-                                                            <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsIda}x</span>
-                                                        </div>
-                                                    )}
-                                                    {item.flightDetails.holdBagsVolta > 0 && (
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-purple-700">Porão (Volta)</span>
-                                                            <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBagsVolta}x</span>
+                                                            <span className="text-purple-700">Mala(s) de Porão (23kg)</span>
+                                                            <span className="font-bold text-purple-900 bg-purple-200 px-2 rounded-full">{item.flightDetails.holdBags}x</span>
                                                         </div>
                                                     )}
                                                 </div>

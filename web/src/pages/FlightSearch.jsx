@@ -90,8 +90,9 @@ export default function FlightSearch({ prefilledData }) {
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
   const [infants, setInfants] = useState(0);
-  const [holdBagsIda, setHoldBagsIda] = useState(0);
-  const [holdBagsVolta, setHoldBagsVolta] = useState(0);
+  
+  // 🎒 BAGAGEM UNIFICADA
+  const [holdBags, setHoldBags] = useState(0);
 
   const [sortConfig, setSortConfig] = useState('price'); 
   const [stopsConfig, setStopsConfig] = useState('all'); 
@@ -126,8 +127,9 @@ export default function FlightSearch({ prefilledData }) {
   const [lastAdultsCount, setLastAdultsCount] = useState(1);
   const [lastChildrenCount, setLastChildrenCount] = useState(0);
   const [lastInfantsCount, setLastInfantsCount] = useState(0);
-  const [lastHoldIdaCount, setLastHoldIdaCount] = useState(0);
-  const [lastHoldVoltaCount, setLastHoldVoltaCount] = useState(0);
+  
+  // 🎒 ESTADO SALVO DA BAGAGEM UNIFICADA PARA A BUSCA
+  const [lastHoldBagsCount, setLastHoldBagsCount] = useState(0);
 
   const tripRef = useRef(null);
   const paxRef = useRef(null);
@@ -236,8 +238,7 @@ export default function FlightSearch({ prefilledData }) {
     setLastAdultsCount(a);
     setLastChildrenCount(c);
     setLastInfantsCount(i);
-    setLastHoldIdaCount(parseInt(holdBagsIda, 10) || 0);
-    setLastHoldVoltaCount(parseInt(holdBagsVolta, 10) || 0);
+    setLastHoldBagsCount(parseInt(holdBags, 10) || 0);
 
     let effectiveDateFrom = getTodayStr();
     let searchDateToRange = getSixMonthsStr();
@@ -286,9 +287,9 @@ export default function FlightSearch({ prefilledData }) {
 
     const flightDetails = {
       ida: voo.ida, volta: voo.volta, pax: lastSearchedPax, adults: lastAdultsCount,
-      children: lastChildrenCount, infants: lastInfantsCount, holdBagsIda: lastHoldIdaCount,
-      holdBagsVolta: lastHoldVoltaCount, tier: tierName,
-      // 👇 ADICIONADO PARA REPASSE AO CARRINHO 👇
+      children: lastChildrenCount, infants: lastInfantsCount, 
+      holdBags: lastHoldBagsCount, // 🎒 Passando a mala unificada para o carrinho
+      tier: tierName,
       deep_link: voo.deep_link,
       booking_token: voo.booking_token
     };
@@ -363,7 +364,7 @@ export default function FlightSearch({ prefilledData }) {
                   <div className="flex items-center gap-1"><span className="text-purple-600">👤</span> {totalPaxPreview} Passageiro(s) <span className="text-[10px] ml-1 text-purple-600">▼</span></div>
                   <div className="flex items-center gap-2 border-l pl-3 border-gray-300">
                     <span className="flex items-center gap-1 text-pink-600">🎒 {totalPaxPreview}</span>
-                    {(holdBagsIda > 0 || holdBagsVolta > 0) && <span className="flex items-center gap-1 text-blue-600">🧳 {holdBagsIda + holdBagsVolta}</span>}
+                    {holdBags > 0 && <span className="flex items-center gap-1 text-blue-600">🧳 {holdBags}</span>}
                   </div>
                 </button>
                 {showPaxMenu && (
@@ -383,8 +384,17 @@ export default function FlightSearch({ prefilledData }) {
                         </div>
                         <span className="font-bold text-gray-800 text-[10px]">{totalPaxPreview} Fixa</span>
                       </div>
-                      <Counter label="Mala Porão - Ida" subLabel={`Máx ${maxHoldBagsAllowed}`} value={holdBagsIda} onChange={setHoldBagsIda} min={0} max={maxHoldBagsAllowed} icon="🛫" />
-                      <Counter label="Mala Porão - Volta" subLabel={`Máx ${maxHoldBagsAllowed}`} value={holdBagsVolta} onChange={setHoldBagsVolta} min={0} max={maxHoldBagsAllowed} icon="🛬" />
+                      
+                      {/* 🎒 CAMPO DE MALA UNIFICADO */}
+                      <Counter 
+                        label="Mala de Porão (23kg)" 
+                        subLabel={`Máx ${maxHoldBagsAllowed} malas`} 
+                        value={holdBags} 
+                        onChange={setHoldBags} 
+                        min={0} 
+                        max={maxHoldBagsAllowed} 
+                        icon="🧳" 
+                      />
                     </div>
                     <button onClick={(e) => executeSearch(e)} className="w-full py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 cursor-pointer transition">Aplicar Filtros</button>
                   </div>
@@ -545,12 +555,11 @@ export default function FlightSearch({ prefilledData }) {
         {renderedFlights.map((voo) => {
           const isExpanded = expandedFlight === voo.id;
           const baseFare = parseInt(voo.precoFinal || voo.price, 10) || 0;
-          const unitBagPriceIda = voo.bags_price?.['1'] ? Math.ceil(voo.bags_price['1']) : 120;
-          const unitBagPriceVolta = voo.bags_price?.['1'] ? Math.ceil(voo.bags_price['1']) : 120;
-          const bagIdaSubtotal = lastHoldIdaCount > 0 ? (lastHoldIdaCount * unitBagPriceIda) : 0;
-          const bagVoltaSubtotal = lastHoldVoltaCount > 0 ? (lastHoldVoltaCount * unitBagPriceVolta) : 0;
-          const totalBagsCost = bagIdaSubtotal + bagVoltaSubtotal;
+          const unitBagPrice = voo.bags_price?.['1'] ? Math.ceil(voo.bags_price['1']) : 120;
           
+          // 🧳 Ajuste cirúrgico: Se o voo tem volta, a mala incide na ida e na volta (multiplica por 2)
+          const bagMultiplier = voo.volta ? 2 : 1;
+          const totalBagsCost = lastHoldBagsCount > 0 ? (lastHoldBagsCount * unitBagPrice * bagMultiplier) : 0;
           const passengerTotal = baseFare;
           const adultSubtotal = lastAdultsCount > 0 ? Math.ceil(passengerTotal * (lastAdultsCount / (lastAdultsCount + lastChildrenCount || 1))) : 0;
           const childSubtotal = lastChildrenCount > 0 ? (passengerTotal - adultSubtotal) : 0;
@@ -622,7 +631,7 @@ export default function FlightSearch({ prefilledData }) {
                     <div><p className="text-xs font-bold text-gray-800">{lastSearchedPax}x Mala de cabine</p></div><span className="text-[10px] font-black uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded">Incluído</span>
                   </div>
                   <div className="flex justify-between items-center mb-2 pb-3 border-b border-gray-100">
-                    <div><p className="text-xs font-bold text-gray-800">{(lastHoldIdaCount + lastHoldVoltaCount)}x Extras (Opcional)</p></div><span className="text-xs font-extrabold text-gray-700">{(lastHoldIdaCount + lastHoldVoltaCount) > 0 ? 'Selecionada' : '0 Adicionada'}</span>
+                    <div><p className="text-xs font-bold text-gray-800">{lastHoldBagsCount}x Mala(s) de Porão</p></div><span className="text-xs font-extrabold text-gray-700">{lastHoldBagsCount > 0 ? 'Selecionada' : '0 Adicionada'}</span>
                   </div>
                 </div>
 
@@ -631,8 +640,7 @@ export default function FlightSearch({ prefilledData }) {
                   {lastAdultsCount > 0 && <div className="flex justify-between"><span>{lastAdultsCount}x Adulto(s)</span><span>R$ {adultSubtotal || 0}</span></div>}
                   {lastChildrenCount > 0 && <div className="flex justify-between"><span>{lastChildrenCount}x Criança(s)</span><span>R$ {childSubtotal || 0}</span></div>}
                   {lastInfantsCount > 0 && <div className="flex justify-between"><span>{lastInfantsCount}x Bebê(s)</span><span>Incluso</span></div>}
-                  {lastHoldIdaCount > 0 && <div className="flex justify-between text-purple-700 font-semibold"><span>{lastHoldIdaCount}x Extra Porão (Ida)</span><span>R$ {bagIdaSubtotal || 0}</span></div>}
-                  {lastHoldVoltaCount > 0 && <div className="flex justify-between text-purple-700 font-semibold"><span>{lastHoldVoltaCount}x Extra Porão (Volta)</span><span>R$ {bagVoltaSubtotal || 0}</span></div>}
+                  {lastHoldBagsCount > 0 && <div className="flex justify-between text-purple-700 font-semibold"><span>{lastHoldBagsCount}x Mala(s) de Porão (23kg)</span><span>R$ {totalBagsCost}</span></div>}
                 </div>
 
                 <div className="text-center w-full mt-auto">
@@ -683,7 +691,6 @@ export default function FlightSearch({ prefilledData }) {
                           R$ {Math.ceil((tarifa.preco + checkoutModal.totalBagsCost) / lastSearchedPax)}
                        </div>
                        
-                       {/* CONTEÚDO REAL DA DUFFEL COM O TEXTO EXPLÍCITO DA MOCHILA E CABINE */}
                        <ul className={`space-y-3 mb-8 text-xs flex-1 ${isMiddle ? 'text-purple-800' : 'text-gray-600'}`}>
                          
                          <li className="flex items-center gap-2">
@@ -744,7 +751,7 @@ export default function FlightSearch({ prefilledData }) {
                        
                        <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
                          <li className="flex items-center gap-2">✔️ Item pessoal (Bolsa) + Mala de mão (10kg)</li>
-                         <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionadas</li>
+                         <li className="flex items-center gap-2">✔️ Inclui {lastHoldBagsCount} mala(s) de porão adicionadas</li>
                          <li className="flex items-center gap-2">✔️ Assento Aleatório</li>
                          <li className="flex items-center gap-2 text-red-500">❌ Sem reembolso no cancelamento</li>
                        </ul>
@@ -758,7 +765,7 @@ export default function FlightSearch({ prefilledData }) {
                        <div className="text-3xl font-black text-purple-700 mb-6">R$ {plusTotal}</div>
                        <ul className="space-y-3 mb-8 text-sm text-purple-800 flex-1">
                          <li className="flex items-center gap-2">✔️ Item pessoal (Bolsa) + Mala de mão (10kg)</li>
-                         <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionadas</li>
+                         <li className="flex items-center gap-2">✔️ Inclui {lastHoldBagsCount} mala(s) de porão adicionadas</li>
                          <li className="flex items-center gap-2 font-bold">✔️ Preferência: Janela ou Corredor</li>
                          <li className="flex items-center gap-2 font-bold">✔️ Remarcação flexível</li>
                        </ul>
@@ -771,7 +778,7 @@ export default function FlightSearch({ prefilledData }) {
                        <div className="text-3xl font-black text-gray-900 mb-6">R$ {flexTotal}</div>
                        <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
                          <li className="flex items-center gap-2">✔️ Item pessoal (Bolsa) + Mala de mão (10kg)</li>
-                         <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionadas</li>
+                         <li className="flex items-center gap-2">✔️ Inclui {lastHoldBagsCount} mala(s) de porão adicionadas</li>
                          <li className="flex items-center gap-2 font-bold">✔️ Preferência: Janela ou Corredor</li>
                          <li className="flex items-center gap-2 font-bold text-green-600">✔️ Cancelamento 100% Reembolsável</li>
                        </ul>
