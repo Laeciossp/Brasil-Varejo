@@ -7,6 +7,14 @@ const SUPABASE_URL = "https://vcqiilytjrrurdbscmio.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_leFg1lWGZlctiU3CXYR2Gw_FpOG2qR3"; 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// HELPER: Formatação segura para URLs de imagens do CDN RateHawk
+const getSafeImageUrl = (imgObj, size = '800x600') => {
+  if (!imgObj) return null;
+  const url = typeof imgObj === 'string' ? imgObj : (imgObj.url || imgObj.image || '');
+  if (!url) return null;
+  return url.replace('{size}', size);
+};
+
 // HELPER: Formatação Estruturada do Nome do Quarto (Requisito ETG)
 const formatRoomName = (r) => {
   if (r.room_data_trans) {
@@ -101,11 +109,18 @@ export default function HotelDetails() {
           return parsed[0]?.group_name ? parsed : [{ group_name: "Comodidades Gerais", amenities: parsed }];
         };
 
+        let processedImages = [];
+        if (data && Array.isArray(data.images) && data.images.length > 0) {
+          processedImages = data.images.map(img => getSafeImageUrl(img, '800x600')).filter(Boolean);
+        } else if (hotel?.imagensReais?.length > 0) {
+          processedImages = hotel.imagensReais.map(img => getSafeImageUrl(img, '800x600')).filter(Boolean);
+        }
+
         if (data) {
           setStaticData({
             name: data.name || hotel.nome, address: data.address || hotel.endereco, star_rating: data.starRating || hotel.categoria,
             latitude: data.latitude || hotel.latitude, longitude: data.longitude || hotel.longitude,
-            images: data.images?.length > 0 ? data.images : (hotel.imagensReais || []),
+            images: processedImages,
             amenity_groups: parseAmenities(data.amenities || data.amenity_groups || hotel.comodidades),
             description: parseDescription(data.description || data.description_struct || hotel.descricao),
             check_in_time: data.check_in_time ? String(data.check_in_time).slice(0, 5) : null,
@@ -115,7 +130,7 @@ export default function HotelDetails() {
         } else {
           setStaticData({
             name: hotel.nome, address: hotel.endereco, star_rating: hotel.categoria,
-            latitude: hotel.latitude, longitude: hotel.longitude, images: hotel.imagensReais || [],
+            latitude: hotel.latitude, longitude: hotel.longitude, images: processedImages,
             amenity_groups: parseAmenities(hotel.comodidades), description: parseDescription(hotel.descricao),
             metapolicy_extra_info: hotel.metapolicy_extra_info || null
           });
@@ -153,8 +168,6 @@ export default function HotelDetails() {
           if (data.status === 'ok' && data.data?.hotels?.[0]?.rates) {
               setCurrentHid(data.data.hotels[0].hid);
               const newOffers = data.data.hotels[0].rates.map(r => {
-                
-                // Formatação e extração das taxas B2B exclusas e políticas de taxa (Deposit/NoShow)
                 const taxes = r.payment_options?.payment_types?.[0]?.tax_data?.taxes?.filter(t => !t.included_by_supplier) || [];
                 const exactCancellation = r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before;
 
@@ -360,7 +373,6 @@ export default function HotelDetails() {
     return matchRefeicao && matchCancelamento;
   });
 
-  // Função para renderizar o iframe do mapa de forma limpa na lateral
   const buildSingleHotelMapHtml = () => {
     const lat = staticData?.latitude || hotel.latitude || -23.5505;
     const lng = staticData?.longitude || hotel.longitude || -46.6333;
@@ -406,9 +418,24 @@ export default function HotelDetails() {
       </div>
 
       <div className="max-w-[1400px] mx-auto px-4 mt-6">
+        
+        {/* GALERIA DE FOTOS OFICIAIS NA PÁGINA DE DETALHES */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+          {staticData?.images?.length > 0 ? (
+            staticData.images.slice(0, 4).map((imgUrl, index) => (
+              <div key={index} className="h-52 rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-gray-100">
+                <img src={imgUrl} alt={`Foto do hotel ${index}`} className="w-full h-full object-cover hover:scale-105 transition duration-300" />
+              </div>
+            ))
+          ) : (
+            <div className="col-span-full py-8 text-center bg-white rounded-xl text-gray-500 text-xs font-bold uppercase border border-gray-200">
+              Nenhuma imagem disponível para este estabelecimento.
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* LADO ESQUERDO: DETALHES, MAPA E POLÍTICAS */}
           <div className="lg:col-span-3 space-y-6">
             
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
@@ -417,12 +444,10 @@ export default function HotelDetails() {
                <p className="text-xs text-gray-500 mt-2 flex gap-1"><span>📍</span> {staticData?.address || hotel.endereco}</p>
             </div>
 
-            {/* MAPA RESTAURADO NA PÁGINA DE DETALHES */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-64 relative">
               <iframe title="Localização do Hotel" width="100%" height="100%" style={{ border: 0 }} srcDoc={buildSingleHotelMapHtml()}></iframe>
             </div>
 
-            {/* POLÍTICAS E CONDIÇÕES DO HOTEL (METAPOLICY) */}
             {metaInfo && (
               <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-900 shadow-sm">
                 <h3 className="font-bold text-sm mb-2 flex items-center gap-1">ℹ️ Políticas do Hotel (Meta Policy)</h3>
@@ -432,7 +457,6 @@ export default function HotelDetails() {
 
           </div>
 
-          {/* LADO DIREITO: TARIFAS E QUARTOS */}
           <div className="lg:col-span-9 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
             
             {!buscandoTarifas && ofertasAtuais.length === 0 && (
@@ -462,7 +486,6 @@ export default function HotelDetails() {
                           Cobre {totalQuartos} Quarto(s) • {totalGuests} Hóspedes
                         </span>
 
-                        {/* RATE POLICIES: NO SHOW E DEPOSIT */}
                         <div className="mt-2 space-y-1">
                           {oferta.noShow && (
                              <p className="text-[9px] text-orange-700 bg-orange-50 p-1 rounded border border-orange-100 inline-block w-max">
@@ -476,7 +499,6 @@ export default function HotelDetails() {
                           )}
                         </div>
 
-                        {/* TAXAS NÃO INCLUSAS NO DETALHE DO QUARTO */}
                         {oferta.excludedTaxes?.length > 0 && (
                           <div className="mt-2 bg-red-50 p-2 rounded border border-red-100">
                             <p className="text-[10px] font-bold text-red-700 uppercase mb-1">Taxas a pagar no hotel:</p>
@@ -518,7 +540,6 @@ export default function HotelDetails() {
         </div>
       </div>
 
-      {/* MODAL: DETALHES E START PREBOOK */}
       {activeRoomDetail && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col overflow-hidden relative p-8">
@@ -537,7 +558,6 @@ export default function HotelDetails() {
         </div>, document.body
       )}
 
-      {/* MODAL DO CHECKOUT (FORM + FINISH) */}
       {bookingStep !== 'idle' && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999999] bg-black/80 backdrop-blur-sm overflow-y-auto flex items-start justify-center pt-10 pb-10 px-4" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col relative overflow-hidden my-auto border border-gray-200">
@@ -565,7 +585,6 @@ export default function HotelDetails() {
                     <p className="text-xl font-black text-green-700 mt-2">BRL {selectedOffer.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
                   </div>
 
-                  {/* ALERTA DE TAXAS NO CHECKOUT B2B */}
                   {selectedOffer.excludedTaxes?.length > 0 && (
                     <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg shadow-sm">
                       <p className="text-sm font-black text-red-700 mb-2 flex items-center gap-1.5">⚠️ Atenção: Impostos locais não incluídos</p>

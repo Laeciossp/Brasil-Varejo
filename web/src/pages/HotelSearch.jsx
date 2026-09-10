@@ -98,6 +98,14 @@ const COUNTRIES = [
   { code: 'zm', name: 'Zâmbia' }, { code: 'zw', name: 'Zimbábue' }, { code: 'xk', name: 'Kosovo' }
 ];
 
+// HELPER: Formatação segura para URLs de imagens do CDN RateHawk
+const getSafeImageUrl = (imgObj, size = '800x600') => {
+  if (!imgObj) return null;
+  const url = typeof imgObj === 'string' ? imgObj : (imgObj.url || imgObj.image || '');
+  if (!url) return null;
+  return url.replace('{size}', size);
+};
+
 // HELPER: Formatação Estruturada do Nome do Quarto (ETG Requirement)
 const formatRoomName = (r) => {
   if (r.room_data_trans) {
@@ -299,6 +307,16 @@ export default function HotelSearch() {
     return `${dia} de ${meses[mes - 1]} de ${ano}`;
   };
 
+  const toggleStar = (star) => {
+    if (stars.includes(star)) setStars(stars.filter(s => s !== star));
+    else setStars([...stars, star]);
+  };
+
+  const toggleMeal = (meal) => {
+    if (meals.includes(meal)) setMeals(meals.filter(m => m !== meal));
+    else setMeals([...meals, meal]);
+  };
+
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
     const targetDest = regionId || destinationQuery;
@@ -326,7 +344,6 @@ export default function HotelSearch() {
     let ratehawkResults = [];
     let restelResults = [];
 
-    // 1. BUSCA RATEHAWK
     try {
       const queryLower = destinationQuery.toLowerCase();
       const isTestSearch = queryLower.includes('los angeles') || queryLower.includes('conrad') || queryLower.includes('us-lax') || queryLower.includes('dubai');
@@ -374,8 +391,11 @@ export default function HotelSearch() {
             const finalLng = h.longitude || (cityLng + lngOffset);
             const dbInfo = dbHotels.find(dbH => dbH.id === String(h.id));
             
-            let imagensOficiais = dbInfo?.images?.length > 0 ? dbInfo.images : [];
-            
+            let imagensOficiais = [];
+            if (dbInfo?.images && Array.isArray(dbInfo.images)) {
+              imagensOficiais = dbInfo.images.map(img => getSafeImageUrl(img, '800x600')).filter(Boolean);
+            }
+
             let comodidadesOficiais = [];
             if (Array.isArray(dbInfo?.amenities)) {
               if (dbInfo.amenities.length > 0 && typeof dbInfo.amenities[0] === 'object' && dbInfo.amenities[0].amenities) {
@@ -428,7 +448,6 @@ export default function HotelSearch() {
       console.error("Aviso: Falha na busca RateHawk:", err);
     }
 
-    // 2. BUSCA RESTEL EM PARALELO
     try {
       const functions = getFunctions(app);
       const searchRestelHotels = httpsCallable(functions, 'searchRestelHotels');
@@ -495,7 +514,7 @@ export default function HotelSearch() {
     
     const pinsData = filteredResults.filter(h => h.latitude && h.longitude).map(h => {
       const img = h.imagensReais && h.imagensReais.length > 0 
-        ? (typeof h.imagensReais[0] === 'string' ? h.imagensReais[0].replace('{size}', '240x240') : h.imagensReais[0]) 
+        ? getSafeImageUrl(h.imagensReais[0], '240x240')
         : 'data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=='; 
 
       return {
@@ -830,7 +849,7 @@ export default function HotelSearch() {
             {hoteisExibidosNaLista.map((hotel, index) => {
               
               const cardBg = hotel.imagensReais && hotel.imagensReais.length > 0 
-                ? (typeof hotel.imagensReais[0] === 'string' ? hotel.imagensReais[0].replace('{size}', '800x600') : hotel.imagensReais[0]) 
+                ? getSafeImageUrl(hotel.imagensReais[0], '800x600')
                 : null;
 
               const isFavorite = favorites.some(fav => fav._id === String(hotel.hotelId) && fav.type === 'hotel');
@@ -1018,7 +1037,7 @@ export default function HotelSearch() {
                 activeGalleryHotel.imagensReais.map((imgUrl, i) => (
                   <img 
                     key={i} 
-                    src={typeof imgUrl === 'string' ? imgUrl.replace('{size}', '500x500') : imgUrl} 
+                    src={getSafeImageUrl(imgUrl, '500x500')} 
                     className="rounded-lg h-40 w-full object-cover shadow-sm border border-gray-100" 
                     alt={`Hotel API ${i}`} 
                   />
