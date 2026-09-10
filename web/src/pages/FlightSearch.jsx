@@ -554,12 +554,13 @@ export default function FlightSearch({ prefilledData }) {
       <div className="space-y-6 relative z-0">
         {renderedFlights.map((voo) => {
           const isExpanded = expandedFlight === voo.id;
-          const baseFare = parseInt(voo.precoFinal || voo.price, 10) || 0;
+        const baseFare = parseInt(voo.precoFinal || voo.price, 10) || 0;
           const unitBagPrice = voo.bags_price?.['1'] ? Math.ceil(voo.bags_price['1']) : 120;
           
-          // 🧳 Ajuste cirúrgico: Se o voo tem volta, a mala incide na ida e na volta (multiplica por 2)
-          const bagMultiplier = voo.volta ? 2 : 1;
-          const totalBagsCost = lastHoldBagsCount > 0 ? (lastHoldBagsCount * unitBagPrice * bagMultiplier) : 0;
+          const bagMultiplier = !voo.volta ? 2 : 1;
+          
+          // 🧳 O preço unitário multiplicado pelo número de malas escolhidas (holdBags)
+          const totalBagsCost = holdBags > 0 ? (holdBags * unitBagPrice * bagMultiplier) : 0;
           const passengerTotal = baseFare;
           const adultSubtotal = lastAdultsCount > 0 ? Math.ceil(passengerTotal * (lastAdultsCount / (lastAdultsCount + lastChildrenCount || 1))) : 0;
           const childSubtotal = lastChildrenCount > 0 ? (passengerTotal - adultSubtotal) : 0;
