@@ -99,13 +99,13 @@ const COUNTRIES = [
 ];
 
 // HELPER: Formatação segura para URLs de imagens do CDN RateHawk
-const getSafeImageUrl = (imgObj, size = '800x600') => {
+// HELPER: Formatação segura para URLs de imagens do CDN RateHawk usando 'x' (tamanho original)
+const getSafeImageUrl = (imgObj, size = 'x') => {
   if (!imgObj) return null;
   const url = typeof imgObj === 'string' ? imgObj : (imgObj.url || imgObj.image || '');
   if (!url) return null;
   return url.replace('{size}', size);
 };
-
 // HELPER: Formatação Estruturada do Nome do Quarto (ETG Requirement)
 const formatRoomName = (r) => {
   if (r.room_data_trans) {
