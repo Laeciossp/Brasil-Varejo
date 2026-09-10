@@ -730,51 +730,57 @@ export default function FlightSearch({ prefilledData }) {
                  })}
                </div>
 
-            ) : (
+ ) : (
+               (() => {
+                 const basicTotal = checkoutModal.safeTotal;
+                 const plusTotal = Math.ceil(basicTotal * 1.20);
+                 const flexTotal = Math.ceil(plusTotal * 1.25);
 
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                 <div className="border border-gray-200 rounded-xl p-6 flex flex-col hover:border-gray-400 transition-colors">
-                   <h3 className="font-black text-lg text-gray-800">Basic</h3>
-                   <p className="text-xs text-gray-500 mb-4 h-8">Sua configuração atual, ideal para quem quer economizar.</p>
-                   <div className="text-3xl font-black text-gray-900 mb-6">R$ {checkoutModal.safeTotal}</div>
-                   
-                   {/* CONTEÚDO SIMULADO DA KIWI COM O TEXTO EXPLÍCITO DA MOCHILA E CABINE */}
-                   <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
-                     <li className="flex items-center gap-2">✔️ Item pessoal (Bolsa) + Mala de mão (10kg)</li>
-                     <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionadas</li>
-                     <li className="flex items-center gap-2">✔️ Assento Aleatório</li>
-                     <li className="flex items-center gap-2 text-red-500">❌ Sem reembolso no cancelamento</li>
-                   </ul>
-                   <button onClick={() => handleAddToCart('Basic', checkoutModal.safeTotal)} className="w-full py-3 bg-gray-900 text-white font-bold rounded-lg hover:bg-black transition-colors">Selecionar Basic</button>
-                 </div>
-   
-                 <div className="border-2 border-purple-500 bg-purple-50 rounded-xl p-6 flex flex-col transform md:-translate-y-4 shadow-xl">
-                   <div className="bg-purple-500 text-white text-[10px] font-bold uppercase tracking-widest text-center py-1 px-3 rounded-full self-center mb-2 -mt-10 shadow">Mais Escolhida</div>
-                   <h3 className="font-black text-lg text-purple-900">Plus</h3>
-                   <p className="text-xs text-purple-700 mb-4 h-8">Mais flexibilidade e a comodidade de sentar onde gosta.</p>
-                   <div className="text-3xl font-black text-purple-700 mb-6">R$ {checkoutModal.safeTotal + (lastSearchedPax * 85)}</div>
-                   <ul className="space-y-3 mb-8 text-sm text-purple-800 flex-1">
-                     <li className="flex items-center gap-2">✔️ Item pessoal (Bolsa) + Mala de mão (10kg)</li>
-                     <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionadas</li>
-                     <li className="flex items-center gap-2 font-bold">✔️ Preferência: Janela ou Corredor</li>
-                     <li className="flex items-center gap-2 font-bold">✔️ Remarcação flexível</li>
-                   </ul>
-                   <button onClick={() => handleAddToCart('Plus', checkoutModal.safeTotal + (lastSearchedPax * 85))} className="w-full py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-lg">Selecionar Plus</button>
-                 </div>
-   
-                 <div className="border border-gray-200 rounded-xl p-6 flex flex-col hover:border-orange-500 transition-colors">
-                   <h3 className="font-black text-lg text-orange-600">Flex</h3>
-                   <p className="text-xs text-gray-500 mb-4 h-8">Garantia total para imprevistos. Cancele e receba 100% de volta.</p>
-                   <div className="text-3xl font-black text-gray-900 mb-6">R$ {Math.ceil(checkoutModal.safeTotal * 1.15)}</div>
-                   <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
-                     <li className="flex items-center gap-2">✔️ Item pessoal (Bolsa) + Mala de mão (10kg)</li>
-                     <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionadas</li>
-                     <li className="flex items-center gap-2 font-bold">✔️ Preferência: Janela ou Corredor</li>
-                     <li className="flex items-center gap-2 font-bold text-green-600">✔️ Cancelamento 100% Reembolsável</li>
-                   </ul>
-                   <button onClick={() => handleAddToCart('Flex', Math.ceil(checkoutModal.safeTotal * 1.15))} className="w-full py-3 bg-orange-100 text-orange-700 font-bold rounded-lg hover:bg-orange-200 transition-colors">Selecionar Flex</button>
-                 </div>
-               </div>
+                 return (
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                     <div className="border border-gray-200 rounded-xl p-6 flex flex-col hover:border-gray-400 transition-colors">
+                       <h3 className="font-black text-lg text-gray-800">Basic</h3>
+                       <p className="text-xs text-gray-500 mb-4 h-8">Sua configuração atual, ideal para quem quer economizar.</p>
+                       <div className="text-3xl font-black text-gray-900 mb-6">R$ {basicTotal}</div>
+                       
+                       <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
+                         <li className="flex items-center gap-2">✔️ Item pessoal (Bolsa) + Mala de mão (10kg)</li>
+                         <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionadas</li>
+                         <li className="flex items-center gap-2">✔️ Assento Aleatório</li>
+                         <li className="flex items-center gap-2 text-red-500">❌ Sem reembolso no cancelamento</li>
+                       </ul>
+                       <button onClick={() => handleAddToCart('Basic', basicTotal)} className="w-full py-3 bg-gray-900 text-white font-bold rounded-lg hover:bg-black transition-colors">Selecionar Basic</button>
+                     </div>
+       
+                     <div className="border-2 border-purple-500 bg-purple-50 rounded-xl p-6 flex flex-col transform md:-translate-y-4 shadow-xl">
+                       <div className="bg-purple-500 text-white text-[10px] font-bold uppercase tracking-widest text-center py-1 px-3 rounded-full self-center mb-2 -mt-10 shadow">Mais Escolhida</div>
+                       <h3 className="font-black text-lg text-purple-900">Plus</h3>
+                       <p className="text-xs text-purple-700 mb-4 h-8">Mais flexibilidade e a comodidade de sentar onde gosta.</p>
+                       <div className="text-3xl font-black text-purple-700 mb-6">R$ {plusTotal}</div>
+                       <ul className="space-y-3 mb-8 text-sm text-purple-800 flex-1">
+                         <li className="flex items-center gap-2">✔️ Item pessoal (Bolsa) + Mala de mão (10kg)</li>
+                         <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionadas</li>
+                         <li className="flex items-center gap-2 font-bold">✔️ Preferência: Janela ou Corredor</li>
+                         <li className="flex items-center gap-2 font-bold">✔️ Remarcação flexível</li>
+                       </ul>
+                       <button onClick={() => handleAddToCart('Plus', plusTotal)} className="w-full py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-lg">Selecionar Plus</button>
+                     </div>
+       
+                     <div className="border border-gray-200 rounded-xl p-6 flex flex-col hover:border-orange-500 transition-colors">
+                       <h3 className="font-black text-lg text-orange-600">Flex</h3>
+                       <p className="text-xs text-gray-500 mb-4 h-8">Garantia total para imprevistos. Cancele e receba 100% de volta.</p>
+                       <div className="text-3xl font-black text-gray-900 mb-6">R$ {flexTotal}</div>
+                       <ul className="space-y-3 mb-8 text-sm text-gray-600 flex-1">
+                         <li className="flex items-center gap-2">✔️ Item pessoal (Bolsa) + Mala de mão (10kg)</li>
+                         <li className="flex items-center gap-2">✔️ Inclui {lastHoldIdaCount + lastHoldVoltaCount} mala(s) adicionadas</li>
+                         <li className="flex items-center gap-2 font-bold">✔️ Preferência: Janela ou Corredor</li>
+                         <li className="flex items-center gap-2 font-bold text-green-600">✔️ Cancelamento 100% Reembolsável</li>
+                       </ul>
+                       <button onClick={() => handleAddToCart('Flex', flexTotal)} className="w-full py-3 bg-orange-100 text-orange-700 font-bold rounded-lg hover:bg-orange-200 transition-colors">Selecionar Flex</button>
+                     </div>
+                   </div>
+                 );
+               })()
             )}
             
             <div className="mt-8 text-center">
