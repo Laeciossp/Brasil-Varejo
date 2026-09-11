@@ -27,7 +27,7 @@ const parseImagesList = (imagesData) => {
   return [];
 };
 
-// HELPER: Lógica do seu Backup (Conrad) + Fallback Motel (Rosa Bell) + Filtro Anti-Fachada
+// HELPER: Lógica com Fallback de Resgate (Evita o "Sem Foto" após o Anti-Fachada)
 const findRoomImages = (oferta, roomGroups, hotelImages) => {
   let rGroups = roomGroups;
   if (typeof rGroups === 'string' && rGroups.trim().startsWith('[')) {
@@ -36,11 +36,11 @@ const findRoomImages = (oferta, roomGroups, hotelImages) => {
   
   let foundImages = [];
   const parsedHotelImages = parseImagesList(hotelImages);
+  const fachadaHotel = parsedHotelImages.length > 0 ? parsedHotelImages[0] : null;
 
-  // Processa as regras de quarto apenas se o hotel tiver room_groups no banco
   if (rGroups && Array.isArray(rGroups) && rGroups.length > 0) {
     
-    // 1. MATCH ESTRITO (rg_ext)
+    // 1. MATCH ESTRITO 
     if (oferta.rg_ext && typeof oferta.rg_ext === 'object') {
       const matchedByRgExt = rGroups.find(rg => {
         if (!rg.rg_ext || typeof rg.rg_ext !== 'object') return false;
@@ -48,62 +48,55 @@ const findRoomImages = (oferta, roomGroups, hotelImages) => {
         if (searchKeys.length === 0) return false;
         return searchKeys.every(key => String(rg.rg_ext[key]) === String(oferta.rg_ext[key]));
       });
-      if (matchedByRgExt && matchedByRgExt.images) {
-        foundImages = parseImagesList(matchedByRgExt.images);
-      }
+      if (matchedByRgExt && matchedByRgExt.images) foundImages = parseImagesList(matchedByRgExt.images);
     }
 
-    // 2. MATCH PARCIAL (Class + Quality)
+    // 2. MATCH PARCIAL
     if (foundImages.length === 0 && oferta.rg_ext) {
       const matchedPartial = rGroups.find(rg => {
         return rg.rg_ext && 
                String(rg.rg_ext.class) === String(oferta.rg_ext.class) && 
                String(rg.rg_ext.quality) === String(oferta.rg_ext.quality);
       });
-      if (matchedPartial && matchedPartial.images) {
-        foundImages = parseImagesList(matchedPartial.images);
-      }
+      if (matchedPartial && matchedPartial.images) foundImages = parseImagesList(matchedPartial.images);
     }
 
-    // 3. LÓGICA DO SEU BACKUP: Match por Nomenclatura (Conserta o Conrad)
+    // 3. MATCH POR NOME 
     if (foundImages.length === 0 && oferta.tipoQuarto) {
       const offerNameLower = oferta.tipoQuarto.toLowerCase();
       const matchedByName = rGroups.find(rg => {
         if (!rg.name) return false;
         const staticNameLower = rg.name.toLowerCase();
-        // Filtra palavras com mais de 4 letras para comparar
         const mainWords = staticNameLower.split(' ').filter(w => w.length > 4); 
         if (mainWords.length > 0) return mainWords.some(word => offerNameLower.includes(word));
         return offerNameLower.includes(staticNameLower);
       });
-      if (matchedByName && matchedByName.images) {
-        foundImages = parseImagesList(matchedByName.images);
-      }
+      if (matchedByName && matchedByName.images) foundImages = parseImagesList(matchedByName.images);
     }
 
-    // 4. QUARTO ÚNICO FALLBACK
+    // 4. QUARTO ÚNICO 
     if (foundImages.length === 0 && rGroups.length === 1) {
       if (rGroups[0].images) foundImages = parseImagesList(rGroups[0].images);
     }
   }
 
-  // 5. FALLBACK PARA MOTÉIS (Conserta o Rosa Bell)
-  if (foundImages.length === 0 && parsedHotelImages.length > 0) {
-    foundImages = [...parsedHotelImages];
+  // 5. FILTRO ANTI-FACHADA IMEDIATO
+  // Exclui a fachada da RateHawk que foi mapeada indevidamente para dentro do quarto
+  if (foundImages.length > 0 && fachadaHotel) {
+    foundImages = foundImages.filter(img => img !== fachadaHotel);
   }
 
-  // 6. FILTRO ANTI-FACHADA
-  if (foundImages.length > 0 && parsedHotelImages.length > 0) {
-    const fachadaHotel = parsedHotelImages[0];
-    if (foundImages[0] === fachadaHotel) {
-      foundImages.shift(); // Remove a primeira foto se for igual a do hotel
-    }
+  // 6. FALLBACK DE RESGATE 
+  // Se o quarto não achou foto, ou se o Anti-Fachada apagou a única foto que ele tinha,
+  // nós injetamos o interior do hotel (camas) para evitar o bloco "SEM FOTO".
+  if (foundImages.length === 0 && parsedHotelImages.length > 0) {
+    foundImages = parsedHotelImages.filter(img => img !== fachadaHotel);
   }
 
   return foundImages; 
 };
 
-// FORMATO DECLARADO NO QUESTIONÁRIO DA ETG
+// FORMATO DE CANCELAMENTO DECLARADO NO QUESTIONÁRIO DA ETG
 const formatCancellation = (deadlineUtc) => {
   if (!deadlineUtc) return null;
   const datePart = deadlineUtc.split('T')[0];
@@ -246,7 +239,7 @@ export default function HotelDetails() {
                 const exactCancellation = r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before;
 
                 return {
-                  tipoQuarto: r.room_name, // EXIGÊNCIA DA ETG: Uso direto do room_name
+                  tipoQuarto: r.room_name,
                   codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO',
                   nomeRegime: r.meal_data?.value || 'Sem refeições', 
                   precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0) * 5.1,
@@ -326,7 +319,6 @@ export default function HotelDetails() {
         guests: room.guests.map(g => ({ ...g, first_name: sanitizeName(g.first_name), last_name: sanitizeName(g.last_name) }))
       }));
 
-      // PAYLOAD DA RESERVA: E-mail Corporativo Exigido para B2B Privacy
       const orderPayload = {
         partner_order_id: partnerOrderId, hash: selectedOffer.bookHash, language: "en",
         user: { email: "contato@palastore.com.br", phone: guestPhone || "+5571999999999", comment: "Reserva B2B" },
@@ -351,7 +343,6 @@ export default function HotelDetails() {
       });
       const finishData = await finishRes.json();
       
-      // REGRA DE ERROS (Seção 5.3): Erros 5xx, timeout e unknown vão para Polling, não throw error.
       if (finishData.status !== 'ok' && !['timeout', 'unknown'].includes(finishData.error)) {
          throw new Error(`Erro Finish: ${finishData.debug?.validation_error || finishData.error}`);
       }
@@ -363,7 +354,6 @@ export default function HotelDetails() {
     }
   };
 
-  // POLLING LIMITS: Máx de 60 requisições (180s)
   const pollBookingStatus = async (partnerOrderId) => {
     let attempts = 0;
     const interval = setInterval(async () => {
@@ -585,30 +575,35 @@ export default function HotelDetails() {
 
       {/* LIGHTBOX DA GALERIA GERAL DO HOTEL EM TELA CHEIA */}
       {lightboxIndex !== null && staticData?.images && (
-        <div className="fixed inset-0 z-[9999999] bg-black/95 flex items-center justify-center">
-          <button onClick={() => setLightboxIndex(null)} className="absolute top-6 right-6 text-white hover:text-gray-300 text-3xl font-black z-50">✕</button>
+        <div className="fixed inset-0 z-[99999999] bg-black/95 flex items-center justify-center w-screen h-screen overflow-hidden select-none">
+          <button 
+            onClick={() => setLightboxIndex(null)} 
+            className="absolute top-4 right-4 md:top-8 md:right-8 text-white hover:text-gray-300 text-3xl font-black z-[100] w-12 h-12 bg-black/50 rounded-full flex items-center justify-center cursor-pointer border border-white/20 transition shadow-lg"
+          >
+            ✕
+          </button>
           
           <button 
             onClick={() => setLightboxIndex(prev => prev > 0 ? prev - 1 : staticData.images.length - 1)} 
-            className="absolute left-4 md:left-10 text-white text-5xl hover:text-yellow-400 z-50 transition"
+            className="absolute left-2 md:left-8 text-white text-4xl hover:text-yellow-400 z-[100] w-14 h-14 bg-black/50 rounded-full flex items-center justify-center cursor-pointer border border-white/20 transition shadow-lg"
           >
             ‹
           </button>
           
           <img 
             src={staticData.images[lightboxIndex]} 
-            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl" 
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl relative z-50" 
             alt="Hotel Ampliada" 
           />
           
           <button 
             onClick={() => setLightboxIndex(prev => prev < staticData.images.length - 1 ? prev + 1 : 0)} 
-            className="absolute right-4 md:right-10 text-white text-5xl hover:text-yellow-400 z-50 transition"
+            className="absolute right-2 md:right-8 text-white text-4xl hover:text-yellow-400 z-[100] w-14 h-14 bg-black/50 rounded-full flex items-center justify-center cursor-pointer border border-white/20 transition shadow-lg"
           >
             ›
           </button>
 
-          <div className="absolute bottom-6 text-white text-sm font-bold bg-black/50 px-4 py-2 rounded-lg">
+          <div className="absolute bottom-6 text-white text-sm font-bold bg-black/60 px-5 py-2 rounded-xl border border-white/10 z-[100]">
             {lightboxIndex + 1} de {staticData.images.length}
           </div>
         </div>
@@ -618,7 +613,7 @@ export default function HotelDetails() {
       {activeRoomDetail && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col overflow-hidden relative p-6 max-h-[90vh]">
-            <button onClick={() => setActiveRoomDetail(null)} className="absolute top-4 right-4 text-gray-400 hover:text-black font-black text-2xl z-10">✕</button>
+            <button onClick={() => setActiveRoomDetail(null)} className="absolute top-4 right-4 text-gray-400 hover:text-black font-black text-2xl z-10 cursor-pointer">✕</button>
             <h2 className="text-xl font-black text-gray-900 leading-tight mb-4 pr-6">{activeRoomDetail.oferta.tipoQuarto}</h2>
             
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4 overflow-y-auto max-h-[50vh] pr-2 scrollbar-thin">
@@ -644,7 +639,7 @@ export default function HotelDetails() {
               <p className="text-3xl font-black text-gray-900">BRL {activeRoomDetail.oferta.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
             </div>
 
-            <button onClick={() => handleStartBooking(activeRoomDetail.oferta)} className="w-full bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-bold py-4 rounded-xl shadow-md transition text-sm uppercase tracking-wider shrink-0">
+            <button onClick={() => handleStartBooking(activeRoomDetail.oferta)} className="w-full bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-bold py-4 rounded-xl shadow-md transition text-sm uppercase tracking-wider shrink-0 cursor-pointer">
               Confirmar e Prosseguir
             </button>
           </div>
@@ -653,30 +648,35 @@ export default function HotelDetails() {
 
       {/* LIGHTBOX EXCLUSIVO PARA O QUARTO EM TELA CHEIA */}
       {roomLightboxIndex !== null && activeRoomDetail?.roomImgs && createPortal(
-        <div className="fixed inset-0 z-[99999999] bg-black/95 flex items-center justify-center">
-          <button onClick={() => setRoomLightboxIndex(null)} className="absolute top-6 right-6 text-white hover:text-gray-300 text-3xl font-black z-50">✕</button>
+        <div className="fixed inset-0 z-[99999999] bg-black/95 flex items-center justify-center w-screen h-screen overflow-hidden select-none">
+          <button 
+            onClick={() => setRoomLightboxIndex(null)} 
+            className="absolute top-4 right-4 md:top-8 md:right-8 text-white hover:text-gray-300 text-3xl font-black z-[100] w-12 h-12 bg-black/50 rounded-full flex items-center justify-center cursor-pointer border border-white/20 transition shadow-lg"
+          >
+            ✕
+          </button>
           
           <button 
             onClick={() => setRoomLightboxIndex(prev => prev > 0 ? prev - 1 : activeRoomDetail.roomImgs.length - 1)} 
-            className="absolute left-4 md:left-10 text-white text-5xl hover:text-yellow-400 z-50 transition"
+            className="absolute left-2 md:left-8 text-white text-4xl hover:text-yellow-400 z-[100] w-14 h-14 bg-black/50 rounded-full flex items-center justify-center cursor-pointer border border-white/20 transition shadow-lg"
           >
             ‹
           </button>
           
           <img 
             src={activeRoomDetail.roomImgs[roomLightboxIndex]} 
-            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl" 
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl relative z-50" 
             alt="Quarto Ampliado" 
           />
           
           <button 
             onClick={() => setRoomLightboxIndex(prev => prev < activeRoomDetail.roomImgs.length - 1 ? prev + 1 : 0)} 
-            className="absolute right-4 md:right-10 text-white text-5xl hover:text-yellow-400 z-50 transition"
+            className="absolute right-2 md:right-8 text-white text-4xl hover:text-yellow-400 z-[100] w-14 h-14 bg-black/50 rounded-full flex items-center justify-center cursor-pointer border border-white/20 transition shadow-lg"
           >
             ›
           </button>
 
-          <div className="absolute bottom-6 text-white text-sm font-bold bg-black/50 px-4 py-2 rounded-lg">
+          <div className="absolute bottom-6 text-white text-sm font-bold bg-black/60 px-5 py-2 rounded-xl border border-white/10 z-[100]">
             {roomLightboxIndex + 1} de {activeRoomDetail.roomImgs.length}
           </div>
         </div>, document.body
@@ -743,7 +743,7 @@ export default function HotelDetails() {
                   <div className="mb-6">
                     <p className="text-xs font-black text-gray-900 mb-3 uppercase tracking-wide border-b border-gray-100 pb-2">Contato</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                      {/* O email do hospede aqui é só para o SEU banco de dados local. A payload da API usa o email corporativo B2B por debaixo dos panos. */}
+                      {/* O email corporativo já é mandado na payload oculta para a ETG */}
                       <input type="email" placeholder="E-mail" required value={guestEmail} onChange={e => setGuestEmail(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none" />
                       <input type="text" placeholder="Telefone com DDD" required value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none" />
                     </div>
