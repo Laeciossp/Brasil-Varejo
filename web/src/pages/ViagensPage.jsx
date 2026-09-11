@@ -391,6 +391,7 @@ export default function ViagensPage() {
     { id: 'onibus', label: 'Ônibus Nacionais', icon: Bus },
     { id: 'seguros', label: 'Seguros', icon: ShieldCheck },
     { id: 'translado', label: 'Translado', icon: MapPin },
+    { id: 'transferz', label: 'Transferz', icon: Car },
     { id: 'passeios', label: 'Passeios (Trip)', icon: Compass },
     { id: 'viator', label: 'Passeios (Viator)', icon: Palmtree }, 
     { id: 'trens', label: 'Trens Internacionais', icon: Train },
@@ -471,6 +472,7 @@ export default function ViagensPage() {
           {activeTab === 'rentcars' && <RentcarsWidget />}
           {activeTab === 'carros' && <PartnerIframe title="Aluguel de Carros" url="https://br.trip.com/carhire/?channelid=14409&locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Alugue veículos com as melhores locadoras globais. Processado via Trip.com." themeColor="indigo" />}
           {activeTab === 'translado' && <PalastoreTransfers />}
+          {activeTab === 'transferz' && <PartnerIframe title="Transfers Globais (Transferz)" url="https://palastore.transferz.com/?language=pt-BR" noticeText="Reserve transfers seguros de/para aeroportos no mundo todo. Parceiro oficial Transferz." themeColor="blue" />}
           {activeTab === 'passeios' && <PartnerIframe title="Passeios e Ingressos (Trip.com)" url="https://br.trip.com/things-to-do/?locale=pt-BR&curr=BRL&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Compre ingressos para atrações turísticas pelo mundo com nosso parceiro Trip.com." themeColor="indigo" />}
           {activeTab === 'viator' && (
             <PartnerWidgetViator 
