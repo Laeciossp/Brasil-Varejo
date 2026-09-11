@@ -27,7 +27,7 @@ const parseImagesList = (imagesData) => {
   return [];
 };
 
-// HELPER: Lógica com Fallback de Resgate (Evita o "Sem Foto" após o Anti-Fachada)
+// HELPER: Lógica de Quartos + Fallback Motel + Filtro Anti-Fachada
 const findRoomImages = (oferta, roomGroups, hotelImages) => {
   let rGroups = roomGroups;
   if (typeof rGroups === 'string' && rGroups.trim().startsWith('[')) {
@@ -35,12 +35,10 @@ const findRoomImages = (oferta, roomGroups, hotelImages) => {
   }
   
   let foundImages = [];
-  const parsedHotelImages = parseImagesList(hotelImages);
-  const fachadaHotel = parsedHotelImages.length > 0 ? parsedHotelImages[0] : null;
 
   if (rGroups && Array.isArray(rGroups) && rGroups.length > 0) {
     
-    // 1. MATCH ESTRITO 
+    // 1. MATCH ESTRITO
     if (oferta.rg_ext && typeof oferta.rg_ext === 'object') {
       const matchedByRgExt = rGroups.find(rg => {
         if (!rg.rg_ext || typeof rg.rg_ext !== 'object') return false;
@@ -48,20 +46,24 @@ const findRoomImages = (oferta, roomGroups, hotelImages) => {
         if (searchKeys.length === 0) return false;
         return searchKeys.every(key => String(rg.rg_ext[key]) === String(oferta.rg_ext[key]));
       });
-      if (matchedByRgExt && matchedByRgExt.images) foundImages = parseImagesList(matchedByRgExt.images);
+      if (matchedByRgExt && matchedByRgExt.images) {
+        foundImages = parseImagesList(matchedByRgExt.images);
+      }
     }
 
-    // 2. MATCH PARCIAL
+    // 2. MATCH PARCIAL (Class + Quality)
     if (foundImages.length === 0 && oferta.rg_ext) {
       const matchedPartial = rGroups.find(rg => {
         return rg.rg_ext && 
                String(rg.rg_ext.class) === String(oferta.rg_ext.class) && 
                String(rg.rg_ext.quality) === String(oferta.rg_ext.quality);
       });
-      if (matchedPartial && matchedPartial.images) foundImages = parseImagesList(matchedPartial.images);
+      if (matchedPartial && matchedPartial.images) {
+        foundImages = parseImagesList(matchedPartial.images);
+      }
     }
 
-    // 3. MATCH POR NOME 
+    // 3. MATCH POR NOME (Conserta o Conrad)
     if (foundImages.length === 0 && oferta.tipoQuarto) {
       const offerNameLower = oferta.tipoQuarto.toLowerCase();
       const matchedByName = rGroups.find(rg => {
@@ -71,24 +73,24 @@ const findRoomImages = (oferta, roomGroups, hotelImages) => {
         if (mainWords.length > 0) return mainWords.some(word => offerNameLower.includes(word));
         return offerNameLower.includes(staticNameLower);
       });
-      if (matchedByName && matchedByName.images) foundImages = parseImagesList(matchedByName.images);
+      if (matchedByName && matchedByName.images) {
+        foundImages = parseImagesList(matchedByName.images);
+      }
     }
 
-    // 4. QUARTO ÚNICO 
+    // 4. QUARTO ÚNICO
     if (foundImages.length === 0 && rGroups.length === 1) {
       if (rGroups[0].images) foundImages = parseImagesList(rGroups[0].images);
     }
   }
 
-  // 5. FILTRO ANTI-FACHADA IMEDIATO
-  // Exclui a fachada da RateHawk que foi mapeada indevidamente para dentro do quarto
+  const parsedHotelImages = parseImagesList(hotelImages);
+  const fachadaHotel = parsedHotelImages.length > 0 ? parsedHotelImages[0] : null;
+
   if (foundImages.length > 0 && fachadaHotel) {
     foundImages = foundImages.filter(img => img !== fachadaHotel);
   }
 
-  // 6. FALLBACK DE RESGATE 
-  // Se o quarto não achou foto, ou se o Anti-Fachada apagou a única foto que ele tinha,
-  // nós injetamos o interior do hotel (camas) para evitar o bloco "SEM FOTO".
   if (foundImages.length === 0 && parsedHotelImages.length > 0) {
     foundImages = parsedHotelImages.filter(img => img !== fachadaHotel);
   }
@@ -96,7 +98,7 @@ const findRoomImages = (oferta, roomGroups, hotelImages) => {
   return foundImages; 
 };
 
-// FORMATO DE CANCELAMENTO DECLARADO NO QUESTIONÁRIO DA ETG
+// FORMATO DE CANCELAMENTO OBRIGATÓRIO ETG
 const formatCancellation = (deadlineUtc) => {
   if (!deadlineUtc) return null;
   const datePart = deadlineUtc.split('T')[0];
@@ -239,7 +241,7 @@ export default function HotelDetails() {
                 const exactCancellation = r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before;
 
                 return {
-                  tipoQuarto: r.room_name,
+                  tipoQuarto: r.room_name, // OBRIGATÓRIO: Uso do room_name original, sem formatações
                   codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO',
                   nomeRegime: r.meal_data?.value || 'Sem refeições', 
                   precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0) * 5.1,
@@ -248,8 +250,8 @@ export default function HotelDetails() {
                   freeCancellation: exactCancellation != null,
                   cancellationDeadline: formatCancellation(exactCancellation),
                   excludedTaxes: taxes,
-                  noShow: r.no_show,
-                  deposit: r.deposit,
+                  deposit: r.deposit || null,
+                  noShow: r.no_show || null,
                   rg_ext: r.rg_ext
                 };
               });
@@ -282,7 +284,6 @@ export default function HotelDetails() {
     setBookingError(null);
 
     try {
-      // PREBOOK: price_increase_percent = 5 fixo como exigido pela certificação ETG
       const prebookPayload = { book_hash: oferta.bookHash, price_increase_percent: 5 };
 
       const res = await fetch('https://palastore-flights-api.laeciossp.workers.dev/hotel-prebook', {
@@ -319,9 +320,10 @@ export default function HotelDetails() {
         guests: room.guests.map(g => ({ ...g, first_name: sanitizeName(g.first_name), last_name: sanitizeName(g.last_name) }))
       }));
 
+      // PAYLOAD B2B: E-mail Corporativo OBRIGATÓRIO (Declarado na Certificação)
       const orderPayload = {
         partner_order_id: partnerOrderId, hash: selectedOffer.bookHash, language: "en",
-        user: { email: "contato@palastore.com.br", phone: guestPhone || "+5571999999999", comment: "Reserva B2B" },
+        user: { email: "reservations@palastore.com.br", phone: guestPhone || "+5571999999999", comment: "Reserva B2B" },
         rooms: sanitizedGuestForms 
       };
 
@@ -427,7 +429,7 @@ export default function HotelDetails() {
 
       <div className="max-w-[1400px] mx-auto px-4 mt-6">
         
-        {/* CARROSSEL HORIZONTAL DE FOTOS DO HOTEL (GALERIA GERAL) */}
+        {/* CARROSSEL HORIZONTAL DE FOTOS DO HOTEL */}
         <div className="mb-6 relative">
           {staticData?.images?.length > 0 ? (
             <div className="flex overflow-x-auto gap-3 pb-3 snap-x scrollbar-thin">
@@ -484,7 +486,7 @@ export default function HotelDetails() {
               </div>
             )}
 
-            {/* SEÇÃO OBRIGATÓRIA: HOTEL POLICIES & IMPORTANT INFO */}
+            {/* HOTEL POLICIES OBRIGATÓRIAS */}
             {staticData?.metapolicy_extra_info && (
               <div className="bg-orange-50 rounded-xl border border-orange-200 shadow-sm p-5">
                 <h3 className="font-black text-sm mb-3 text-orange-800 flex items-center gap-1.5">⚠️ Hotel Policies & Important Information</h3>
@@ -509,7 +511,7 @@ export default function HotelDetails() {
                 <div className="hidden md:grid grid-cols-12 gap-2 bg-[#2d3748] text-white text-[10px] font-bold p-3 rounded-t-xl uppercase">
                   <div className="col-span-4 pl-2">Acomodação</div>
                   <div className="col-span-2">Refeições</div>
-                  <div className="col-span-3">Cancelamento</div>
+                  <div className="col-span-3">Cancelamento & Políticas</div>
                   <div className="col-span-2 text-right pr-4">Preço LÍQUIDO</div>
                   <div className="col-span-1 text-center">Ação</div>
                 </div>
@@ -520,8 +522,8 @@ export default function HotelDetails() {
 
                   return (
                     <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-4 p-5 border-b border-gray-100 items-start hover:bg-gray-50 transition">
+                      
                       <div className="col-span-1 md:col-span-4 flex gap-4">
-                        
                         <div 
                            className="w-24 h-24 shrink-0 rounded-lg overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:opacity-80 transition bg-gray-100 flex items-center justify-center relative group"
                            onClick={() => setActiveRoomDetail({ oferta, roomImgs })}
@@ -553,10 +555,31 @@ export default function HotelDetails() {
                       
                       <div className="col-span-1 md:col-span-3 text-xs font-bold pt-1 pr-2">
                         {oferta.freeCancellation ? <span className="text-[#15803d]">↩️ {oferta.cancellationDeadline}</span> : <span className="text-red-600">❌ Não reembolsável</span>}
+                        
+                        {/* POLÍTICAS DA TARIFA (Exigência ETG) */}
+                        {oferta.deposit && (
+                           <div className="text-[9px] text-orange-600 mt-1 font-normal leading-tight">
+                             <b>Deposit:</b> Payment may be required before check-in.
+                           </div>
+                        )}
+                        {oferta.noShow && (
+                           <div className="text-[9px] text-red-600 mt-1 font-normal leading-tight">
+                             <b>No-Show:</b> Fee applies if you don't arrive.
+                           </div>
+                        )}
                       </div>
 
                       <div className="col-span-1 md:col-span-2 pt-1 text-right pr-4">
                         <span className="text-base font-black text-gray-900 block tracking-tight">BRL {oferta.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                        
+                        {/* TAXAS OBRIGATÓRIAS (Exigência ETG) */}
+                        {oferta.excludedTaxes?.length > 0 && (
+                          <div className="mt-1 flex flex-col items-end">
+                            {oferta.excludedTaxes.map((t, idx2) => (
+                              <span key={idx2} className="text-[9px] font-black text-red-700 tracking-wider">Payable at the property: {t.name} {t.amount} {t.currency_code}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div className="col-span-1 md:col-span-1 flex justify-center pt-1">
@@ -574,39 +597,34 @@ export default function HotelDetails() {
       </div>
 
       {/* LIGHTBOX DA GALERIA GERAL DO HOTEL EM TELA CHEIA */}
-      {lightboxIndex !== null && staticData?.images && (
-        <div className="fixed inset-0 z-[99999999] bg-black/95 flex items-center justify-center w-screen h-screen overflow-hidden select-none">
+      {lightboxIndex !== null && staticData?.images && createPortal(
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 2147483647, display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none' }} onClick={() => setLightboxIndex(null)}>
           <button 
-            onClick={() => setLightboxIndex(null)} 
-            className="absolute top-4 right-4 md:top-8 md:right-8 text-white hover:text-gray-300 text-3xl font-black z-[100] w-12 h-12 bg-black/50 rounded-full flex items-center justify-center cursor-pointer border border-white/20 transition shadow-lg"
-          >
-            ✕
-          </button>
+            onClick={(e) => { e.stopPropagation(); setLightboxIndex(null); }} 
+            style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 2147483647, width: '50px', height: '50px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >✕</button>
           
           <button 
-            onClick={() => setLightboxIndex(prev => prev > 0 ? prev - 1 : staticData.images.length - 1)} 
-            className="absolute left-2 md:left-8 text-white text-4xl hover:text-yellow-400 z-[100] w-14 h-14 bg-black/50 rounded-full flex items-center justify-center cursor-pointer border border-white/20 transition shadow-lg"
-          >
-            ‹
-          </button>
+            onClick={(e) => { e.stopPropagation(); setLightboxIndex(prev => prev > 0 ? prev - 1 : staticData.images.length - 1); }} 
+            style={{ position: 'absolute', left: '20px', zIndex: 2147483647, width: '60px', height: '60px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '35px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >‹</button>
           
           <img 
             src={staticData.images[lightboxIndex]} 
-            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl relative z-50" 
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', zIndex: 2147483646 }} 
             alt="Hotel Ampliada" 
           />
           
           <button 
-            onClick={() => setLightboxIndex(prev => prev < staticData.images.length - 1 ? prev + 1 : 0)} 
-            className="absolute right-2 md:right-8 text-white text-4xl hover:text-yellow-400 z-[100] w-14 h-14 bg-black/50 rounded-full flex items-center justify-center cursor-pointer border border-white/20 transition shadow-lg"
-          >
-            ›
-          </button>
+            onClick={(e) => { e.stopPropagation(); setLightboxIndex(prev => prev < staticData.images.length - 1 ? prev + 1 : 0); }} 
+            style={{ position: 'absolute', right: '20px', zIndex: 2147483647, width: '60px', height: '60px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '35px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >›</button>
 
-          <div className="absolute bottom-6 text-white text-sm font-bold bg-black/60 px-5 py-2 rounded-xl border border-white/10 z-[100]">
+          <div style={{ position: 'absolute', bottom: '20px', backgroundColor: 'rgba(0,0,0,0.7)', color: '#fff', padding: '8px 20px', borderRadius: '20px', fontSize: '14px', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)', zIndex: 2147483647 }}>
             {lightboxIndex + 1} de {staticData.images.length}
           </div>
-        </div>
+        </div>, document.body
       )}
 
       {/* MODAL DE FOTOS DO QUARTO COM GRID */}
@@ -648,35 +666,34 @@ export default function HotelDetails() {
 
       {/* LIGHTBOX EXCLUSIVO PARA O QUARTO EM TELA CHEIA */}
       {roomLightboxIndex !== null && activeRoomDetail?.roomImgs && createPortal(
-        <div className="fixed inset-0 z-[99999999] bg-black/95 flex items-center justify-center w-screen h-screen overflow-hidden select-none">
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 2147483647, display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none' }} onClick={() => setRoomLightboxIndex(null)}>
           <button 
-            onClick={() => setRoomLightboxIndex(null)} 
-            className="absolute top-4 right-4 md:top-8 md:right-8 text-white hover:text-gray-300 text-3xl font-black z-[100] w-12 h-12 bg-black/50 rounded-full flex items-center justify-center cursor-pointer border border-white/20 transition shadow-lg"
-          >
-            ✕
-          </button>
+            onClick={(e) => { e.stopPropagation(); setRoomLightboxIndex(null); }} 
+            style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 2147483647, width: '50px', height: '50px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >✕</button>
           
-          <button 
-            onClick={() => setRoomLightboxIndex(prev => prev > 0 ? prev - 1 : activeRoomDetail.roomImgs.length - 1)} 
-            className="absolute left-2 md:left-8 text-white text-4xl hover:text-yellow-400 z-[100] w-14 h-14 bg-black/50 rounded-full flex items-center justify-center cursor-pointer border border-white/20 transition shadow-lg"
-          >
-            ‹
-          </button>
+          {activeRoomDetail.roomImgs.length > 1 && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); setRoomLightboxIndex(prev => prev > 0 ? prev - 1 : activeRoomDetail.roomImgs.length - 1); }} 
+              style={{ position: 'absolute', left: '20px', zIndex: 2147483647, width: '60px', height: '60px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '35px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >‹</button>
+          )}
           
           <img 
             src={activeRoomDetail.roomImgs[roomLightboxIndex]} 
-            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl relative z-50" 
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', zIndex: 2147483646 }} 
             alt="Quarto Ampliado" 
           />
           
-          <button 
-            onClick={() => setRoomLightboxIndex(prev => prev < activeRoomDetail.roomImgs.length - 1 ? prev + 1 : 0)} 
-            className="absolute right-2 md:right-8 text-white text-4xl hover:text-yellow-400 z-[100] w-14 h-14 bg-black/50 rounded-full flex items-center justify-center cursor-pointer border border-white/20 transition shadow-lg"
-          >
-            ›
-          </button>
+          {activeRoomDetail.roomImgs.length > 1 && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); setRoomLightboxIndex(prev => prev < activeRoomDetail.roomImgs.length - 1 ? prev + 1 : 0); }} 
+              style={{ position: 'absolute', right: '20px', zIndex: 2147483647, width: '60px', height: '60px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '35px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >›</button>
+          )}
 
-          <div className="absolute bottom-6 text-white text-sm font-bold bg-black/60 px-5 py-2 rounded-xl border border-white/10 z-[100]">
+          <div style={{ position: 'absolute', bottom: '20px', backgroundColor: 'rgba(0,0,0,0.7)', color: '#fff', padding: '8px 20px', borderRadius: '20px', fontSize: '14px', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)', zIndex: 2147483647 }}>
             {roomLightboxIndex + 1} de {activeRoomDetail.roomImgs.length}
           </div>
         </div>, document.body
@@ -708,7 +725,6 @@ export default function HotelDetails() {
                     <p className="text-xl font-black text-green-700 mt-2">BRL {selectedOffer.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
                   </div>
 
-                  {/* FORMATAÇÃO EXATA DE TAXAS DECLARADA À ETG */}
                   {selectedOffer.excludedTaxes?.length > 0 && (
                     <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg shadow-sm">
                       <p className="text-sm font-black text-red-700 mb-2 flex items-center gap-1.5">⚠️ Mandatory Fees</p>
@@ -743,7 +759,6 @@ export default function HotelDetails() {
                   <div className="mb-6">
                     <p className="text-xs font-black text-gray-900 mb-3 uppercase tracking-wide border-b border-gray-100 pb-2">Contato</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                      {/* O email corporativo já é mandado na payload oculta para a ETG */}
                       <input type="email" placeholder="E-mail" required value={guestEmail} onChange={e => setGuestEmail(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none" />
                       <input type="text" placeholder="Telefone com DDD" required value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none" />
                     </div>

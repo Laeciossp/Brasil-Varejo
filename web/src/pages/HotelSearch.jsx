@@ -52,6 +52,7 @@ const parseImagesList = (imagesData) => {
   return [];
 };
 
+// FORMATAÇÃO ESTRUTURADA EXIGIDA PELA ETG (Evita strings cruas)
 const formatRoomName = (r) => {
   if (r.room_data_trans) {
     const main = r.room_data_trans.main_room_type || r.room_data_trans.main_name || r.room_name;
@@ -62,11 +63,12 @@ const formatRoomName = (r) => {
   return r.room_name || 'Quarto Standard';
 };
 
+// FORMATO IMUTÁVEL DA ETG PARA CANCELAMENTO (Não traduzir)
 const formatCancellation = (deadlineUtc) => {
   if (!deadlineUtc) return null;
   const datePart = deadlineUtc.split('T')[0];
   const timePart = deadlineUtc.split('T')[1]?.substring(0, 5) || '00:00';
-  return `Cancelamento gratuito até ${datePart} às ${timePart}`;
+  return `Free cancellation before ${datePart} at ${timePart} (Hotel Local Time)`;
 };
 
 const calculateNights = (inDate, outDate) => {
@@ -270,7 +272,6 @@ export default function HotelSearch() {
             const dbInfo = dbHotels.find(dbH => dbH.id === String(h.id));
             let imagensOficiais = dbInfo?.images || h.images || [];
 
-            // SOLUÇÃO DAS COORDENADAS: Força o uso do offset para evitar sobreposição dos pinos no mapa
             const latOffset = (Math.random() - 0.5) * 0.015;
             const lngOffset = (Math.random() - 0.5) * 0.015;
             const finalLat = h.latitude ? h.latitude : (cityLat + latOffset);
@@ -286,14 +287,19 @@ export default function HotelSearch() {
               longitude: finalLng,
               imagensReais: imagensOficiais,
               ofertas: h.rates.map(r => {
+                const taxes = r.payment_options?.payment_types?.[0]?.tax_data?.taxes?.filter(t => !t.included_by_supplier) || [];
                 const exactCancellation = r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before;
+                
                 return {
                   tipoQuarto: formatRoomName(r),
                   codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO',
                   nomeRegime: r.meal_data?.value || 'Sem refeições', 
                   precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0) * 5.1,
                   freeCancellation: exactCancellation != null,
-                  cancellationDeadline: formatCancellation(exactCancellation)
+                  cancellationDeadline: formatCancellation(exactCancellation),
+                  excludedTaxes: taxes,
+                  deposit: r.deposit || null,
+                  noShow: r.no_show || null
                 };
               }).sort((a, b) => a.precoVenda - b.precoVenda) 
             };
@@ -335,7 +341,6 @@ export default function HotelSearch() {
     return true;
   });
 
-  // Geração do HTML do Mapa
   const buildMapHtml = () => {
     const centerLat = mapCenterLatLon ? mapCenterLatLon.split(',')[0] : -23.5505;
     const centerLng = mapCenterLatLon ? mapCenterLatLon.split(',')[1] : -46.6333;
@@ -352,7 +357,6 @@ export default function HotelSearch() {
       };
     });
 
-    // Lógica auto-bounds (Enquadra todos os pinos ao inicializar o mapa)
     return `
       <!DOCTYPE html>
       <html>
@@ -416,7 +420,7 @@ export default function HotelSearch() {
   return (
     <div className="w-full bg-gray-50 font-sans min-h-screen pb-10">
       
-      {/* Top Nav Minimalista */}
+      {/* Top Nav */}
       <div className="w-full bg-white border-b border-gray-200 py-3 px-4 shadow-sm mb-6">
         <div className="max-w-[1400px] mx-auto">
           <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
@@ -427,9 +431,9 @@ export default function HotelSearch() {
         </div>
       </div>
 
+      {/* SEARCH BOX */}
       <div className="max-w-[1400px] mx-auto px-3 mb-6">
         <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-visible relative z-40">
-          
           <div className="flex overflow-x-auto bg-white border-b border-gray-200 rounded-t-xl">
             <button className="flex items-center gap-2 px-6 py-4 bg-[#333333] text-white text-sm font-bold whitespace-nowrap rounded-tl-xl">
               <span>🏨</span> Hotéis e apartamentos
@@ -439,7 +443,6 @@ export default function HotelSearch() {
           <div className="p-5 md:p-6 bg-orange-500 rounded-b-xl">
             <form onSubmit={handleSearch}>
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-                
                 <div className="col-span-1 lg:col-span-4 relative bg-white border border-gray-300 rounded-md hover:border-gray-400 transition" ref={dropdownRef}>
                   <label className="block text-[10px] text-gray-400 uppercase pt-1.5 px-3">Destino</label>
                   <div className="flex items-center px-3 pb-1.5">
@@ -558,16 +561,14 @@ export default function HotelSearch() {
       <div className="max-w-[1400px] mx-auto px-3 mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           
-          {/* BARRA LATERAL ESQUERDA - Filtros Padrão ETG */}
+          {/* BARRA LATERAL ESQUERDA - Filtros */}
           <div className="lg:col-span-3 space-y-5 hidden lg:block sticky top-4 max-h-screen overflow-y-auto pr-2 scrollbar-thin">
             
-            {/* Bloco 1: Nome do Hotel */}
             <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
               <label className="block text-sm font-black text-gray-900 mb-3">Nome do hotel</label>
               <input type="text" placeholder="Buscar na lista" value={filterHotelName} onChange={(e) => setFilterHotelName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none focus:border-orange-500 transition bg-gray-50"/>
             </div>
 
-            {/* Bloco 2: Nacionalidade / Cidadania */}
             <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
               <label className="block text-sm font-black text-gray-900 mb-3">Cidadania</label>
               <div className="border border-gray-300 rounded-lg bg-gray-50 px-3 py-2 cursor-pointer hover:border-gray-400 transition">
@@ -577,7 +578,6 @@ export default function HotelSearch() {
               </div>
             </div>
 
-            {/* Bloco 3: Pagamento e Reserva */}
             <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
               <h3 className="block text-sm font-black text-gray-900 mb-3">Pagamento e reserva</h3>
               <label className="flex items-center gap-3 cursor-pointer group">
@@ -589,7 +589,6 @@ export default function HotelSearch() {
               </label>
             </div>
 
-            {/* Bloco 4: Estrelas */}
             <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
               <h3 className="block text-sm font-black text-gray-900 mb-3">Classificação</h3>
               <div className="flex flex-col gap-2.5">
@@ -604,17 +603,9 @@ export default function HotelSearch() {
                     <input type="checkbox" checked={stars.includes(star)} onChange={() => toggleStar(star)} className="hidden" />
                   </label>
                 ))}
-                <label className="flex items-center gap-3 cursor-pointer group mt-1">
-                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${stars.includes(0) ? 'bg-[#ffc107] border-[#ffc107]' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
-                    {stars.includes(0) && <Check size={14} className="text-gray-900 font-bold" />}
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">Sem classificação</span>
-                  <input type="checkbox" checked={stars.includes(0)} onChange={() => toggleStar(0)} className="hidden" />
-                </label>
               </div>
             </div>
 
-            {/* Bloco 5: Refeições */}
             <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
               <h3 className="block text-sm font-black text-gray-900 mb-3">Refeições</h3>
               <div className="flex flex-col gap-2.5">
@@ -638,9 +629,8 @@ export default function HotelSearch() {
 
           </div>
 
-          {/* LISTA DE HOTÉIS - Centro */}
+          {/* LISTA DE HOTÉIS */}
           <div className="lg:col-span-5 space-y-4">
-            
             <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center">
               <h2 className="text-lg font-black text-gray-900 leading-tight">
                 {destinationQuery ? destinationQuery.split(',')[0] : 'Destino'}: {hoteisExibidosNaLista.length} opções
@@ -649,7 +639,7 @@ export default function HotelSearch() {
 
             {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm font-bold border border-red-200 shadow-sm">{error}</div>}
 
-            {/* CARDS COM UMA ÚNICA OFERTA (A MAIS BARATA) E LAYOUT HORIZONTAL ESTRITO */}
+            {/* CARDS DE HOTÉIS */}
             {hoteisExibidosNaLista.map((hotel, index) => {
               const cardBg = getSafeImageUrl(hotel.imagensReais);
               const isFavorite = favorites.some(fav => fav._id === String(hotel.hotelId) && fav.type === 'hotel');
@@ -683,7 +673,7 @@ export default function HotelSearch() {
                     {cardBg ? (
                       <img src={cardBg} alt={hotel.nome} className="w-full h-full object-cover group-hover:opacity-90 transition duration-300" />
                     ) : (
-                      <div className="flex flex-col items-center justify-center w-full h-full text-gray-400">
+                      <div className="flex flex-col items-center justify-center w-full h-full text-gray-400 bg-gray-50">
                         <span className="text-3xl mb-1">🏨</span>
                         <span className="text-[10px] font-bold uppercase tracking-wider">Sem Imagem</span>
                       </div>
@@ -709,18 +699,31 @@ export default function HotelSearch() {
                       </h3>
                       <p className="text-xs text-gray-500 mt-1 truncate">{hotel.endereco || hotel.distancia}</p>
                       
-                      {/* RESUMO DO QUARTO MAIS BARATO */}
+                      {/* RESUMO DO QUARTO E EXIGÊNCIAS ETG DE POLÍTICAS (NO SHOW/DEPOSIT) */}
                       {cheapestOffer && (
                         <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
                            <p className="text-sm font-bold text-gray-800">{cheapestOffer.tipoQuarto}</p>
                            <p className="text-[10px] text-gray-500 uppercase mt-0.5">Opção mais econômica para {totalGuests} hóspedes</p>
                            
-                           <div className="flex flex-wrap items-center gap-3 mt-2 text-xs font-medium text-gray-700">
+                           <div className="flex flex-col gap-1 mt-2 text-xs font-medium text-gray-700">
                               <span className="flex items-center gap-1">🍽️ {cheapestOffer.nomeRegime}</span>
+                              
                               {cheapestOffer.freeCancellation ? (
-                                <span className="flex items-center gap-1 text-green-700">↩️ {cheapestOffer.cancellationDeadline || 'Cancelamento especial'}</span>
+                                <span className="text-green-700 font-bold">↩️ {cheapestOffer.cancellationDeadline}</span>
                               ) : (
-                                <span className="flex items-center gap-1 text-red-600">❌ Não reembolsável</span>
+                                <span className="text-red-600 font-bold">❌ Não reembolsável</span>
+                              )}
+
+                              {/* RATE POLICIES EXIGIDOS PELA ETG */}
+                              {cheapestOffer.deposit && (
+                                 <div className="text-[9px] text-orange-600 font-normal leading-tight mt-1">
+                                   <b>Deposit:</b> Payment may be required before check-in.
+                                 </div>
+                              )}
+                              {cheapestOffer.noShow && (
+                                 <div className="text-[9px] text-red-600 font-normal leading-tight mt-1">
+                                   <b>No-Show:</b> Fee applies if you don't arrive.
+                                 </div>
                               )}
                            </div>
                         </div>
@@ -728,9 +731,21 @@ export default function HotelSearch() {
                     </div>
 
                     <div className="mt-5 flex flex-col sm:flex-row justify-between items-end border-t border-gray-100 pt-4 gap-3 sm:gap-0">
+                      
+                      {/* PREÇO E TAXAS EXCLUÍDAS (OBRIGATÓRIO ETG NA SERP) */}
                       <div className="w-full sm:w-auto text-right sm:text-left flex-1">
                          <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">A partir de</p>
                          <p className="text-2xl font-black text-gray-900 leading-none">BRL {cheapestOffer?.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                         
+                         {cheapestOffer?.excludedTaxes?.length > 0 && (
+                            <div className="mt-1 flex flex-col items-end sm:items-start">
+                              {cheapestOffer.excludedTaxes.map((t, idx2) => (
+                                <span key={idx2} className="text-[9px] font-black text-red-700 tracking-wider">
+                                  Payable at the property: {t.name} {t.amount} {t.currency_code}
+                                </span>
+                              ))}
+                            </div>
+                         )}
                       </div>
                       
                       <button 
@@ -773,8 +788,8 @@ export default function HotelSearch() {
 
       {/* GALERIA GERAL DE FOTOS */}
       {activeGalleryHotel && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl p-6 rounded-2xl relative shadow-2xl">
+        <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setActiveGalleryHotel(null)}>
+          <div className="bg-white w-full max-w-4xl p-6 rounded-2xl relative shadow-2xl" onClick={e => e.stopPropagation()}>
             <button onClick={() => setActiveGalleryHotel(null)} className="absolute top-4 right-4 text-xl font-bold text-gray-500 hover:text-black">✕</button>
             <h3 className="font-black text-lg mb-4 text-gray-900">Galeria Oficial: {activeGalleryHotel.nome}</h3>
             
