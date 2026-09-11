@@ -486,13 +486,14 @@ export default function HotelDetails() {
               </div>
             )}
 
-            {/* HOTEL POLICIES */}
+           {/* HOTEL POLICIES */}
             {staticData?.metapolicy_extra_info && (
               <div className="bg-orange-50 rounded-xl border border-orange-200 shadow-sm p-5">
-                <h3 className="font-black text-sm mb-3 text-orange-800 flex items-center gap-1.5">⚠️ Hotel Policies & Important Information</h3>
-                <p className="text-xs text-orange-900 whitespace-pre-line leading-relaxed">
-                  {staticData.metapolicy_extra_info}
-                </p>
+                <h3 className="font-black text-sm mb-3 text-orange-800 flex items-center gap-1.5">⚠️ Políticas e Informações Importantes</h3>
+                <div 
+                  className="text-xs text-orange-900 leading-relaxed [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-2 [&>ul>li]:mb-1"
+                  dangerouslySetInnerHTML={{ __html: staticData.metapolicy_extra_info }}
+                />
               </div>
             )}
           </div>
