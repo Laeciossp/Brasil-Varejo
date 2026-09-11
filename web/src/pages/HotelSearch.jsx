@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../firebase'; 
 import { createClient } from '@supabase/supabase-js';
-import { Heart } from 'lucide-react';
+import { Heart, Check } from 'lucide-react';
 import useCartStore from '../store/useCartStore';
 
 const SUPABASE_URL = "https://vcqiilytjrrurdbscmio.supabase.co";
@@ -12,101 +12,46 @@ const SUPABASE_ANON_KEY = "sb_publishable_leFg1lWGZlctiU3CXYR2Gw_FpOG2qR3";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const COUNTRIES = [
-  { code: 'br', name: 'Brasil' }, { code: 'aw', name: 'Aruba' }, { code: 'af', name: 'Afeganistão' },
-  { code: 'ao', name: 'Angola' }, { code: 'ai', name: 'Anguilla' }, { code: 'ax', name: 'Ilhas Alanda' },
-  { code: 'al', name: 'Albânia' }, { code: 'ad', name: 'Andorra' }, { code: 'ae', name: 'Emirados Árabes Unidos' },
-  { code: 'ar', name: 'Argentina' }, { code: 'am', name: 'Arménia' }, { code: 'as', name: 'Samoa Americana' },
-  { code: 'aq', name: 'Antártida' }, { code: 'tf', name: 'Territórios Franceses do Sul' }, { code: 'ag', name: 'Antígua e Barbuda' },
-  { code: 'au', name: 'Austrália' }, { code: 'at', name: 'Áustria' }, { code: 'az', name: 'Azerbaijão' },
-  { code: 'bi', name: 'Burundi' }, { code: 'be', name: 'Bélgica' }, { code: 'bj', name: 'Benim' },
-  { code: 'bq', name: 'Bonaire, Santo Eustáquio e Saba' }, { code: 'bf', name: 'Burkina Faso' }, { code: 'bd', name: 'Bangladeche' },
-  { code: 'bg', name: 'Bulgária' }, { code: 'bh', name: 'Barém' }, { code: 'bs', name: 'Bahamas' },
-  { code: 'ba', name: 'Bósnia e Herzegovina' }, { code: 'bl', name: 'Saint Barthélemy' }, { code: 'by', name: 'Bielorússia' },
-  { code: 'bz', name: 'Belize' }, { code: 'bm', name: 'Bermudas' }, { code: 'bo', name: 'Bolívia' },
-  { code: 'bb', name: 'Barbados' }, { code: 'bn', name: 'Brunei' }, { code: 'bt', name: 'Butão' },
-  { code: 'bv', name: 'Ilha Bouvet' }, { code: 'bw', name: 'Botsuana' }, { code: 'cf', name: 'República Centro-Africana' },
-  { code: 'ca', name: 'Canadá' }, { code: 'cc', name: 'Ilhas Cocos' }, { code: 'ch', name: 'Suíça' },
-  { code: 'cl', name: 'Chile' }, { code: 'cn', name: 'China' }, { code: 'ci', name: 'Costa do Marfim' },
-  { code: 'cm', name: 'Camarões' }, { code: 'cd', name: 'Congo, República Democrática do' }, { code: 'cg', name: 'Congo' },
-  { code: 'ck', name: 'Ilhas Cook' }, { code: 'co', name: 'Colômbia' }, { code: 'km', name: 'Comores' },
-  { code: 'cv', name: 'Cabo Verde' }, { code: 'cr', name: 'Costa Rica' }, { code: 'cu', name: 'Cuba' },
-  { code: 'cw', name: 'Curação' }, { code: 'cx', name: 'Ilha Natal' }, { code: 'ky', name: 'Ilhas Caimão' },
-  { code: 'cy', name: 'Chipre' }, { code: 'cz', name: 'Chéquia' }, { code: 'de', name: 'Alemanha' },
-  { code: 'dj', name: 'Djibouti' }, { code: 'dm', name: 'Dominica' }, { code: 'dk', name: 'Dinamarca' },
-  { code: 'do', name: 'República Dominicana' }, { code: 'dz', name: 'Argélia' }, { code: 'ec', name: 'Equador' },
-  { code: 'eg', name: 'Egito' }, { code: 'er', name: 'Eritreia' }, { code: 'eh', name: 'Saara Ocidental' },
-  { code: 'es', name: 'Espanha' }, { code: 'ee', name: 'Estónia' }, { code: 'et', name: 'Etiópia' },
-  { code: 'fi', name: 'Finlândia' }, { code: 'fj', name: 'Fiji' }, { code: 'fk', name: 'Ilhas Falkland (Malvinas)' },
-  { code: 'fr', name: 'França' }, { code: 'fo', name: 'Ilhas Faroé' }, { code: 'fm', name: 'Micronésia, Estados Federados da' },
-  { code: 'ga', name: 'Gabão' }, { code: 'gb', name: 'Reino Unido' }, { code: 'ge', name: 'Geórgia' },
-  { code: 'gg', name: 'Guernsey' }, { code: 'gh', name: 'Gana' }, { code: 'gi', name: 'Gibraltar' },
-  { code: 'gn', name: 'Guiné' }, { code: 'gp', name: 'Guadalupe' }, { code: 'gm', name: 'Gâmbia' },
-  { code: 'gw', name: 'Guiné-Bissáu' }, { code: 'gq', name: 'Guiné Equatorial' }, { code: 'gr', name: 'Grécia' },
-  { code: 'gd', name: 'Granada' }, { code: 'gl', name: 'Gronelândia' }, { code: 'gt', name: 'Guatemala' },
-  { code: 'gf', name: 'Guiana Francesa' }, { code: 'gu', name: 'Guam' }, { code: 'gy', name: 'Guiana' },
-  { code: 'hk', name: 'Hong Kong' }, { code: 'hm', name: 'Ilha Heard e Ilhas McDonald' }, { code: 'hn', name: 'Honduras' },
-  { code: 'hr', name: 'Croácia' }, { code: 'ht', name: 'Haiti' }, { code: 'hu', name: 'Hungria' },
-  { code: 'id', name: 'Indonésia' }, { code: 'im', name: 'Ilha de Man' }, { code: 'in', name: 'Índia' },
-  { code: 'io', name: 'Território Britânico do Oceano Índico' }, { code: 'ie', name: 'Irlanda' }, { code: 'ir', name: 'Irão' },
-  { code: 'iq', name: 'Iraque' }, { code: 'is', name: 'Islândia' }, { code: 'il', name: 'Israel' },
-  { code: 'it', name: 'Itália' }, { code: 'jm', name: 'Jamaica' }, { code: 'je', name: 'Jersey' },
-  { code: 'jo', name: 'Jordânia' }, { code: 'jp', name: 'Japão' }, { code: 'kz', name: 'Cazaquistão' },
-  { code: 'ke', name: 'Quénia' }, { code: 'kg', name: 'Quirguistão' }, { code: 'kh', name: 'Camboja' },
-  { code: 'ki', name: 'Kiribati' }, { code: 'kn', name: 'São Cristóvão e Nevis' }, { code: 'kr', name: 'Coreia do Sul' },
-  { code: 'kw', name: 'Kuwait' }, { code: 'la', name: 'Laos' }, { code: 'lb', name: 'Líbano' },
-  { code: 'lr', name: 'Libéria' }, { code: 'ly', name: 'Líbia' }, { code: 'lc', name: 'Santa Lúcia' },
-  { code: 'li', name: 'Liechtenstein' }, { code: 'lk', name: 'Sri Lanka' }, { code: 'ls', name: 'Lesoto' },
-  { code: 'lt', name: 'Lituânia' }, { code: 'lu', name: 'Luxemburgo' }, { code: 'lv', name: 'Letónia' },
-  { code: 'mo', name: 'Macau' }, { code: 'mf', name: 'São Martin (Território Francês)' }, { code: 'ma', name: 'Marrocos' },
-  { code: 'mc', name: 'Mónaco' }, { code: 'md', name: 'Moldávia, República da' }, { code: 'mg', name: 'Madagáscar' },
-  { code: 'mv', name: 'Maldivas' }, { code: 'mx', name: 'México' }, { code: 'mh', name: 'Ilhas Marshall' },
-  { code: 'mk', name: 'Macedónia do Norte' }, { code: 'ml', name: 'Mali' }, { code: 'mt', name: 'Malta' },
-  { code: 'mm', name: 'Birmânia' }, { code: 'me', name: 'Montenegro' }, { code: 'mn', name: 'Mongólia' },
-  { code: 'mp', name: 'Ilhas Marianas do Norte' }, { code: 'mz', name: 'Moçambique' }, { code: 'mr', name: 'Mauritânia' },
-  { code: 'ms', name: 'Monserrate' }, { code: 'mq', name: 'Martinica' }, { code: 'mu', name: 'Maurícia' },
-  { code: 'mw', name: 'Malawi' }, { code: 'my', name: 'Malásia' }, { code: 'yt', name: 'Mayotte' },
-  { code: 'na', name: 'Namíbia' }, { code: 'nc', name: 'Nova Caledónia' }, { code: 'ne', name: 'Níger' },
-  { code: 'nf', name: 'Ilha Norfolk' }, { code: 'ng', name: 'Nigéria' }, { code: 'ni', name: 'Nicarágua' },
-  { code: 'nu', name: 'Niue' }, { code: 'nl', name: 'Países Baixos' }, { code: 'no', name: 'Noruega' },
-  { code: 'np', name: 'Nepal' }, { code: 'nr', name: 'Nauru' }, { code: 'nz', name: 'Nova Zelândia' },
-  { code: 'om', name: 'Omã' }, { code: 'pk', name: 'Paquistão' }, { code: 'pa', name: 'Panamá' },
-  { code: 'pn', name: 'Pitcairn' }, { code: 'pe', name: 'Peru' }, { code: 'ph', name: 'Filipinas' },
-  { code: 'pw', name: 'Palau' }, { code: 'pg', name: 'Papua Nova Guiné' }, { code: 'pl', name: 'Polónia' },
-  { code: 'pr', name: 'Porto Rico' }, { code: 'kp', name: 'Coreia do Norte' }, { code: 'pt', name: 'Portugal' },
-  { code: 'py', name: 'Paraguai' }, { code: 'ps', name: 'Palestina, Estado da' }, { code: 'pf', name: 'Polinésia Francesa' },
-  { code: 'qa', name: 'Catar' }, { code: 're', name: 'Ilha Reunião' }, { code: 'ro', name: 'Roménia' },
-  { code: 'ru', name: 'Federação Russa' }, { code: 'rw', name: 'Ruanda' }, { code: 'sa', name: 'Arábia Saudita' },
-  { code: 'sd', name: 'Sudão' }, { code: 'sn', name: 'Senegal' }, { code: 'sg', name: 'Singapura' },
-  { code: 'gs', name: 'Ilhas Geórgia do Sul e Sandwich do Sul' }, { code: 'sh', name: 'Santa Helena' },
-  { code: 'sj', name: 'Svalbard e Jan Mayen' }, { code: 'sb', name: 'Ilhas Salomão' }, { code: 'sl', name: 'Serra Leoa' },
-  { code: 'sv', name: 'El Salvador' }, { code: 'sm', name: 'San Marino' }, { code: 'so', name: 'Somália' },
-  { code: 'pm', name: 'Saint Pierre e Miquelon' }, { code: 'rs', name: 'Sérvia' }, { code: 'ss', name: 'Sudão do Sul' },
-  { code: 'st', name: 'São Tomé e Príncipe' }, { code: 'sr', name: 'Suriname' }, { code: 'sk', name: 'Eslováquia' },
-  { code: 'si', name: 'Eslovénia' }, { code: 'se', name: 'Suécia' }, { code: 'sz', name: 'Suazilândia' },
-  { code: 'sx', name: 'São Martinho (Países Baixos)' }, { code: 'sc', name: 'Seychelles' }, { code: 'sy', name: 'Síria' },
-  { code: 'tc', name: 'Ilhas Turcas e Caicos' }, { code: 'td', name: 'Chade' }, { code: 'tg', name: 'Togo' },
-  { code: 'th', name: 'Tailândia' }, { code: 'tj', name: 'Tajiquistão' }, { code: 'tk', name: 'Tokelau' },
-  { code: 'tm', name: 'Turquemenistão' }, { code: 'tl', name: 'Timor-Leste' }, { code: 'to', name: 'Tonga' },
-  { code: 'tt', name: 'Trindade e Tobago' }, { code: 'tn', name: 'Tunísia' }, { code: 'tr', name: 'Turquia' },
-  { code: 'tv', name: 'Tuvalu' }, { code: 'tw', name: 'Taiwan' }, { code: 'tz', name: 'Tanzânia' },
-  { code: 'ug', name: 'Uganda' }, { code: 'ua', name: 'Ucrânia' }, { code: 'um', name: 'Ilhas Menores Distantes dos Estados Unidos' },
-  { code: 'uy', name: 'Uruguai' }, { code: 'us', name: 'Estados Unidos' }, { code: 'uz', name: 'Uzbequistão' },
-  { code: 'va', name: 'Vaticano' }, { code: 'vc', name: 'São Vicente e Granadinas' }, { code: 've', name: 'Venezuela' },
-  { code: 'vg', name: 'Ilhas Virgens Britânicas' }, { code: 'vi', name: 'Ilhas Virgens dos Estados Unidos' },
-  { code: 'vn', name: 'Vietname' }, { code: 'vu', name: 'Vanuatu' }, { code: 'wf', name: 'Wallis e Futuna' },
-  { code: 'ws', name: 'Samoa' }, { code: 'ye', name: 'Iémen' }, { code: 'za', name: 'África do Sul' },
-  { code: 'zm', name: 'Zâmbia' }, { code: 'zw', name: 'Zimbábue' }, { code: 'xk', name: 'Kosovo' }
+  { code: 'br', name: 'Brasil' }, { code: 'us', name: 'Estados Unidos' }, { code: 'pt', name: 'Portugal' },
+  { code: 'ar', name: 'Argentina' }, { code: 'uy', name: 'Uruguai' }, { code: 'cl', name: 'Chile' },
+  { code: 'co', name: 'Colômbia' }, { code: 'pe', name: 'Peru' }, { code: 'mx', name: 'México' },
+  { code: 'ca', name: 'Canadá' }, { code: 'gb', name: 'Reino Unido' }, { code: 'es', name: 'Espanha' },
+  { code: 'fr', name: 'França' }, { code: 'it', name: 'Itália' }, { code: 'de', name: 'Alemanha' },
+  { code: 'cn', name: 'China' }, { code: 'jp', name: 'Japão' }, { code: 'ae', name: 'Emirados Árabes Unidos' },
+  { code: 'ao', name: 'Angola' }, { code: 'mz', name: 'Moçambique' }, { code: 'za', name: 'África do Sul' },
+  { code: 'ru', name: 'Federação Russa' }, { code: 'in', name: 'Índia' }, { code: 'au', name: 'Austrália' }
 ];
 
-// HELPER: Formatação segura para URLs de imagens do CDN RateHawk
-// HELPER: Formatação segura para URLs de imagens do CDN RateHawk usando 'x' (tamanho original)
-const getSafeImageUrl = (imgObj, size = 'x') => {
-  if (!imgObj) return null;
-  const url = typeof imgObj === 'string' ? imgObj : (imgObj.url || imgObj.image || '');
-  if (!url) return null;
-  return url.replace('{size}', size);
+const getSafeImageUrl = (imgInput) => {
+  if (!imgInput) return null;
+  let rawList = imgInput;
+  if (typeof rawList === 'string' && rawList.trim().startsWith('[')) {
+    try { rawList = JSON.parse(rawList); } catch (e) { }
+  }
+  const target = Array.isArray(rawList) ? rawList[0] : rawList;
+  let rawUrl = typeof target === 'string' ? target : (target?.url || target?.image || '');
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  let formattedUrl = rawUrl.startsWith('//') ? 'https:' + rawUrl : rawUrl;
+  return formattedUrl.replace('{size}', '1024x768');
 };
-// HELPER: Formatação Estruturada do Nome do Quarto (ETG Requirement)
+
+const parseImagesList = (imagesData) => {
+  if (!imagesData) return [];
+  let list = imagesData;
+  if (typeof list === 'string' && list.trim().startsWith('[')) {
+    try { list = JSON.parse(list); } catch(e) { return []; }
+  }
+  if (Array.isArray(list)) {
+    return list.map(img => {
+      let rawUrl = typeof img === 'string' ? img : (img?.url || img?.image || '');
+      if (!rawUrl) return null;
+      let formattedUrl = rawUrl.startsWith('//') ? 'https:' + rawUrl : rawUrl;
+      return formattedUrl.replace('{size}', '1024x768');
+    }).filter(Boolean);
+  }
+  return [];
+};
+
 const formatRoomName = (r) => {
   if (r.room_data_trans) {
     const main = r.room_data_trans.main_room_type || r.room_data_trans.main_name || r.room_name;
@@ -117,12 +62,19 @@ const formatRoomName = (r) => {
   return r.room_name || 'Quarto Standard';
 };
 
-// HELPER: Formatação da Política de Cancelamento exata e Fuso Horário (ETG Requirement)
 const formatCancellation = (deadlineUtc) => {
   if (!deadlineUtc) return null;
   const datePart = deadlineUtc.split('T')[0];
   const timePart = deadlineUtc.split('T')[1]?.substring(0, 5) || '00:00';
-  return `Cancelamento gratuito até ${datePart} às ${timePart} (UTC)`;
+  return `Cancelamento gratuito até ${datePart} às ${timePart}`;
+};
+
+const calculateNights = (inDate, outDate) => {
+  if (!inDate || !outDate) return 1;
+  const start = new Date(inDate);
+  const end = new Date(outDate);
+  const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+  return diff > 0 ? diff : 1;
 };
 
 export default function HotelSearch() {
@@ -143,19 +95,14 @@ export default function HotelSearch() {
   const [residency, setResidency] = useState('br'); 
   const [stars, setStars] = useState([]); 
   const [meals, setMeals] = useState([]); 
-  const [earlyCheckin, setEarlyCheckin] = useState('');
-  const [lateCheckout, setLateCheckout] = useState('');
   const [freeCancellation, setFreeCancellation] = useState(false);
-
-  const [onlyFavorites, setOnlyFavorites] = useState(false);
-  const [sortBy, setSortBy] = useState('popularidade');
   const [filterHotelName, setFilterHotelName] = useState('');
+  const [sortBy, setSortBy] = useState('preco_crescente');
 
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [searchOnMapMove, setSearchOnMapMove] = useState(false);
   const [mapBounds, setMapBounds] = useState(null);
 
-  const [supplier, setSupplier] = useState('RATEHAWK');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -167,6 +114,11 @@ export default function HotelSearch() {
   const guestDropdownRef = useRef(null);
   const checkInRef = useRef(null);
   const checkOutRef = useRef(null);
+
+  const totalAdults = rooms.reduce((acc, r) => acc + r.adults, 0);
+  const totalChildren = rooms.reduce((acc, r) => acc + r.childrenAges.length, 0);
+  const totalGuests = totalAdults + totalChildren;
+  const nightsCount = calculateNights(checkInDate, checkOutDate);
 
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const getTomorrowStr = () => {
@@ -187,19 +139,14 @@ export default function HotelSearch() {
       if (event.data && event.data.type === 'SELECT_HOTEL') {
         const idClicado = String(event.data.hotelId);
         const hotelSelecionado = results.find(h => String(h.hotelId) === idClicado);
-        
         if (hotelSelecionado) {
-          navigate('/hotel-details', { 
-            state: { hotel: hotelSelecionado, checkInDate, checkOutDate, rooms, residency } 
-          });
+          navigate('/hotel-details', { state: { hotel: hotelSelecionado, checkInDate, checkOutDate, rooms, residency } });
         }
       }
-
       if (event.data && event.data.type === 'MAP_MOVED') {
         setMapBounds(event.data.bounds);
       }
     };
-    
     window.addEventListener('message', handleIframeMessage);
     return () => window.removeEventListener('message', handleIframeMessage);
   }, [results, navigate, checkInDate, checkOutDate, rooms, residency]);
@@ -216,60 +163,9 @@ export default function HotelSearch() {
         const ratehawkRegions = data.regions || data.data?.regions || [];
         const ratehawkHotels = data.hotels || data.data?.hotels || [];
 
-        const { data: restelData, error } = await supabase
-          .from('RestelHotel')
-          .select('name, city, province, countryCode')
-          .or(`name.ilike.%${destinationQuery}%,city.ilike.%${destinationQuery}%,province.ilike.%${destinationQuery}%,countryCode.ilike.%${destinationQuery}%`)
-          .limit(20);
-
-        let restelRegionsFormatted = [];
-        let restelHotelsFormatted = [];
-
-        if (!error && restelData) {
-          const uniqueCities = new Set();
-          const uniqueProvinces = new Set();
-
-          restelData.forEach(h => {
-            if (h.city && h.city.toLowerCase().includes(destinationQuery.toLowerCase())) {
-              uniqueCities.add(JSON.stringify({ city: h.city, province: h.province, country: h.countryCode }));
-            }
-            if (h.province && h.province.toLowerCase().includes(destinationQuery.toLowerCase()) && h.province.toLowerCase() !== h.city?.toLowerCase()) {
-              uniqueProvinces.add(JSON.stringify({ province: h.province, country: h.countryCode }));
-            }
-          });
-
-          Array.from(uniqueCities).slice(0, 3).forEach((itemStr, idx) => {
-            const item = JSON.parse(itemStr);
-            const subText = item.province && item.province !== item.city ? `, ${item.province}` : '';
-            restelRegionsFormatted.push({
-              id: `restel_city_${idx}`,
-              name: `${item.city}${subText} (${item.country || ''})`.trim(),
-              cleanQuery: item.city,
-              label: 'Cidade'
-            });
-          });
-
-          Array.from(uniqueProvinces).slice(0, 2).forEach((itemStr, idx) => {
-            const item = JSON.parse(itemStr);
-            restelRegionsFormatted.push({
-              id: `restel_prov_${idx}`,
-              name: `${item.province} (${item.country || ''})`,
-              cleanQuery: item.province,
-              label: 'Província'
-            });
-          });
-
-          restelHotelsFormatted = restelData.map(h => ({
-            id: h.name,
-            name: `${h.name} — ${h.city || ''}, ${h.province || ''} (${h.countryCode || ''})`.replace(/,\s*,/g, '').replace(/— ,/g, '—').trim(),
-            cleanName: h.name,
-            label: 'Hotel'
-          }));
-        }
-
-        setRegionsResults([...ratehawkRegions, ...restelRegionsFormatted]); 
-        setHotelsResults([...ratehawkHotels, ...restelHotelsFormatted]);
-        setShowDropdown(ratehawkRegions.length > 0 || ratehawkHotels.length > 0 || restelRegionsFormatted.length > 0 || restelHotelsFormatted.length > 0);
+        setRegionsResults([...ratehawkRegions]); 
+        setHotelsResults([...ratehawkHotels]);
+        setShowDropdown(ratehawkRegions.length > 0 || ratehawkHotels.length > 0);
       } catch (err) {
         console.error("Erro no autocompletar:", err);
       }
@@ -335,38 +231,27 @@ export default function HotelSearch() {
         cityLat = parseFloat(geoData[0].lat);
         cityLng = parseFloat(geoData[0].lon);
       }
-    } catch (err) {
-      console.error("Erro ao buscar coordenadas da cidade", err);
-    }
+    } catch (err) {}
     
     setMapCenterLatLon(`${cityLat},${cityLng}`);
 
     let ratehawkResults = [];
-    let restelResults = [];
 
     try {
       const queryLower = destinationQuery.toLowerCase();
       const isTestSearch = queryLower.includes('los angeles') || queryLower.includes('conrad') || queryLower.includes('us-lax') || queryLower.includes('dubai');
-      
       const hidsToSearch = isTestSearch ? [10004834, 8819557, 9015534, 8663536, 8473727] : [];
 
       if (hidsToSearch.length > 0) {
         const baseUrl = `https://palastore-flights-api.laeciossp.workers.dev/serp-hotels`; 
         const guestsPayload = rooms.map(room => ({
-          adults: room.adults,
-          children: room.childrenAges
+          adults: room.adults, children: room.childrenAges
         }));
 
         const response = await fetch(baseUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            hids: hidsToSearch,
-            checkin: checkInDate,
-            checkout: checkOutDate,
-            residency: residency,
-            currency: "USD",
-            guests: guestsPayload
+            hids: hidsToSearch, checkin: checkInDate, checkout: checkOutDate, residency: residency, currency: "USD", guests: guestsPayload
           })
         });
 
@@ -377,37 +262,19 @@ export default function HotelSearch() {
           const matchedIds = combinados.map(h => String(h.id));
           let dbHotels = [];
           if (matchedIds.length > 0) {
-            const { data } = await supabase
-              .from('Hotel')
-              .select('id, images, amenities, description') 
-              .in('id', matchedIds);
+            const { data } = await supabase.from('Hotel').select('id, images, amenities, description').in('id', matchedIds);
             if (data) dbHotels = data;
           }
 
           ratehawkResults = combinados.map((h) => {
+            const dbInfo = dbHotels.find(dbH => dbH.id === String(h.id));
+            let imagensOficiais = dbInfo?.images || h.images || [];
+
+            // SOLUÇÃO DAS COORDENADAS: Força o uso do offset para evitar sobreposição dos pinos no mapa
             const latOffset = (Math.random() - 0.5) * 0.015;
             const lngOffset = (Math.random() - 0.5) * 0.015;
-            const finalLat = h.latitude || (cityLat + latOffset);
-            const finalLng = h.longitude || (cityLng + lngOffset);
-            const dbInfo = dbHotels.find(dbH => dbH.id === String(h.id));
-            
-            let imagensOficiais = [];
-            if (dbInfo?.images && Array.isArray(dbInfo.images)) {
-              imagensOficiais = dbInfo.images.map(img => getSafeImageUrl(img, '800x600')).filter(Boolean);
-            }
-
-            let comodidadesOficiais = [];
-            if (Array.isArray(dbInfo?.amenities)) {
-              if (dbInfo.amenities.length > 0 && typeof dbInfo.amenities[0] === 'object' && dbInfo.amenities[0].amenities) {
-                comodidadesOficiais = dbInfo.amenities.flatMap(grupo => grupo.amenities || []);
-              } else {
-                comodidadesOficiais = dbInfo.amenities;
-              }
-            } else if (dbInfo?.amenities && Array.isArray(dbInfo.amenities.amenities)) {
-              comodidadesOficiais = dbInfo.amenities.amenities;
-            }
-
-            let descricaoOficial = dbInfo?.description || dbInfo?.descricao || h.description || "";
+            const finalLat = h.latitude ? h.latitude : (cityLat + latOffset);
+            const finalLng = h.longitude ? h.longitude : (cityLng + lngOffset);
 
             return {
               hotelId: `rh_${h.id}`, 
@@ -418,28 +285,17 @@ export default function HotelSearch() {
               latitude: finalLat,
               longitude: finalLng,
               imagensReais: imagensOficiais,
-              
-              amenities: comodidadesOficiais,
-              comodidades: comodidadesOficiais,
-              description: descricaoOficial,
-              descricao: descricaoOficial,
-              
               ofertas: h.rates.map(r => {
-                const taxes = r.payment_options?.payment_types?.[0]?.tax_data?.taxes?.filter(t => !t.included_by_supplier) || [];
                 const exactCancellation = r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before;
-                
                 return {
                   tipoQuarto: formatRoomName(r),
                   codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO',
                   nomeRegime: r.meal_data?.value || 'Sem refeições', 
                   precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0) * 5.1,
-                  paymentTypeObj: r.payment_options?.payment_types?.[0],
-                  bookHash: r.book_hash,
                   freeCancellation: exactCancellation != null,
-                  cancellationDeadline: formatCancellation(exactCancellation),
-                  excludedTaxes: taxes
+                  cancellationDeadline: formatCancellation(exactCancellation)
                 };
-              })
+              }).sort((a, b) => a.precoVenda - b.precoVenda) 
             };
           });
         }
@@ -448,39 +304,11 @@ export default function HotelSearch() {
       console.error("Aviso: Falha na busca RateHawk:", err);
     }
 
-    try {
-      const functions = getFunctions(app);
-      const searchRestelHotels = httpsCallable(functions, 'searchRestelHotels');
-      const cleanDestination = destinationQuery.split(',')[0].trim();
-
-      const response = await searchRestelHotels({
-        destinationCode: cleanDestination,
-        checkInDate: checkInDate,
-        checkOutDate: checkOutDate,
-        adults: rooms[0].adults,
-        children: rooms[0].childrenAges.length,
-        childrenAges: rooms[0].childrenAges.join(',')
-      });
-
-      if (response.data && response.data.status === 'success' && response.data.hoteis) {
-        restelResults = response.data.hoteis.map(h => ({
-          ...h,
-          hotelId: `restel_${h.hotelId}`,
-          distancia: 'Restel B2B'
-        }));
-      }
-    } catch (err) {
-      console.error("Aviso: Falha na busca Restel:", err);
-    }
-
-    const todosOsHoteis = [...ratehawkResults, ...restelResults];
-
-    if (todosOsHoteis.length > 0) {
-      setResults(todosOsHoteis);
+    if (ratehawkResults.length > 0) {
+      setResults(ratehawkResults);
     } else {
-      setError("Nenhum hotel encontrado em nenhum dos fornecedores para esta data e destino.");
+      setError("Nenhum hotel encontrado para esta data e destino.");
     }
-
     setLoading(false);
   };
 
@@ -494,10 +322,9 @@ export default function HotelSearch() {
     });
     return validOffers.length > 0;
   }).sort((a, b) => {
-    if (sortBy === 'preco_crescente') {
-      return a.ofertas[0].precoVenda - b.ofertas[0].precoVenda;
-    }
-    return 0;
+    const minPriceA = Math.min(...a.ofertas.map(o => o.precoVenda));
+    const minPriceB = Math.min(...b.ofertas.map(o => o.precoVenda));
+    return minPriceA - minPriceB; 
   });
 
   const hoteisExibidosNaLista = filteredResults.filter(hotel => {
@@ -508,26 +335,24 @@ export default function HotelSearch() {
     return true;
   });
 
+  // Geração do HTML do Mapa
   const buildMapHtml = () => {
     const centerLat = mapCenterLatLon ? mapCenterLatLon.split(',')[0] : -23.5505;
     const centerLng = mapCenterLatLon ? mapCenterLatLon.split(',')[1] : -46.6333;
     
     const pinsData = filteredResults.filter(h => h.latitude && h.longitude).map(h => {
-      const img = h.imagensReais && h.imagensReais.length > 0 
-        ? getSafeImageUrl(h.imagensReais[0], '240x240')
-        : 'data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=='; 
+      const img = getSafeImageUrl(h.imagensReais) || 'data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=='; 
+      const precoMin = Math.min(...h.ofertas.map(o => o.precoVenda));
 
       return {
-        id: h.hotelId,
-        lat: h.latitude,
-        lng: h.longitude,
+        id: h.hotelId, lat: h.latitude, lng: h.longitude,
         nome: h.nome.replace(/'/g, "\\'").replace(/"/g, '&quot;'),
-        preco: `BRL ${h.ofertas[0]?.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 
-        estrelas: '⭐'.repeat(h.categoria || 4),
-        imagem: img
+        preco: `BRL ${precoMin.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 
+        estrelas: '⭐'.repeat(h.categoria || 4), imagem: img
       };
     });
 
+    // Lógica auto-bounds (Enquadra todos os pinos ao inicializar o mapa)
     return `
       <!DOCTYPE html>
       <html>
@@ -558,8 +383,15 @@ export default function HotelSearch() {
         <script>
           const center = [${centerLat}, ${centerLng}];
           const hotels = ${JSON.stringify(pinsData)};
-          const map = L.map('map').setView(center, 14);
+          const map = L.map('map');
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+
+          if (hotels.length > 0) {
+            const bounds = L.latLngBounds(hotels.map(h => [h.lat, h.lng]));
+            map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
+          } else {
+            map.setView(center, 14);
+          }
 
           map.on('moveend', function() {
             const bounds = map.getBounds();
@@ -584,6 +416,7 @@ export default function HotelSearch() {
   return (
     <div className="w-full bg-gray-50 font-sans min-h-screen pb-10">
       
+      {/* Top Nav Minimalista */}
       <div className="w-full bg-white border-b border-gray-200 py-3 px-4 shadow-sm mb-6">
         <div className="max-w-[1400px] mx-auto">
           <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
@@ -605,8 +438,7 @@ export default function HotelSearch() {
 
           <div className="p-5 md:p-6 bg-orange-500 rounded-b-xl">
             <form onSubmit={handleSearch}>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-4">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
                 
                 <div className="col-span-1 lg:col-span-4 relative bg-white border border-gray-300 rounded-md hover:border-gray-400 transition" ref={dropdownRef}>
                   <label className="block text-[10px] text-gray-400 uppercase pt-1.5 px-3">Destino</label>
@@ -625,11 +457,7 @@ export default function HotelSearch() {
                       {regionsResults.map((item, idx) => (
                         <div 
                           key={`reg-${idx}`} 
-                          onClick={() => { 
-                            setDestinationQuery(item.cleanQuery || item.name.split(',')[0]); 
-                            setRegionId(item.id); 
-                            setShowDropdown(false); 
-                          }} 
+                          onClick={() => { setDestinationQuery(item.cleanQuery || item.name.split(',')[0]); setRegionId(item.id); setShowDropdown(false); }} 
                           className="px-4 py-3 text-sm text-gray-800 hover:bg-orange-50 cursor-pointer border-b border-gray-100 flex justify-between items-center"
                         >
                           <span className="font-medium">{item.name}</span>
@@ -641,49 +469,29 @@ export default function HotelSearch() {
                 </div>
 
                 <div className="col-span-1 lg:col-span-4 flex bg-white border border-gray-300 rounded-md hover:border-gray-400 transition relative overflow-hidden">
-                  <div 
-                    className="flex-1 px-3 flex flex-col justify-center relative cursor-pointer group hover:bg-gray-50 transition"
-                    onClick={() => checkInRef.current && checkInRef.current.showPicker()}
-                  >
+                  <div className="flex-1 px-3 flex flex-col justify-center relative cursor-pointer group hover:bg-gray-50 transition" onClick={() => checkInRef.current && checkInRef.current.showPicker()}>
                     <label className="block text-[10px] text-gray-400 uppercase pt-1 cursor-pointer">Check-in</label>
                     <div className="text-sm text-gray-900 font-bold pb-1 truncate cursor-pointer">
                       {checkInDate ? formatarDataExibicao(checkInDate) : <span className="text-gray-300 font-normal">Adicionar data</span>}
                     </div>
-                    <input 
-                      type="date" 
-                      ref={checkInRef}
-                      min={getTodayStr()} 
-                      value={checkInDate} 
-                      onChange={(e) => setCheckInDate(e.target.value)} 
-                      className="absolute bottom-0 left-0 w-full h-0 opacity-0 pointer-events-none"
-                    />
+                    <input type="date" ref={checkInRef} min={getTodayStr()} value={checkInDate} onChange={(e) => setCheckInDate(e.target.value)} className="absolute bottom-0 left-0 w-full h-0 opacity-0 pointer-events-none" />
                   </div>
 
                   <div className="w-[1px] bg-gray-300 my-2"></div>
 
-                  <div 
-                    className="flex-1 px-3 flex flex-col justify-center relative cursor-pointer group hover:bg-gray-50 transition"
-                    onClick={() => checkOutRef.current && checkOutRef.current.showPicker()}
-                  >
+                  <div className="flex-1 px-3 flex flex-col justify-center relative cursor-pointer group hover:bg-gray-50 transition" onClick={() => checkOutRef.current && checkOutRef.current.showPicker()}>
                     <label className="block text-[10px] text-gray-400 uppercase pt-1 cursor-pointer">Check-out</label>
                     <div className="text-sm text-gray-900 font-bold pb-1 truncate cursor-pointer">
                       {checkOutDate ? formatarDataExibicao(checkOutDate) : <span className="text-gray-300 font-normal">Adicionar data</span>}
                     </div>
-                    <input 
-                      type="date" 
-                      ref={checkOutRef}
-                      min={checkInDate || getTomorrowStr()} 
-                      value={checkOutDate} 
-                      onChange={(e) => setCheckOutDate(e.target.value)} 
-                      className="absolute bottom-0 left-0 w-full h-0 opacity-0 pointer-events-none"
-                    />
+                    <input type="date" ref={checkOutRef} min={checkInDate || getTomorrowStr()} value={checkOutDate} onChange={(e) => setCheckOutDate(e.target.value)} className="absolute bottom-0 left-0 w-full h-0 opacity-0 pointer-events-none" />
                   </div>
                 </div>
 
                 <div className="col-span-1 lg:col-span-2 relative bg-white border border-gray-300 rounded-md px-3 py-1.5 cursor-pointer hover:border-gray-400 transition flex flex-col justify-center" ref={guestDropdownRef} onClick={() => setShowGuestDropdown(!showGuestDropdown)}>
                   <span className="block text-[10px] text-gray-400 uppercase">{rooms.length} quarto{rooms.length > 1 ? 's' : ''} para</span>
                   <div className="text-sm text-gray-900 font-medium flex justify-between items-center">
-                    <span>{rooms.reduce((acc, r) => acc + r.adults + r.childrenAges.length, 0)} hóspedes</span>
+                    <span>{totalGuests} hóspedes</span>
                     <span className="text-gray-400 text-xs">▼</span>
                   </div>
 
@@ -692,14 +500,10 @@ export default function HotelSearch() {
                       <div className="max-h-[360px] overflow-y-auto pr-2 scrollbar-thin">
                         {rooms.map((room, roomIndex) => (
                           <div key={roomIndex} className="mb-5 pb-5 border-b border-gray-100 last:border-0 last:pb-0 last:mb-0">
-                            
                             <div className="flex justify-between items-center mb-3">
                               <h4 className="font-bold text-gray-900 text-base">Quarto {roomIndex + 1}</h4>
-                              {roomIndex > 0 && (
-                                <button type="button" onClick={() => removeRoom(roomIndex)} className="text-sm text-red-500 hover:underline">Remover</button>
-                              )}
+                              {roomIndex > 0 && <button type="button" onClick={() => removeRoom(roomIndex)} className="text-sm text-red-500 hover:underline">Remover</button>}
                             </div>
-                            
                             <div className="flex gap-4">
                               <div className="flex flex-col items-start w-1/3 shrink-0">
                                 <span className="text-xs text-gray-500 mb-1.5">Adultos</span>
@@ -709,50 +513,31 @@ export default function HotelSearch() {
                                   <button type="button" onClick={() => updateAdults(roomIndex, 1)} disabled={room.adults >= 6} className="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 transition">+</button>
                                 </div>
                               </div>
-
                               <div className="flex flex-col items-start flex-1">
                                 <span className="text-xs text-gray-500 mb-1.5">Crianças</span>
                                 <div className="flex flex-wrap gap-2">
                                   {room.childrenAges.map((age, childIndex) => (
                                     <div key={childIndex} className="flex items-center border border-gray-300 rounded h-9 bg-white overflow-hidden shadow-sm">
-                                      <select 
-                                        value={age} 
-                                        onChange={(e) => updateChildAge(roomIndex, childIndex, e.target.value)} 
-                                        className="pl-2 pr-1 h-full text-sm text-gray-800 outline-none bg-transparent cursor-pointer appearance-none"
-                                      >
-                                        {[...Array(18).keys()].map(n => (
-                                          <option key={n} value={n}>{n === 0 ? '0 ano' : `${n} ano${n !== 1 ? 's' : ''}`}</option>
-                                        ))}
+                                      <select value={age} onChange={(e) => updateChildAge(roomIndex, childIndex, e.target.value)} className="pl-2 pr-1 h-full text-sm text-gray-800 outline-none bg-transparent cursor-pointer appearance-none">
+                                        {[...Array(18).keys()].map(n => <option key={n} value={n}>{n === 0 ? '0 ano' : `${n} ano${n !== 1 ? 's' : ''}`}</option>)}
                                       </select>
                                       <button type="button" onClick={() => removeChild(roomIndex, childIndex)} className="px-2 h-full flex items-center justify-center border-l border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-red-500 transition font-bold">✕</button>
                                     </div>
                                   ))}
                                   {room.childrenAges.length < 4 && (
-                                    <button 
-                                      type="button" 
-                                      onClick={() => addChild(roomIndex)} 
-                                      className={`border border-gray-300 rounded h-9 text-gray-700 hover:bg-gray-50 transition text-sm font-medium ${room.childrenAges.length === 0 ? 'px-4' : 'w-9 flex items-center justify-center'}`}
-                                    >
+                                    <button type="button" onClick={() => addChild(roomIndex)} className={`border border-gray-300 rounded h-9 text-gray-700 hover:bg-gray-50 transition text-sm font-medium ${room.childrenAges.length === 0 ? 'px-4' : 'w-9 flex items-center justify-center'}`}>
                                       {room.childrenAges.length === 0 ? 'Adicionar uma criança' : '+'}
                                     </button>
                                   )}
                                 </div>
                               </div>
-
                             </div>
                           </div>
                         ))}
                       </div>
-
                       <div className="pt-4 mt-2 border-t border-gray-100 flex flex-col gap-4">
-                        {rooms.length < 9 && (
-                          <button type="button" onClick={addRoom} className="text-sm text-blue-600 hover:text-blue-800 font-medium text-left">
-                            Adicionar um quarto
-                          </button>
-                        )}
-                        <button type="button" onClick={() => setShowGuestDropdown(false)} className="w-full bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-bold py-2.5 rounded shadow-sm transition text-sm">
-                          Concluído
-                        </button>
+                        {rooms.length < 9 && <button type="button" onClick={addRoom} className="text-sm text-blue-600 hover:text-blue-800 font-medium text-left">Adicionar um quarto</button>}
+                        <button type="button" onClick={() => setShowGuestDropdown(false)} className="w-full bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-bold py-2.5 rounded shadow-sm transition text-sm">Concluído</button>
                       </div>
                     </div>
                   )}
@@ -764,283 +549,239 @@ export default function HotelSearch() {
                   </button>
                 </div>
               </div>
-
-              <div className="mt-2">
-                <span className="text-xs text-white font-medium mb-2 block">Parâmetros adicionais</span>
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
-                  
-                  <div className="col-span-1 lg:col-span-2 border border-gray-300 rounded-md bg-white px-2 flex flex-col justify-center h-[38px] hover:border-gray-400 transition">
-                    <label className="block text-[8px] text-gray-400 uppercase font-bold">Nacionalidade</label>
-                    <select value={residency} onChange={(e) => setResidency(e.target.value)} className="text-[11px] text-gray-900 font-bold outline-none bg-transparent w-full cursor-pointer">
-                      {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="col-span-1 lg:col-span-3 flex border border-gray-300 rounded-md divide-x divide-gray-300 overflow-hidden text-[11px] font-medium text-gray-700 bg-white h-[38px]">
-                    <button type="button" onClick={() => toggleStar(0)} className={`flex-1 px-1 transition ${stars.length === 0 ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>Sem estrelas</button>
-                    <button type="button" onClick={() => toggleStar(2)} className={`flex-1 px-1 transition ${stars.includes(2) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>2⭐</button>
-                    <button type="button" onClick={() => toggleStar(3)} className={`flex-1 px-1 transition ${stars.includes(3) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>3⭐</button>
-                    <button type="button" onClick={() => toggleStar(4)} className={`flex-1 px-1 transition ${stars.includes(4) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>4⭐</button>
-                    <button type="button" onClick={() => toggleStar(5)} className={`flex-1 px-1 transition ${stars.includes(5) ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>5⭐</button>
-                  </div>
-
-                  <div className="col-span-1 lg:col-span-2 flex border border-gray-300 rounded-md divide-x divide-gray-300 overflow-hidden text-[11px] font-medium text-gray-700 bg-white h-[38px]">
-                    <button type="button" title="Somente quarto" onClick={() => toggleMeal('RO')} className={`flex-1 transition ${meals.includes('RO') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>RO</button>
-                    <button type="button" title="Café da manhã" onClick={() => toggleMeal('BB')} className={`flex-1 transition ${meals.includes('BB') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>BB</button>
-                    <button type="button" title="Meia pensão" onClick={() => toggleMeal('HB')} className={`flex-1 transition ${meals.includes('HB') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>HB</button>
-                    <button type="button" title="Pensão completa" onClick={() => toggleMeal('FB')} className={`flex-1 transition ${meals.includes('FB') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>FB</button>
-                    <button type="button" title="Tudo incluído" onClick={() => toggleMeal('AI')} className={`flex-1 transition ${meals.includes('AI') ? 'bg-orange-50 font-bold text-orange-600' : 'hover:bg-gray-50'}`}>AI</button>
-                  </div>
-
-                  <div className="col-span-1 lg:col-span-5 flex items-center gap-2">
-                    
-                    <div className="flex border border-gray-300 rounded-md px-2 hover:border-gray-400 transition-all bg-white h-[38px] flex-1 min-w-[110px]">
-                      <div className="flex flex-col w-full justify-center">
-                        <label className="text-[8px] text-gray-400 uppercase font-bold">Check-in antec.</label>
-                        <select value={earlyCheckin} onChange={(e) => setEarlyCheckin(e.target.value)} className="text-[11px] font-medium text-gray-700 outline-none bg-transparent cursor-pointer w-full">
-                          <option value="">Selecionar</option>
-                          {['01:00','02:00','03:00','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00'].map(h => <option key={h} value={h}>{h}</option>)}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="flex border border-gray-300 rounded-md px-2 hover:border-gray-400 transition-all bg-white h-[38px] flex-1 min-w-[110px]">
-                      <div className="flex flex-col w-full justify-center">
-                        <label className="text-[8px] text-gray-400 uppercase font-bold">Check-out tard.</label>
-                        <select value={lateCheckout} onChange={(e) => setLateCheckout(e.target.value)} className="text-[11px] font-medium text-gray-700 outline-none bg-transparent cursor-pointer w-full">
-                          <option value="">Selecionar</option>
-                          {['13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00'].map(h => <option key={h} value={h}>{h}</option>)}
-                        </select>
-                      </div>
-                    </div>
-
-                    <label className="flex items-center gap-1.5 cursor-pointer h-[38px] px-1 whitespace-nowrap">
-                      <input type="checkbox" checked={freeCancellation} onChange={(e) => setFreeCancellation(e.target.checked)} className="w-3.5 h-3.5 accent-[#ffc107] cursor-pointer" />
-                      <span className="text-[11px] font-medium text-white shadow-sm drop-shadow-md">Cancel. Grátis</span>
-                    </label>
-                  </div>
-
-                </div>
-              </div>
-
             </form>
           </div>
         </div>
       </div>
 
+      {/* Main Layout - 3 Columns */}
       <div className="max-w-[1400px] mx-auto px-3 mt-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           
-          <div className="lg:col-span-3 bg-white rounded-xl shadow-sm p-5 border border-gray-200 text-sm text-gray-800 hidden lg:block">
-            <div className="pb-5 mb-5 border-b border-gray-200">
-              <label className="block font-bold text-gray-900 mb-2">Nome do hotel</label>
-              <input type="text" placeholder="Buscar na lista" value={filterHotelName} onChange={(e) => setFilterHotelName(e.target.value)} className="w-full border border-gray-300 rounded p-2.5 text-sm outline-none focus:border-orange-500 transition"/>
+          {/* BARRA LATERAL ESQUERDA - Filtros Padrão ETG */}
+          <div className="lg:col-span-3 space-y-5 hidden lg:block sticky top-4 max-h-screen overflow-y-auto pr-2 scrollbar-thin">
+            
+            {/* Bloco 1: Nome do Hotel */}
+            <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
+              <label className="block text-sm font-black text-gray-900 mb-3">Nome do hotel</label>
+              <input type="text" placeholder="Buscar na lista" value={filterHotelName} onChange={(e) => setFilterHotelName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none focus:border-orange-500 transition bg-gray-50"/>
             </div>
+
+            {/* Bloco 2: Nacionalidade / Cidadania */}
+            <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
+              <label className="block text-sm font-black text-gray-900 mb-3">Cidadania</label>
+              <div className="border border-gray-300 rounded-lg bg-gray-50 px-3 py-2 cursor-pointer hover:border-gray-400 transition">
+                <select value={residency} onChange={(e) => setResidency(e.target.value)} className="text-sm text-gray-900 font-medium outline-none bg-transparent w-full cursor-pointer">
+                  {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Bloco 3: Pagamento e Reserva */}
+            <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
+              <h3 className="block text-sm font-black text-gray-900 mb-3">Pagamento e reserva</h3>
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${freeCancellation ? 'bg-[#ffc107] border-[#ffc107]' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
+                  {freeCancellation && <Check size={14} className="text-gray-900 font-bold" />}
+                </div>
+                <span className="text-sm font-medium text-gray-700 select-none">Cancelamento grátis</span>
+                <input type="checkbox" checked={freeCancellation} onChange={(e) => setFreeCancellation(e.target.checked)} className="hidden" />
+              </label>
+            </div>
+
+            {/* Bloco 4: Estrelas */}
+            <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
+              <h3 className="block text-sm font-black text-gray-900 mb-3">Classificação</h3>
+              <div className="flex flex-col gap-2.5">
+                {[5, 4, 3, 2].map(star => (
+                  <label key={star} className="flex items-center gap-3 cursor-pointer group">
+                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${stars.includes(star) ? 'bg-[#ffc107] border-[#ffc107]' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
+                      {stars.includes(star) && <Check size={14} className="text-gray-900 font-bold" />}
+                    </div>
+                    <span className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                      {'⭐'.repeat(star)} 
+                    </span>
+                    <input type="checkbox" checked={stars.includes(star)} onChange={() => toggleStar(star)} className="hidden" />
+                  </label>
+                ))}
+                <label className="flex items-center gap-3 cursor-pointer group mt-1">
+                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${stars.includes(0) ? 'bg-[#ffc107] border-[#ffc107]' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
+                    {stars.includes(0) && <Check size={14} className="text-gray-900 font-bold" />}
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">Sem classificação</span>
+                  <input type="checkbox" checked={stars.includes(0)} onChange={() => toggleStar(0)} className="hidden" />
+                </label>
+              </div>
+            </div>
+
+            {/* Bloco 5: Refeições */}
+            <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
+              <h3 className="block text-sm font-black text-gray-900 mb-3">Refeições</h3>
+              <div className="flex flex-col gap-2.5">
+                {[
+                  { id: 'RO', label: 'Sem refeições incluídas' },
+                  { id: 'BB', label: 'Pequeno-almoço incluído' },
+                  { id: 'HB', label: 'Meia Pensão' },
+                  { id: 'FB', label: 'Pensão Completa' },
+                  { id: 'AI', label: 'Tudo incluído' }
+                ].map(meal => (
+                  <label key={meal.id} className="flex items-center gap-3 cursor-pointer group">
+                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${meals.includes(meal.id) ? 'bg-[#ffc107] border-[#ffc107]' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
+                      {meals.includes(meal.id) && <Check size={14} className="text-gray-900 font-bold" />}
+                    </div>
+                    <span className="text-sm font-medium text-gray-700">{meal.label}</span>
+                    <input type="checkbox" checked={meals.includes(meal.id)} onChange={() => toggleMeal(meal.id)} className="hidden" />
+                  </label>
+                ))}
+              </div>
+            </div>
+
           </div>
 
+          {/* LISTA DE HOTÉIS - Centro */}
           <div className="lg:col-span-5 space-y-4">
             
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-              <h2 className="text-lg font-black text-gray-900">{destinationQuery ? destinationQuery.split(',')[0] : 'Destino'}: {hoteisExibidosNaLista.length} opções disponíveis</h2>
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center">
+              <h2 className="text-lg font-black text-gray-900 leading-tight">
+                {destinationQuery ? destinationQuery.split(',')[0] : 'Destino'}: {hoteisExibidosNaLista.length} opções
+              </h2>
             </div>
 
-            {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm font-bold border-l-4 border-red-500 shadow-sm">{error}</div>}
+            {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm font-bold border border-red-200 shadow-sm">{error}</div>}
 
+            {/* CARDS COM UMA ÚNICA OFERTA (A MAIS BARATA) E LAYOUT HORIZONTAL ESTRITO */}
             {hoteisExibidosNaLista.map((hotel, index) => {
-              
-              const cardBg = hotel.imagensReais && hotel.imagensReais.length > 0 
-                ? getSafeImageUrl(hotel.imagensReais[0], '800x600')
-                : null;
-
+              const cardBg = getSafeImageUrl(hotel.imagensReais);
               const isFavorite = favorites.some(fav => fav._id === String(hotel.hotelId) && fav.type === 'hotel');
+              const cheapestOffer = hotel.ofertas[0]; 
+              
+              const guestsText = `para ${nightsCount} noite${nightsCount > 1 ? 's' : ''} para ${totalAdults} adulto${totalAdults > 1 ? 's' : ''}${totalChildren > 0 ? ` e ${totalChildren} criança${totalChildren > 1 ? 's' : ''}` : ''}`;
 
               const handleToggleFavorite = (e) => {
-                e.stopPropagation(); 
-                e.preventDefault();
-                
+                e.stopPropagation(); e.preventDefault();
                 toggleFavorite({
-                    _id: String(hotel.hotelId),
-                    type: 'hotel',
-                    name: hotel.nome,
-                    price: hotel.ofertas[0]?.precoVenda || 0,
-                    image: cardBg,
-                    originalHotelData: hotel,
-                    checkInDate,
-                    checkOutDate,
-                    rooms,
-                    residency
+                    _id: String(hotel.hotelId), type: 'hotel', name: hotel.nome,
+                    price: cheapestOffer?.precoVenda || 0, image: cardBg,
+                    originalHotelData: hotel, checkInDate, checkOutDate, rooms, residency
                 });
               };
 
               return (
                 <div 
                   key={index} 
-                  onMouseEnter={() => {
-                    if(hotel.latitude && hotel.longitude) {
-                      setMapCenterLatLon(`${hotel.latitude},${hotel.longitude}`);
-                    }
-                  }}
-                  className="bg-white border border-gray-200 rounded-xl shadow-sm hover:border-orange-400 hover:shadow-md transition-all overflow-hidden flex flex-col xl:flex-row cursor-default"
+                  onMouseEnter={() => { if(hotel.latitude && hotel.longitude) setMapCenterLatLon(`${hotel.latitude},${hotel.longitude}`); }}
+                  className="flex flex-col md:flex-row bg-white rounded-xl shadow-sm hover:shadow-md transition-all border border-gray-200 overflow-hidden"
                 >
+                  {/* FACHADA DO HOTEL */}
                   <div 
                     onClick={() => setActiveGalleryHotel(hotel)} 
-                    className="w-full xl:w-[220px] h-48 xl:h-auto bg-gray-100 relative shrink-0 cursor-pointer group overflow-hidden border-r border-gray-200 flex items-center justify-center"
+                    className="relative w-full md:w-[260px] h-[220px] md:h-auto bg-gray-100 shrink-0 cursor-pointer group border-b md:border-b-0 md:border-r border-gray-200"
                   >
-                    <button 
-                      onClick={handleToggleFavorite}
-                      className="absolute top-3 right-3 z-20 p-2 bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:scale-110 transition-transform"
-                      title="Salvar nos Favoritos"
-                    >
+                    <button onClick={handleToggleFavorite} className="absolute top-3 left-3 z-20 p-2 bg-white/90 backdrop-blur-md rounded-full shadow-sm hover:scale-110 transition-transform">
                       <Heart size={18} className={isFavorite ? "fill-red-500 text-red-500" : "text-gray-500"} />
                     </button>
-
                     {cardBg ? (
-                      <div 
-                        className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                        style={{ backgroundImage: `url('${cardBg}')` }}
-                      ></div>
+                      <img src={cardBg} alt={hotel.nome} className="w-full h-full object-cover group-hover:opacity-90 transition duration-300" />
                     ) : (
-                      <div className="flex flex-col items-center justify-center p-4 text-center">
-                        <span className="text-2xl mb-1">🏨</span>
-                        <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Imagem Indisponível</span>
+                      <div className="flex flex-col items-center justify-center w-full h-full text-gray-400">
+                        <span className="text-3xl mb-1">🏨</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Sem Imagem</span>
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-3">
-                      <span className="text-white text-[10px] font-bold bg-black/50 px-2 py-1 rounded-md backdrop-blur-sm flex items-center gap-1.5 shadow-sm border border-white/20">📷 Ver {hotel.imagensReais?.length || 0} fotos</span>
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] font-bold px-3 py-1 rounded-full backdrop-blur-sm flex items-center gap-1 hover:bg-black/80 transition">
+                      <span>⟨</span> 1 / {parseImagesList(hotel.imagensReais).length || 1} <span>⟩</span>
                     </div>
                   </div>
 
-                  <div className="flex-1 p-4 flex flex-col justify-between">
+                  {/* INFO DO HOTEL & OFERTA PRINCIPAL */}
+                  <div className="flex-1 p-5 flex flex-col justify-between">
                     <div>
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <div className="text-amber-400 text-[10px] mb-0.5">{'⭐'.repeat(hotel.categoria || 4)}</div>
-                          
-                          <h3 
-                            onClick={() => navigate('/hotel-details', { state: { hotel, checkInDate, checkOutDate, rooms, residency } })}
-                            className="font-bold text-blue-600 text-base leading-tight hover:underline transition cursor-pointer"
-                          >
-                            {hotel.nome}
-                          </h3>
-
-                          <p 
-                            onClick={() => navigate('/hotel-details', { state: { hotel, checkInDate, checkOutDate, rooms, residency } })}
-                            className="text-[11px] text-gray-500 font-medium mt-1 hover:underline cursor-pointer"
-                          >
-                            {hotel.endereco}
-                          </p>
-
-                          <p className="text-[11px] text-gray-400">{hotel.distancia}</p>
-                        </div>
-                        <div className="bg-green-600 text-white font-black text-sm px-2.5 py-1 rounded shadow-sm">8,2</div>
+                      <div className="flex justify-between items-start mb-1.5">
+                        <div className="text-amber-400 text-xs">{'⭐'.repeat(hotel.categoria || 4)}</div>
+                        <div className="bg-green-600 text-white font-black text-sm px-2.5 py-1 rounded shadow-sm">8,6</div>
                       </div>
-
-                      <div className="pt-3 flex flex-col gap-2.5">
-                        {hotel.ofertas?.filter(oferta => {
-                          const mealMatch = meals.length === 0 || meals.includes(oferta.codigoRegime);
-                          const cancelMatch = !freeCancellation || oferta.freeCancellation;
-                          return mealMatch && cancelMatch;
-                        }).map((oferta, idx) => (
-                          <div key={idx} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-2 rounded-lg border-t border-gray-100 transition">
-                            <div className="mb-2 sm:mb-0 w-full sm:w-auto">
-                              <p className="font-medium text-gray-700 text-xs">{oferta.tipoQuarto}</p>
-                              
-                              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                <span className="text-[10px] text-green-700 font-medium flex items-center gap-1 uppercase"><span>🍽️</span> {oferta.nomeRegime}</span>
-                                {oferta.freeCancellation && (
-                                  <span className="text-[10px] text-green-700 font-medium bg-green-50 px-1.5 py-0.5 rounded border border-green-100">
-                                    ↩️ {oferta.cancellationDeadline || 'Cancelamento gratuito'}
-                                  </span>
-                                )}
-                              </div>
-
-                              {oferta.excludedTaxes?.length > 0 && (
-                                <div className="mt-2 pt-2 border-t border-gray-50">
-                                  <span className="text-[9px] font-bold text-red-500 uppercase">Mandatory taxes at hotel:</span>
-                                  <div className="flex flex-col gap-0.5 mt-0.5">
-                                    {oferta.excludedTaxes.map((tax, i) => (
-                                      <span key={i} className="text-[9px] text-red-600">{tax.name}: {tax.amount} {tax.currency_code}</span>
-                                    ))}
-                                  </div>
-                                </div>
+                      
+                      <h3 
+                        onClick={() => navigate('/hotel-details', { state: { hotel, checkInDate, checkOutDate, rooms, residency } })}
+                        className="font-bold text-blue-600 text-lg leading-tight hover:underline cursor-pointer"
+                      >
+                        {hotel.nome}
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-1 truncate">{hotel.endereco || hotel.distancia}</p>
+                      
+                      {/* RESUMO DO QUARTO MAIS BARATO */}
+                      {cheapestOffer && (
+                        <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                           <p className="text-sm font-bold text-gray-800">{cheapestOffer.tipoQuarto}</p>
+                           <p className="text-[10px] text-gray-500 uppercase mt-0.5">Opção mais econômica para {totalGuests} hóspedes</p>
+                           
+                           <div className="flex flex-wrap items-center gap-3 mt-2 text-xs font-medium text-gray-700">
+                              <span className="flex items-center gap-1">🍽️ {cheapestOffer.nomeRegime}</span>
+                              {cheapestOffer.freeCancellation ? (
+                                <span className="flex items-center gap-1 text-green-700">↩️ {cheapestOffer.cancellationDeadline || 'Cancelamento especial'}</span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-red-600">❌ Não reembolsável</span>
                               )}
-                            </div>
-                            
-                            <div className="text-left sm:text-right flex flex-col sm:items-end w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0">
-                              <span className="text-base font-medium text-gray-900">BRL {oferta.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                              
-                              <button 
-                                onClick={() => navigate('/hotel-details', { state: { hotel, checkInDate, checkOutDate, rooms, residency } })}
-                                className="w-full sm:w-auto bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-bold text-[11px] px-4 py-1.5 rounded shadow-sm transition mt-1"
-                              >Mostrar</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                           </div>
+                        </div>
+                      )}
                     </div>
+
+                    <div className="mt-5 flex flex-col sm:flex-row justify-between items-end border-t border-gray-100 pt-4 gap-3 sm:gap-0">
+                      <div className="w-full sm:w-auto text-right sm:text-left flex-1">
+                         <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">A partir de</p>
+                         <p className="text-2xl font-black text-gray-900 leading-none">BRL {cheapestOffer?.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                      </div>
+                      
+                      <button 
+                        onClick={() => navigate('/hotel-details', { state: { hotel, checkInDate, checkOutDate, rooms, residency } })}
+                        className="w-full sm:w-auto bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-bold py-2.5 px-6 rounded-lg shadow-sm text-xs uppercase tracking-wider transition"
+                      >
+                        Mostrar todos os quartos
+                      </button>
+                    </div>
+
                   </div>
                 </div>
               );
             })}
           </div>
 
+          {/* MAPA STICKY - Lado Direito */}
           <div className="lg:col-span-4 sticky top-4 h-[calc(100vh-40px)] bg-gray-100 rounded-xl border border-gray-300 overflow-hidden shadow-inner hidden lg:flex flex-col">
-            
             <div className="bg-white p-3 border-b border-gray-200 flex justify-between items-center z-10 shadow-sm relative">
-              <button 
-                onClick={() => setIsMapExpanded(true)} 
-                className="bg-white border border-gray-300 text-xs font-bold px-4 py-2 rounded shadow hover:bg-gray-50 transition flex items-center gap-1 text-gray-700"
-              >
+              <button onClick={() => setIsMapExpanded(true)} className="bg-white border border-gray-300 text-xs font-bold px-4 py-2 rounded shadow hover:bg-gray-50 transition flex items-center gap-1 text-gray-700">
                 <span>⛶</span> Ampliar o mapa
               </button>
-              
               <label className="flex items-center gap-2 cursor-pointer ml-3 bg-gray-50 border border-gray-300 px-3 py-1.5 rounded-md hover:bg-gray-100 transition">
-                <input 
-                  type="checkbox" 
-                  checked={searchOnMapMove} 
-                  onChange={(e) => setSearchOnMapMove(e.target.checked)} 
-                  className="accent-[#ffc107] w-4 h-4 cursor-pointer"
-                />
-                <span className="text-xs font-bold text-gray-700 whitespace-nowrap">Pesquisar movendo o mapa</span>
+                <input type="checkbox" checked={searchOnMapMove} onChange={(e) => setSearchOnMapMove(e.target.checked)} className="accent-[#ffc107] w-4 h-4 cursor-pointer" />
+                <span className="text-[10px] font-bold text-gray-700 whitespace-nowrap uppercase">Pesquisar movendo o mapa</span>
               </label>
             </div>
 
             <div className="flex-1 w-full relative">
               {filteredResults.length > 0 ? (
-                <iframe 
-                  title="Mapa de Localização com Preços"
-                  width="100%" 
-                  height="100%" 
-                  style={{ border: 0 }} 
-                  srcDoc={buildMapHtml()}
-                ></iframe>
+                <iframe title="Mapa de Localização com Preços" width="100%" height="100%" style={{ border: 0 }} srcDoc={buildMapHtml()}></iframe>
               ) : (
-                <div className="flex items-center justify-center h-full text-gray-400 text-sm font-medium">
-                  Faça uma busca para ver os hotéis no mapa
-                </div>
+                <div className="flex items-center justify-center h-full text-gray-400 text-sm font-medium">Faça uma busca para ver os hotéis no mapa</div>
               )}
             </div>
-            
           </div>
 
         </div>
       </div>
 
+      {/* GALERIA GERAL DE FOTOS */}
       {activeGalleryHotel && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl p-6 rounded-2xl relative shadow-2xl">
+          <div className="bg-white w-full max-w-4xl p-6 rounded-2xl relative shadow-2xl">
             <button onClick={() => setActiveGalleryHotel(null)} className="absolute top-4 right-4 text-xl font-bold text-gray-500 hover:text-black">✕</button>
             <h3 className="font-black text-lg mb-4 text-gray-900">Galeria Oficial: {activeGalleryHotel.nome}</h3>
             
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-h-[70vh] overflow-y-auto pr-1 scrollbar-thin">
               {activeGalleryHotel.imagensReais && activeGalleryHotel.imagensReais.length > 0 ? (
-                activeGalleryHotel.imagensReais.map((imgUrl, i) => (
-                  <img 
-                    key={i} 
-                    src={getSafeImageUrl(imgUrl, '500x500')} 
-                    className="rounded-lg h-40 w-full object-cover shadow-sm border border-gray-100" 
-                    alt={`Hotel API ${i}`} 
-                  />
+                parseImagesList(activeGalleryHotel.imagensReais).map((imgUrl, i) => (
+                  <img key={i} src={imgUrl} className="rounded-lg h-32 w-full object-cover shadow-sm border border-gray-100" alt={`Hotel API ${i}`} />
                 ))
               ) : (
                 <div className="col-span-full py-12 text-center text-gray-500 text-xs font-medium bg-gray-50 rounded-xl border border-dashed border-gray-200">
@@ -1069,6 +810,7 @@ export default function HotelSearch() {
         document.body
       )}
 
+      {/* MAPA EXPANDIDO TELA CHEIA */}
       {isMapExpanded && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999999] bg-white flex flex-col">
           <div className="p-4 bg-gray-900 flex justify-between items-center shadow-md">
@@ -1076,7 +818,7 @@ export default function HotelSearch() {
             <div className="flex items-center gap-6">
               <label className="flex items-center gap-2 cursor-pointer bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 hover:bg-gray-700 transition">
                 <input type="checkbox" checked={searchOnMapMove} onChange={(e) => setSearchOnMapMove(e.target.checked)} className="accent-[#ffc107] w-4 h-4" />
-                <span className="text-xs font-bold text-white">Pesquisar movendo o mapa</span>
+                <span className="text-xs font-bold text-white uppercase tracking-wide">Pesquisar movendo o mapa</span>
               </label>
               <button onClick={() => setIsMapExpanded(false)} className="bg-[#ffc107] hover:bg-yellow-500 text-gray-900 px-6 py-2 rounded-lg font-black text-sm uppercase tracking-wide transition shadow-lg">
                 Fechar Mapa
