@@ -27,7 +27,6 @@ const parseImagesList = (imagesData) => {
   return [];
 };
 
-// HELPER: Lógica de Quartos + Fallback Motel + Filtro Anti-Fachada
 const findRoomImages = (oferta, roomGroups, hotelImages) => {
   let rGroups = roomGroups;
   if (typeof rGroups === 'string' && rGroups.trim().startsWith('[')) {
@@ -35,37 +34,27 @@ const findRoomImages = (oferta, roomGroups, hotelImages) => {
   }
   
   let foundImages = [];
+  const parsedHotelImages = parseImagesList(hotelImages);
+  const fachadaHotel = parsedHotelImages.length > 0 ? parsedHotelImages[0] : null;
 
   if (rGroups && Array.isArray(rGroups) && rGroups.length > 0) {
-    
-    // 1. MATCH ESTRITO
     if (oferta.rg_ext && typeof oferta.rg_ext === 'object') {
-      const matchedByRgExt = rGroups.find(rg => {
+      const matchedExact = rGroups.find(rg => {
         if (!rg.rg_ext || typeof rg.rg_ext !== 'object') return false;
         const searchKeys = Object.keys(oferta.rg_ext);
         if (searchKeys.length === 0) return false;
         return searchKeys.every(key => String(rg.rg_ext[key]) === String(oferta.rg_ext[key]));
       });
-      if (matchedByRgExt && matchedByRgExt.images) {
-        foundImages = parseImagesList(matchedByRgExt.images);
-      }
+      if (matchedExact && matchedExact.images) foundImages = parseImagesList(matchedExact.images);
     }
-
-    // 2. MATCH PARCIAL (Class + Quality)
     if (foundImages.length === 0 && oferta.rg_ext) {
       const matchedPartial = rGroups.find(rg => {
-        return rg.rg_ext && 
-               String(rg.rg_ext.class) === String(oferta.rg_ext.class) && 
-               String(rg.rg_ext.quality) === String(oferta.rg_ext.quality);
+        return rg.rg_ext && String(rg.rg_ext.class) === String(oferta.rg_ext.class) && String(rg.rg_ext.quality) === String(oferta.rg_ext.quality);
       });
-      if (matchedPartial && matchedPartial.images) {
-        foundImages = parseImagesList(matchedPartial.images);
-      }
+      if (matchedPartial && matchedPartial.images) foundImages = parseImagesList(matchedPartial.images);
     }
-
-    // 3. MATCH POR NOME (Conserta o Conrad)
-    if (foundImages.length === 0 && oferta.tipoQuarto) {
-      const offerNameLower = oferta.tipoQuarto.toLowerCase();
+    if (foundImages.length === 0 && oferta.tipoQuartoRaw) {
+      const offerNameLower = oferta.tipoQuartoRaw.toLowerCase();
       const matchedByName = rGroups.find(rg => {
         if (!rg.name) return false;
         const staticNameLower = rg.name.toLowerCase();
@@ -73,24 +62,16 @@ const findRoomImages = (oferta, roomGroups, hotelImages) => {
         if (mainWords.length > 0) return mainWords.some(word => offerNameLower.includes(word));
         return offerNameLower.includes(staticNameLower);
       });
-      if (matchedByName && matchedByName.images) {
-        foundImages = parseImagesList(matchedByName.images);
-      }
+      if (matchedByName && matchedByName.images) foundImages = parseImagesList(matchedByName.images);
     }
-
-    // 4. QUARTO ÚNICO
     if (foundImages.length === 0 && rGroups.length === 1) {
       if (rGroups[0].images) foundImages = parseImagesList(rGroups[0].images);
     }
   }
 
-  const parsedHotelImages = parseImagesList(hotelImages);
-  const fachadaHotel = parsedHotelImages.length > 0 ? parsedHotelImages[0] : null;
-
   if (foundImages.length > 0 && fachadaHotel) {
     foundImages = foundImages.filter(img => img !== fachadaHotel);
   }
-
   if (foundImages.length === 0 && parsedHotelImages.length > 0) {
     foundImages = parsedHotelImages.filter(img => img !== fachadaHotel);
   }
@@ -98,7 +79,16 @@ const findRoomImages = (oferta, roomGroups, hotelImages) => {
   return foundImages; 
 };
 
-// FORMATO DE CANCELAMENTO OBRIGATÓRIO ETG
+const formatRoomName = (r) => {
+  if (r.room_data_trans) {
+    const main = r.room_data_trans.main_room_type || r.room_data_trans.main_name || r.room_name;
+    const bedding = r.room_data_trans.bedding_type ? ` (${r.room_data_trans.bedding_type})` : '';
+    const misc = r.room_data_trans.misc_room_type ? ` - ${r.room_data_trans.misc_room_type}` : '';
+    return `${main}${bedding}${misc}`.trim();
+  }
+  return r.room_name || 'Quarto Standard';
+};
+
 const formatCancellation = (deadlineUtc) => {
   if (!deadlineUtc) return null;
   const datePart = deadlineUtc.split('T')[0];
@@ -226,8 +216,10 @@ export default function HotelDetails() {
           const safeCheckin = checkInDate || new Date().toISOString().split('T')[0];
           const safeCheckout = checkOutDate || new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-          const res = await fetch('https://palastore-flights-api.laeciossp.workers.dev/hotel-page', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
+          // CACHE BUSTER SEGURO: Parâmetro via URL evita bloqueio de CORS no Worker
+          const res = await fetch(`https://palastore-flights-api.laeciossp.workers.dev/hotel-page?_t=${Date.now()}`, {
+              method: 'POST', 
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
                   id: rawId, checkin: safeCheckin, checkout: safeCheckout, residency: currentResidency || "br", currency: "USD", guests: guestsPayload 
               })
@@ -241,7 +233,8 @@ export default function HotelDetails() {
                 const exactCancellation = r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before;
 
                 return {
-                  tipoQuarto: r.room_name, // OBRIGATÓRIO: Uso do room_name original, sem formatações
+                  tipoQuartoRaw: r.room_name,
+                  tipoQuarto: formatRoomName(r), 
                   codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO',
                   nomeRegime: r.meal_data?.value || 'Sem refeições', 
                   precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0) * 5.1,
@@ -284,10 +277,18 @@ export default function HotelDetails() {
     setBookingError(null);
 
     try {
-      const prebookPayload = { book_hash: oferta.bookHash, price_increase_percent: 5 };
+      // PREBOOK PAYLOAD SEGURO
+      const prebookPayload = { 
+        hash: oferta.bookHash, 
+        book_hash: oferta.bookHash, 
+        price_increase_percent: 10
+      };
 
-      const res = await fetch('https://palastore-flights-api.laeciossp.workers.dev/hotel-prebook', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prebookPayload)
+      // CACHE BUSTER SEGURO: Evita o erro rate_not_found sem causar bloqueio de CORS
+      const res = await fetch(`https://palastore-flights-api.laeciossp.workers.dev/hotel-prebook?_t=${Date.now()}`, {
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(prebookPayload)
       });
       const data = await res.json();
 
@@ -320,7 +321,6 @@ export default function HotelDetails() {
         guests: room.guests.map(g => ({ ...g, first_name: sanitizeName(g.first_name), last_name: sanitizeName(g.last_name) }))
       }));
 
-      // PAYLOAD B2B: E-mail Corporativo OBRIGATÓRIO (Declarado na Certificação)
       const orderPayload = {
         partner_order_id: partnerOrderId, hash: selectedOffer.bookHash, language: "en",
         user: { email: "reservations@palastore.com.br", phone: guestPhone || "+5571999999999", comment: "Reserva B2B" },
@@ -486,7 +486,7 @@ export default function HotelDetails() {
               </div>
             )}
 
-            {/* HOTEL POLICIES OBRIGATÓRIAS */}
+            {/* HOTEL POLICIES */}
             {staticData?.metapolicy_extra_info && (
               <div className="bg-orange-50 rounded-xl border border-orange-200 shadow-sm p-5">
                 <h3 className="font-black text-sm mb-3 text-orange-800 flex items-center gap-1.5">⚠️ Hotel Policies & Important Information</h3>
@@ -523,6 +523,7 @@ export default function HotelDetails() {
                   return (
                     <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-4 p-5 border-b border-gray-100 items-start hover:bg-gray-50 transition">
                       
+                      {/* ACOMODAÇÃO */}
                       <div className="col-span-1 md:col-span-4 flex gap-4">
                         <div 
                            className="w-24 h-24 shrink-0 rounded-lg overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:opacity-80 transition bg-gray-100 flex items-center justify-center relative group"
@@ -551,12 +552,13 @@ export default function HotelDetails() {
                         </div>
                       </div>
 
+                      {/* REFEIÇÕES */}
                       <div className="col-span-1 md:col-span-2 text-xs font-bold text-[#15803d] pt-1">🍽️ {oferta.nomeRegime}</div>
                       
+                      {/* CANCELAMENTO & RATE POLICIES */}
                       <div className="col-span-1 md:col-span-3 text-xs font-bold pt-1 pr-2">
                         {oferta.freeCancellation ? <span className="text-[#15803d]">↩️ {oferta.cancellationDeadline}</span> : <span className="text-red-600">❌ Não reembolsável</span>}
                         
-                        {/* POLÍTICAS DA TARIFA (Exigência ETG) */}
                         {oferta.deposit && (
                            <div className="text-[9px] text-orange-600 mt-1 font-normal leading-tight">
                              <b>Deposit:</b> Payment may be required before check-in.
@@ -569,14 +571,15 @@ export default function HotelDetails() {
                         )}
                       </div>
 
+                      {/* PREÇO E TAXAS EXCLUÍDAS */}
                       <div className="col-span-1 md:col-span-2 pt-1 text-right pr-4">
                         <span className="text-base font-black text-gray-900 block tracking-tight">BRL {oferta.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                         
-                        {/* TAXAS OBRIGATÓRIAS (Exigência ETG) */}
                         {oferta.excludedTaxes?.length > 0 && (
                           <div className="mt-1 flex flex-col items-end">
+                            <span className="text-[8px] font-black text-red-600 uppercase tracking-wider">⚠️ Payable at property:</span>
                             {oferta.excludedTaxes.map((t, idx2) => (
-                              <span key={idx2} className="text-[9px] font-black text-red-700 tracking-wider">Payable at the property: {t.name} {t.amount} {t.currency_code}</span>
+                              <span key={idx2} className="text-[9px] text-red-700">{t.name} {t.amount} {t.currency_code}</span>
                             ))}
                           </div>
                         )}
