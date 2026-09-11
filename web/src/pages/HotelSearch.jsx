@@ -4,22 +4,78 @@ import { useNavigate } from 'react-router-dom';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../firebase'; 
 import { createClient } from '@supabase/supabase-js';
-import { Heart, Check } from 'lucide-react';
+import { Heart, Check, Clock } from 'lucide-react';
 import useCartStore from '../store/useCartStore';
 
 const SUPABASE_URL = "https://vcqiilytjrrurdbscmio.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_leFg1lWGZlctiU3CXYR2Gw_FpOG2qR3"; 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// LISTA DE PAÍSES COMPLETA E MAPEADA OFICIALMENTE
 const COUNTRIES = [
-  { code: 'br', name: 'Brasil' }, { code: 'us', name: 'Estados Unidos' }, { code: 'pt', name: 'Portugal' },
-  { code: 'ar', name: 'Argentina' }, { code: 'uy', name: 'Uruguai' }, { code: 'cl', name: 'Chile' },
-  { code: 'co', name: 'Colômbia' }, { code: 'pe', name: 'Peru' }, { code: 'mx', name: 'México' },
-  { code: 'ca', name: 'Canadá' }, { code: 'gb', name: 'Reino Unido' }, { code: 'es', name: 'Espanha' },
-  { code: 'fr', name: 'França' }, { code: 'it', name: 'Itália' }, { code: 'de', name: 'Alemanha' },
-  { code: 'cn', name: 'China' }, { code: 'jp', name: 'Japão' }, { code: 'ae', name: 'Emirados Árabes Unidos' },
-  { code: 'ao', name: 'Angola' }, { code: 'mz', name: 'Moçambique' }, { code: 'za', name: 'África do Sul' },
-  { code: 'ru', name: 'Federação Russa' }, { code: 'in', name: 'Índia' }, { code: 'au', name: 'Austrália' }
+  { code: 'br', name: 'Brasil' }, { code: 'aw', name: 'Aruba' }, { code: 'af', name: 'Afeganistão' }, { code: 'ao', name: 'Angola' },
+  { code: 'ai', name: 'Anguilla' }, { code: 'ax', name: 'Ilhas Alanda' }, { code: 'al', name: 'Albânia' }, { code: 'ad', name: 'Andorra' },
+  { code: 'ae', name: 'Emirados Árabes Unidos' }, { code: 'ar', name: 'Argentina' }, { code: 'am', name: 'Arménia' }, { code: 'as', name: 'Samoa Americana' },
+  { code: 'aq', name: 'Antártida' }, { code: 'tf', name: 'Territórios Franceses do Sul' }, { code: 'ag', name: 'Antígua e Barbuda' }, { code: 'au', name: 'Austrália' },
+  { code: 'at', name: 'Áustria' }, { code: 'az', name: 'Azerbaijão' }, { code: 'bi', name: 'Burundi' }, { code: 'be', name: 'Bélgica' },
+  { code: 'bj', name: 'Benim' }, { code: 'bq', name: 'Bonaire, Santo Eustáquio e Saba' }, { code: 'bf', name: 'Burkina Faso' }, { code: 'bd', name: 'Bangladeche' },
+  { code: 'bg', name: 'Bulgária' }, { code: 'bh', name: 'Barém' }, { code: 'bs', name: 'Bahamas' }, { code: 'ba', name: 'Bósnia e Herzegovina' },
+  { code: 'bl', name: 'Saint Barthélemy' }, { code: 'by', name: 'Bielorússia' }, { code: 'bz', name: 'Belize' }, { code: 'bm', name: 'Bermudas' },
+  { code: 'bo', name: 'Bolívia, Estado Plurinacional da' }, { code: 'bb', name: 'Barbados' }, { code: 'bn', name: 'Brunei' }, { code: 'bt', name: 'Butão' },
+  { code: 'bv', name: 'Ilha Bouvet' }, { code: 'bw', name: 'Botsuana' }, { code: 'cf', name: 'República Centro-Africana' }, { code: 'ca', name: 'Canadá' },
+  { code: 'cc', name: 'Ilhas Cocos' }, { code: 'ch', name: 'Suíça' }, { code: 'cl', name: 'Chile' }, { code: 'cn', name: 'China' },
+  { code: 'ci', name: 'Costa do Marfim' }, { code: 'cm', name: 'Camarões' }, { code: 'cd', name: 'Congo, República Democrática do' }, { code: 'cg', name: 'Congo' },
+  { code: 'ck', name: 'Ilhas Cook' }, { code: 'co', name: 'Colômbia' }, { code: 'km', name: 'Comores' }, { code: 'cv', name: 'Cabo Verde' },
+  { code: 'cr', name: 'Costa Rica' }, { code: 'cu', name: 'Cuba' }, { code: 'cw', name: 'Curação' }, { code: 'cx', name: 'Ilha Natal' },
+  { code: 'ky', name: 'Ilhas Caimão' }, { code: 'cy', name: 'Chipre' }, { code: 'cz', name: 'Chéquia' }, { code: 'de', name: 'Alemanha' },
+  { code: 'dj', name: 'Djibouti' }, { code: 'dm', name: 'Dominica' }, { code: 'dk', name: 'Dinamarca' }, { code: 'do', name: 'República Dominicana' },
+  { code: 'dz', name: 'Argélia' }, { code: 'ec', name: 'Equador' }, { code: 'eg', name: 'Egito' }, { code: 'er', name: 'Eritreia' },
+  { code: 'eh', name: 'Saara Ocidental' }, { code: 'es', name: 'Espanha' }, { code: 'ee', name: 'Estónia' }, { code: 'et', name: 'Etiópia' },
+  { code: 'fi', name: 'Finlândia' }, { code: 'fj', name: 'Fiji' }, { code: 'fk', name: 'Ilhas Falkland (Malvinas)' }, { code: 'fr', name: 'França' },
+  { code: 'fo', name: 'Ilhas Faroé' }, { code: 'fm', name: 'Micronésia, Estados Federados da' }, { code: 'ga', name: 'Gabão' }, { code: 'gb', name: 'Reino Unido' },
+  { code: 'ge', name: 'Geórgia' }, { code: 'gg', name: 'Guernsey' }, { code: 'gh', name: 'Gana' }, { code: 'gi', name: 'Gibraltar' },
+  { code: 'gn', name: 'Guiné' }, { code: 'gp', name: 'Guadalupe' }, { code: 'gm', name: 'Gâmbia' }, { code: 'gw', name: 'Guiné-Bissáu' },
+  { code: 'gq', name: 'Guiné Equatorial' }, { code: 'gr', name: 'Grécia' }, { code: 'gd', name: 'Granada' }, { code: 'gl', name: 'Gronelândia' },
+  { code: 'gt', name: 'Guatemala' }, { code: 'gf', name: 'Guiana Francesa' }, { code: 'gu', name: 'Guam' }, { code: 'gy', name: 'Guiana' },
+  { code: 'hk', name: 'Hong Kong' }, { code: 'hm', name: 'Ilha Heard e Ilhas McDonald' }, { code: 'hn', name: 'Honduras' }, { code: 'hr', name: 'Croácia' },
+  { code: 'ht', name: 'Haiti' }, { code: 'hu', name: 'Hungria' }, { code: 'id', name: 'Indonésia' }, { code: 'im', name: 'Ilha de Man' },
+  { code: 'in', name: 'Índia' }, { code: 'io', name: 'Território Britânico do Oceano Índico' }, { code: 'ie', name: 'Irlanda' }, { code: 'ir', name: 'Irão, República Islâmica do' },
+  { code: 'iq', name: 'Iraque' }, { code: 'is', name: 'Islândia' }, { code: 'il', name: 'Israel' }, { code: 'it', name: 'Itália' },
+  { code: 'jm', name: 'Jamaica' }, { code: 'je', name: 'Jersey' }, { code: 'jo', name: 'Jordânia' }, { code: 'jp', name: 'Japão' },
+  { code: 'kz', name: 'Cazaquistão' }, { code: 'ke', name: 'Quénia' }, { code: 'kg', name: 'Quirguistão' }, { code: 'kh', name: 'Camboja' },
+  { code: 'ki', name: 'Kiribati' }, { code: 'kn', name: 'São Cristóvão e Nevis' }, { code: 'kr', name: 'Coreia, República da' }, { code: 'kw', name: 'Kuwait' },
+  { code: 'la', name: 'República Democrática Popular do Laos' }, { code: 'lb', name: 'Líbano' }, { code: 'lr', name: 'Libéria' }, { code: 'ly', name: 'Líbia' },
+  { code: 'lc', name: 'Santa Lúcia' }, { code: 'li', name: 'Liechtenstein' }, { code: 'lk', name: 'Sri Lanka' }, { code: 'ls', name: 'Lesoto' },
+  { code: 'lt', name: 'Lituânia' }, { code: 'lu', name: 'Luxemburgo' }, { code: 'lv', name: 'Letónia' }, { code: 'mo', name: 'Macau' },
+  { code: 'mf', name: 'São Martin (Território Francês)' }, { code: 'ma', name: 'Marrocos' }, { code: 'mc', name: 'Mónaco' }, { code: 'md', name: 'Moldávia, República da' },
+  { code: 'mg', name: 'Madagáscar' }, { code: 'mv', name: 'Maldivas' }, { code: 'mx', name: 'México' }, { code: 'mh', name: 'Ilhas Marshall' },
+  { code: 'mk', name: 'Macedónia do Norte' }, { code: 'ml', name: 'Mali' }, { code: 'mt', name: 'Malta' }, { code: 'mm', name: 'Birmânia' },
+  { code: 'me', name: 'Montenegro' }, { code: 'mn', name: 'Mongólia' }, { code: 'mp', name: 'Ilhas Marianas do Norte' }, { code: 'mz', name: 'Moçambique' },
+  { code: 'mr', name: 'Mauritânia' }, { code: 'ms', name: 'Monserrate' }, { code: 'mq', name: 'Martinica' }, { code: 'mu', name: 'Maurícia' },
+  { code: 'mw', name: 'Malawi' }, { code: 'my', name: 'Malásia' }, { code: 'yt', name: 'Mayotte' }, { code: 'na', name: 'Namíbia' },
+  { code: 'nc', name: 'Nova Caledónia' }, { code: 'ne', name: 'Níger' }, { code: 'nf', name: 'Ilha Norfolk' }, { code: 'ng', name: 'Nigéria' },
+  { code: 'ni', name: 'Nicarágua' }, { code: 'nu', name: 'Niue' }, { code: 'nl', name: 'Países Baixos' }, { code: 'no', name: 'Noruega' },
+  { code: 'np', name: 'Nepal' }, { code: 'nr', name: 'Nauru' }, { code: 'nz', name: 'Nova Zelândia' }, { code: 'om', name: 'Omã' },
+  { code: 'pk', name: 'Paquistão' }, { code: 'pa', name: 'Panamá' }, { code: 'pn', name: 'Pitcairn' }, { code: 'pe', name: 'Peru' },
+  { code: 'ph', name: 'Filipinas' }, { code: 'pw', name: 'Palau' }, { code: 'pg', name: 'Papua Nova Guiné' }, { code: 'pl', name: 'Polónia' },
+  { code: 'pr', name: 'Porto Rico' }, { code: 'kp', name: 'Coreia, República Popular Democrática da' }, { code: 'pt', name: 'Portugal' }, { code: 'py', name: 'Paraguai' },
+  { code: 'ps', name: 'Palestina, Estado da' }, { code: 'pf', name: 'Polinésia Francesa' }, { code: 'qa', name: 'Catar' }, { code: 're', name: 'Ilha Reunião' },
+  { code: 'ro', name: 'Roménia' }, { code: 'ru', name: 'Federação Russa' }, { code: 'rw', name: 'Ruanda' }, { code: 'sa', name: 'Arábia Saudita' },
+  { code: 'sd', name: 'Sudão' }, { code: 'sn', name: 'Senegal' }, { code: 'sg', name: 'Singapura' }, { code: 'gs', name: 'Ilhas Geórgia do Sul e Sandwich do Sul' },
+  { code: 'sh', name: 'Santa Helena, Ascensão e Tristão da Cunha' }, { code: 'sj', name: 'Svalbard e Jan Mayen' }, { code: 'sb', name: 'Ilhas Salomão' }, { code: 'sl', name: 'Serra Leoa' },
+  { code: 'sv', name: 'El Salvador' }, { code: 'sm', name: 'San Marino' }, { code: 'so', name: 'Somália' }, { code: 'pm', name: 'Saint Pierre e Miquelon' },
+  { code: 'rs', name: 'Sérvia' }, { code: 'ss', name: 'Sudão do Sul' }, { code: 'st', name: 'São Tomé e Príncipe' }, { code: 'sr', name: 'Suriname' },
+  { code: 'sk', name: 'Eslováquia' }, { code: 'si', name: 'Eslovénia' }, { code: 'se', name: 'Suécia' }, { code: 'sz', name: 'Suazilândia' },
+  { code: 'sx', name: 'São Martinho (Países Baixos)' }, { code: 'sc', name: 'Seychelles' }, { code: 'sy', name: 'República Árabe Síria' }, { code: 'tc', name: 'Ilhas Turcas e Caicos' },
+  { code: 'td', name: 'Chade' }, { code: 'tg', name: 'Togo' }, { code: 'th', name: 'Tailândia' }, { code: 'tj', name: 'Tajiquistão' },
+  { code: 'tk', name: 'Tokelau' }, { code: 'tm', name: 'Turquemenistão' }, { code: 'tl', name: 'Timor-Leste' }, { code: 'to', name: 'Tonga' },
+  { code: 'tt', name: 'Trindade e Tobago' }, { code: 'tn', name: 'Tunísia' }, { code: 'tr', name: 'Turquia' }, { code: 'tv', name: 'Tuvalu' },
+  { code: 'tw', name: 'Taiwan' }, { code: 'tz', name: 'Tanzânia, República Unida da' }, { code: 'ug', name: 'Uganda' }, { code: 'ua', name: 'Ucrânia' },
+  { code: 'um', name: 'Ilhas Menores Distantes dos Estados Unidos' }, { code: 'uy', name: 'Uruguai' }, { code: 'us', name: 'Estados Unidos' }, { code: 'uz', name: 'Uzbequistão' },
+  { code: 'va', name: 'Santa Sé (Estado da Cidade do Vaticano)' }, { code: 'vc', name: 'São Vicente e Granadinas' }, { code: 've', name: 'Venezuela, República Bolivariana da' }, { code: 'vg', name: 'Ilhas Virgens, Britânicas' },
+  { code: 'vi', name: 'Ilhas Virgens, Estados Unidos' }, { code: 'vn', name: 'Vietname' }, { code: 'vu', name: 'Vanuatu' }, { code: 'wf', name: 'Wallis e Futuna' },
+  { code: 'ws', name: 'Samoa' }, { code: 'ye', name: 'Iémen' }, { code: 'za', name: 'África do Sul' }, { code: 'zm', name: 'Zâmbia' },
+  { code: 'zw', name: 'Zimbábue' }, { code: 'xk', name: 'Kosovo' }
 ];
 
 const getSafeImageUrl = (imgInput) => {
@@ -94,7 +150,11 @@ export default function HotelSearch() {
   const [rooms, setRooms] = useState([{ adults: 1, childrenAges: [] }]);
   const [showGuestDropdown, setShowGuestDropdown] = useState(false);
   
+  // NOVOS PARÂMETROS
   const [residency, setResidency] = useState('br'); 
+  const [earlyCheckin, setEarlyCheckin] = useState(''); // 01:00 às 13:00
+  const [lateCheckout, setLateCheckout] = useState(''); // 13:00 às 23:00
+
   const [stars, setStars] = useState([]); 
   const [meals, setMeals] = useState([]); 
   const [freeCancellation, setFreeCancellation] = useState(false);
@@ -250,11 +310,21 @@ export default function HotelSearch() {
           adults: room.adults, children: room.childrenAges
         }));
 
+        const payloadData = {
+          hids: hidsToSearch, 
+          checkin: checkInDate, 
+          checkout: checkOutDate, 
+          residency: residency, 
+          currency: "USD", 
+          guests: guestsPayload
+        };
+
+        if (earlyCheckin) payloadData.early_arrival = earlyCheckin;
+        if (lateCheckout) payloadData.late_departure = lateCheckout;
+
         const response = await fetch(baseUrl, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            hids: hidsToSearch, checkin: checkInDate, checkout: checkOutDate, residency: residency, currency: "USD", guests: guestsPayload
-          })
+          body: JSON.stringify(payloadData)
         });
 
         const resData = await response.json();
@@ -442,7 +512,8 @@ export default function HotelSearch() {
 
           <div className="p-5 md:p-6 bg-orange-500 rounded-b-xl">
             <form onSubmit={handleSearch}>
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+              {/* LINHA 1: BUSCA PRINCIPAL */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3">
                 <div className="col-span-1 lg:col-span-4 relative bg-white border border-gray-300 rounded-md hover:border-gray-400 transition" ref={dropdownRef}>
                   <label className="block text-[10px] text-gray-400 uppercase pt-1.5 px-3">Destino</label>
                   <div className="flex items-center px-3 pb-1.5">
@@ -552,11 +623,69 @@ export default function HotelSearch() {
                   </button>
                 </div>
               </div>
+
+{/* LINHA 2: PARÂMETROS ADICIONAIS (CIDADANIA, CHECK-IN, CHECK-OUT) */}
+              <div className="flex flex-wrap items-center gap-3">
+                
+                {/* Cidadania */}
+                <div className="bg-white border border-gray-300 rounded-md flex flex-col justify-center px-3 py-1 hover:border-gray-400 transition w-full md:w-48">
+                  <label className="text-[10px] text-gray-400 uppercase">Cidadania</label>
+                  <select value={residency} onChange={(e) => setResidency(e.target.value)} className="w-full outline-none text-sm text-gray-900 font-medium bg-transparent cursor-pointer">
+                    {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                  </select>
+                </div>
+
+                {/* Check-in Antecipado (Área 100% Clicável) */}
+                <div 
+                  className="bg-white border border-gray-300 rounded-md flex flex-col justify-center px-3 py-1 hover:border-gray-400 transition w-full md:w-40 cursor-pointer"
+                  onClick={(e) => {
+                    const input = e.currentTarget.querySelector('input[type="time"]');
+                    if (input && input.showPicker) {
+                      try { input.showPicker(); } catch (err) {}
+                    }
+                  }}
+                >
+                  <label className="text-[10px] text-gray-400 uppercase flex items-center gap-1 cursor-pointer"><Clock size={10}/> Check-in antes</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="time" 
+                      min="01:00" max="13:00"
+                      value={earlyCheckin} 
+                      onChange={(e) => setEarlyCheckin(e.target.value)} 
+                      className="w-full outline-none text-sm text-gray-900 font-medium bg-transparent cursor-pointer"
+                    />
+                    {earlyCheckin && <button type="button" onClick={(e) => { e.stopPropagation(); setEarlyCheckin(''); }} className="text-gray-400 hover:text-red-500 font-bold px-1">✕</button>}
+                  </div>
+                </div>
+
+                {/* Check-out Tardio (Área 100% Clicável) */}
+                <div 
+                  className="bg-white border border-gray-300 rounded-md flex flex-col justify-center px-3 py-1 hover:border-gray-400 transition w-full md:w-40 cursor-pointer"
+                  onClick={(e) => {
+                    const input = e.currentTarget.querySelector('input[type="time"]');
+                    if (input && input.showPicker) {
+                      try { input.showPicker(); } catch (err) {}
+                    }
+                  }}
+                >
+                  <label className="text-[10px] text-gray-400 uppercase flex items-center gap-1 cursor-pointer"><Clock size={10}/> Check-out depois</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="time" 
+                      min="13:00" max="23:00"
+                      value={lateCheckout} 
+                      onChange={(e) => setLateCheckout(e.target.value)} 
+                      className="w-full outline-none text-sm text-gray-900 font-medium bg-transparent cursor-pointer"
+                    />
+                    {lateCheckout && <button type="button" onClick={(e) => { e.stopPropagation(); setLateCheckout(''); }} className="text-gray-400 hover:text-red-500 font-bold px-1">✕</button>}
+                  </div>
+                </div>
+
+              </div>
             </form>
           </div>
         </div>
       </div>
-
       {/* Main Layout - 3 Columns */}
       <div className="max-w-[1400px] mx-auto px-3 mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
@@ -567,15 +696,6 @@ export default function HotelSearch() {
             <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
               <label className="block text-sm font-black text-gray-900 mb-3">Nome do hotel</label>
               <input type="text" placeholder="Buscar na lista" value={filterHotelName} onChange={(e) => setFilterHotelName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none focus:border-orange-500 transition bg-gray-50"/>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
-              <label className="block text-sm font-black text-gray-900 mb-3">Cidadania</label>
-              <div className="border border-gray-300 rounded-lg bg-gray-50 px-3 py-2 cursor-pointer hover:border-gray-400 transition">
-                <select value={residency} onChange={(e) => setResidency(e.target.value)} className="text-sm text-gray-900 font-medium outline-none bg-transparent w-full cursor-pointer">
-                  {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-                </select>
-              </div>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200">
@@ -645,8 +765,6 @@ export default function HotelSearch() {
               const isFavorite = favorites.some(fav => fav._id === String(hotel.hotelId) && fav.type === 'hotel');
               const cheapestOffer = hotel.ofertas[0]; 
               
-              const guestsText = `para ${nightsCount} noite${nightsCount > 1 ? 's' : ''} para ${totalAdults} adulto${totalAdults > 1 ? 's' : ''}${totalChildren > 0 ? ` e ${totalChildren} criança${totalChildren > 1 ? 's' : ''}` : ''}`;
-
               const handleToggleFavorite = (e) => {
                 e.stopPropagation(); e.preventDefault();
                 toggleFavorite({

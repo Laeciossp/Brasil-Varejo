@@ -10,7 +10,7 @@ import PalastoreTransfers from '../components/PalastoreTransfers';
 import { 
   Calendar, Users, Check, AlertCircle, 
   Plane, Building, Car, X, 
-  Briefcase, Luggage, Info, ArrowRightLeft, MapPin, Clock, ShoppingCart, ShieldCheck
+  Briefcase, Luggage, Info, ArrowRightLeft, MapPin, Clock, ShoppingCart, ShieldCheck, Timer
 } from 'lucide-react';
 
 const WORKER_URL = "https://palastore-flights-api.laeciossp.workers.dev";
@@ -65,6 +65,94 @@ const calcularNoites = (ida, volta) => {
   return Math.max(1, Math.ceil(Math.abs(new Date(volta) - new Date(ida)) / (1000 * 60 * 60 * 24)));
 };
 
+// ==========================================
+// FUNÇÕES DE PADRÃO DE OURO DO HOTEL (ETG)
+// ==========================================
+const getSafeImageUrl = (imgInput) => {
+  if (!imgInput) return null;
+  let rawUrl = typeof imgInput === 'string' ? imgInput : (imgInput?.url || imgInput?.image || '');
+  if (!rawUrl) return null;
+  let formattedUrl = rawUrl.startsWith('//') ? 'https:' + rawUrl : rawUrl;
+  return formattedUrl.replace('{size}', '1024x768');
+};
+
+const parseImagesList = (imagesData) => {
+  if (!imagesData) return [];
+  let list = imagesData;
+  if (typeof list === 'string' && list.trim().startsWith('[')) {
+    try { list = JSON.parse(list); } catch(e) { return []; }
+  }
+  if (Array.isArray(list)) {
+    return list.map(img => getSafeImageUrl(img)).filter(Boolean);
+  }
+  return [];
+};
+
+const findRoomImages = (oferta, roomGroups, hotelImages) => {
+  let rGroups = roomGroups;
+  if (typeof rGroups === 'string' && rGroups.trim().startsWith('[')) {
+      try { rGroups = JSON.parse(rGroups); } catch(e) { rGroups = []; }
+  }
+  
+  let foundImages = [];
+  const parsedHotelImages = parseImagesList(hotelImages);
+  const fachadaHotel = parsedHotelImages.length > 0 ? parsedHotelImages[0] : null;
+
+  if (rGroups && Array.isArray(rGroups) && rGroups.length > 0) {
+    if (oferta?.rg_ext && typeof oferta.rg_ext === 'object') {
+      const matchedByRgExt = rGroups.find(rg => {
+        if (!rg.rg_ext || typeof rg.rg_ext !== 'object') return false;
+        const searchKeys = Object.keys(oferta.rg_ext);
+        if (searchKeys.length === 0) return false;
+        return searchKeys.every(key => String(rg.rg_ext[key]) === String(oferta.rg_ext[key]));
+      });
+      if (matchedByRgExt && matchedByRgExt.images) foundImages = parseImagesList(matchedByRgExt.images);
+    }
+    if (foundImages.length === 0 && oferta?.rg_ext) {
+      const matchedPartial = rGroups.find(rg => {
+        return rg.rg_ext && String(rg.rg_ext.class) === String(oferta.rg_ext.class) && String(rg.rg_ext.quality) === String(oferta.rg_ext.quality);
+      });
+      if (matchedPartial && matchedPartial.images) foundImages = parseImagesList(matchedPartial.images);
+    }
+    if (foundImages.length === 0 && oferta?.tipoQuartoRaw) {
+      const offerNameLower = oferta.tipoQuartoRaw.toLowerCase();
+      const matchedByName = rGroups.find(rg => {
+        if (!rg.name) return false;
+        const staticNameLower = rg.name.toLowerCase();
+        const mainWords = staticNameLower.split(' ').filter(w => w.length > 4); 
+        if (mainWords.length > 0) return mainWords.some(word => offerNameLower.includes(word));
+        return offerNameLower.includes(staticNameLower);
+      });
+      if (matchedByName && matchedByName.images) foundImages = parseImagesList(matchedByName.images);
+    }
+    if (foundImages.length === 0 && rGroups.length === 1) {
+      if (rGroups[0].images) foundImages = parseImagesList(rGroups[0].images);
+    }
+  }
+
+  if (foundImages.length > 0 && fachadaHotel) foundImages = foundImages.filter(img => img !== fachadaHotel);
+  if (foundImages.length === 0 && parsedHotelImages.length > 0) foundImages = parsedHotelImages.filter(img => img !== fachadaHotel);
+
+  return foundImages; 
+};
+
+const formatRoomName = (r) => {
+  if (r.room_data_trans) {
+    const main = r.room_data_trans.main_room_type || r.room_data_trans.main_name || r.room_name;
+    const bedding = r.room_data_trans.bedding_type ? ` (${r.room_data_trans.bedding_type})` : '';
+    const misc = r.room_data_trans.misc_room_type ? ` - ${r.room_data_trans.misc_room_type}` : '';
+    return `${main}${bedding}${misc}`.trim();
+  }
+  return r.room_name || 'Quarto Standard';
+};
+
+const formatCancellation = (deadlineUtc) => {
+  if (!deadlineUtc) return null;
+  const datePart = deadlineUtc.split('T')[0];
+  const timePart = deadlineUtc.split('T')[1]?.substring(0, 5) || '00:00';
+  return `Free cancellation before ${datePart} at ${timePart} (Hotel Local Time)`;
+};
+
 export default function FlightHotelPackage() {
   const navigate = useNavigate();
   const { addItem } = useCartStore();
@@ -76,16 +164,18 @@ export default function FlightHotelPackage() {
     setFlightsResults, setHotelsResults, 
     selectedFlight, selectedHotel, selectedTransfer,
     changeSelectedFlight, changeSelectedHotel, changeSelectedTransfer,
-    removeTransfer, removeFlight, removeHotel,
-    flightFilters, setFlightFilters,
-    hotelFilters, setHotelFilters,
-    isLoading, setLoading, error, setError, getPackageTotals
+    removeTransfer, isLoading, setLoading, error, setError
   } = usePackageStore();
 
   const [loadingCart, setLoadingCart] = useState(false);
   const [activeGalleryHotel, setActiveGalleryHotel] = useState(null);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [expandedFlightId, setExpandedFlightId] = useState(null);
+  
+  // ==========================================
+  // ESTADO DO CRONÔMETRO DE 10 MINUTOS
+  // ==========================================
+  const [timeLeft, setTimeLeft] = useState(600);
 
   const [tempOrigin, setTempOrigin] = useState(searchParams?.origin?.name || 'São Paulo');
   const [selectedOriginObj, setSelectedOriginObj] = useState(searchParams?.origin || { id: 'SAO', name: 'São Paulo' });
@@ -100,17 +190,54 @@ export default function FlightHotelPackage() {
   const [tempDateOut, setTempDateOut] = useState(searchParams?.dateOut || '2026-12-18');
   const [tempDateIn, setTempDateIn] = useState(searchParams?.dateIn || '2026-12-20');
   const [tempPax, setTempPax] = useState(searchParams?.adults || 2);
-  const [tempBagsIda, setTempBagsIda] = useState(searchParams?.holdBagsIda || 0);
-  const [tempBagsVolta, setTempBagsVolta] = useState(searchParams?.holdBagsVolta || 0);
+  
+  // ==========================================
+  // BAGAGEM UNIFICADA (Idêntica ao Voo Avulso)
+  // ==========================================
+  const [tempHoldBags, setTempHoldBags] = useState(searchParams?.holdBags || 0);
 
-  const { totalGeral, precoPorPessoa, totalPax, bagCost } = getPackageTotals();
-  const taxasEImpostos = Math.ceil(precoPorPessoa * 0.12);
-  const precoBasePessoa = Math.max(0, precoPorPessoa - taxasEImpostos);
+  // Variáveis Básicas
+  const totalPax = searchParams?.adults || 2;
   const noites = calcularNoites(searchParams?.dateOut, searchParams?.dateIn);
 
-  const flightTotal = selectedFlight ? (Number(selectedFlight.precoBase || selectedFlight.safeTotal || selectedFlight.precoFinal || selectedFlight.price) || 0) + (bagCost || 0) : 0;
-  const hotelTotal = selectedHotel ? (Number(selectedHotel.ofertas?.[0]?.precoVenda || selectedHotel.price) || 0) : 0;
-  const transferTotal = selectedTransfer ? (Number(selectedTransfer.price) || 0) : 0;
+  // Cálculos Dinâmicos Locais (Precisão Absoluta)
+  const bagMultiplier = selectedFlight && !selectedFlight.volta ? 2 : 1;
+  const unitBagPrice = selectedFlight?.bags_price?.['1'] ? Math.ceil(selectedFlight.bags_price['1']) : 120;
+  const localBagCost = (searchParams?.holdBags || 0) > 0 ? (searchParams.holdBags * unitBagPrice * bagMultiplier) : 0;
+
+  const baseFlightFare = selectedFlight ? (Number(selectedFlight.precoBase || selectedFlight.safeTotal || selectedFlight.precoFinal || selectedFlight.price) || 0) : 0;
+  const localFlightTotal = baseFlightFare + localBagCost;
+  
+  const localHotelTotal = selectedHotel ? (Number(selectedHotel.ofertas?.[0]?.precoVenda || selectedHotel.price) || 0) : 0;
+  const localTransferTotal = selectedTransfer ? (Number(selectedTransfer.price) || 0) : 0;
+
+  const localTotalGeral = localFlightTotal + localHotelTotal + localTransferTotal;
+  const localPrecoPorPessoa = Math.ceil(localTotalGeral / (totalPax || 1));
+  const localTaxasEImpostos = Math.ceil(localPrecoPorPessoa * 0.12);
+  const localPrecoBasePessoa = Math.max(0, localPrecoPorPessoa - localTaxasEImpostos);
+
+  // ==========================================
+  // EFEITO DO CRONÔMETRO
+  // ==========================================
+  useEffect(() => {
+    if (isLoading) {
+       setTimeLeft(600); // Reseta o relógio durante o loading
+       return;
+    }
+    if (timeLeft <= 0) return;
+
+    const intervalId = setInterval(() => {
+      setTimeLeft((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [timeLeft, isLoading]);
+
+  const formatTimer = (seconds) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -121,10 +248,7 @@ export default function FlightHotelPackage() {
           setOriginResults(data.locations || []);
           if ((data.locations || []).length > 0) setShowOriginDropdown(true);
         } catch (e) {}
-      } else { 
-        setOriginResults([]); 
-        setShowOriginDropdown(false);
-      }
+      } else { setOriginResults([]); setShowOriginDropdown(false); }
     }, 400);
     return () => clearTimeout(timer);
   }, [tempOrigin]);
@@ -138,15 +262,12 @@ export default function FlightHotelPackage() {
           setDestResults(data.locations || []);
           if ((data.locations || []).length > 0) setShowDestDropdown(true);
         } catch (e) {}
-      } else { 
-        setDestResults([]); 
-        setShowDestDropdown(false);
-      }
+      } else { setDestResults([]); setShowDestDropdown(false); }
     }, 400);
     return () => clearTimeout(timer);
   }, [tempDest]);
 
-  const executarBuscaCompleta = async (origObj, destObj, dateOutStr, dateInStr, paxNum, bagsIda, bagsVolta) => {
+  const executarBuscaCompleta = async (origObj, destObj, dateOutStr, dateInStr, paxNum, bagsUnificadas) => {
     setLoading(true); setError(null);
     try {
       const destCode = destObj.id || 'RIO';
@@ -164,39 +285,48 @@ export default function FlightHotelPackage() {
 
       let cityLat = -23.5505; let cityLng = -46.6333;
       const isTest = cleanDestName.toLowerCase().includes('rio') || cleanDestName.toLowerCase().includes('janeiro') || cleanDestName.toLowerCase().includes('york') || cleanDestName.toLowerCase().includes('paulo');
-      
-      // 🚀 VERSÃO DE PRODUÇÃO: Restaurando todos os IDs e usando a rota /serp-hotels
       const hidsToSearch = isTest ? [10004834, 8819557, 9015534, 8663536] : [];
 
       if (hidsToSearch.length > 0) {
         const response = await fetch(`${WORKER_URL}/serp-hotels`, {
-          method: 'POST', 
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            hids: hidsToSearch, 
-            checkin: dateOutStr, 
-            checkout: dateInStr, 
-            residency: 'br', 
-            currency: "BRL", 
-            guests: [{ adults: paxNum, children: [] }] 
-          })
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hids: hidsToSearch, checkin: dateOutStr, checkout: dateInStr, residency: 'br', currency: "BRL", guests: [{ adults: paxNum, children: [] }] })
         });
         
         const resData = await response.json();
         let comb = resData.data?.hotels || [];
 
         if (comb.length > 0) {
-          const { data: dbHotels } = await supabase.from('Hotel').select('id, images, description').in('id', comb.map(h => String(h.id)));
+          const { data: dbHotels } = await supabase.from('Hotel').select('id, images, description, room_groups').in('id', comb.map(h => String(h.id)));
+          
           hoteis = comb.map(h => {
             const dbInfo = (dbHotels || []).find(dbH => dbH.id === String(h.id));
             return {
               hotelId: `rh_${h.id}`, nome: h.name, categoria: h.star_rating || 4, endereco: h.address,
               latitude: h.latitude || cityLat, longitude: h.longitude || cityLng,
-              imagensReais: dbInfo?.images || [], description: dbInfo?.description,
-              ofertas: (h.rates || []).map(r => ({
-                tipoQuarto: r.room_name, codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO', nomeRegime: r.meal_data?.value || 'Sem refeições',
-                precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || 0), bookHash: r.book_hash, freeCancellation: !!r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before
-              }))
+              imagensReais: dbInfo?.images || h.images || [], 
+              room_groups: dbInfo?.room_groups || [],
+              description: dbInfo?.description,
+              ofertas: (h.rates || []).map(r => {
+                // INTEGRANDO PADRÃO ETG
+                const taxes = r.payment_options?.payment_types?.[0]?.tax_data?.taxes?.filter(t => !t.included_by_supplier) || [];
+                const exactCancellation = r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before;
+
+                return {
+                  tipoQuartoRaw: r.room_name,
+                  tipoQuarto: formatRoomName(r), 
+                  codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO', 
+                  nomeRegime: r.meal_data?.value || 'Sem refeições',
+                  precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || 0) * 5.1, 
+                  bookHash: r.book_hash, 
+                  freeCancellation: exactCancellation != null,
+                  cancellationDeadline: formatCancellation(exactCancellation),
+                  excludedTaxes: taxes,
+                  deposit: r.deposit || null,
+                  noShow: r.no_show || null,
+                  rg_ext: r.rg_ext
+                };
+              }).sort((a,b) => a.precoVenda - b.precoVenda)
             };
           });
           setHotelsResults(hoteis);
@@ -220,8 +350,8 @@ export default function FlightHotelPackage() {
       const defaultOut = '2026-12-18';
       const defaultIn = '2026-12-20';
       
-      setSearchParams({ origin: defaultOrig, destination: defaultDest, dateOut: defaultOut, dateIn: defaultIn, adults: 2, holdBagsIda: 0, holdBagsVolta: 0 });
-      executarBuscaCompleta(defaultOrig, defaultDest, defaultOut, defaultIn, 2, 0, 0);
+      setSearchParams({ origin: defaultOrig, destination: defaultDest, dateOut: defaultOut, dateIn: defaultIn, adults: 2, holdBags: 0 });
+      executarBuscaCompleta(defaultOrig, defaultDest, defaultOut, defaultIn, 2, 0);
     }
   }, [searchParams, isLoading, setSearchParams]);
 
@@ -238,27 +368,15 @@ export default function FlightHotelPackage() {
       dateOut: tempDateOut, 
       dateIn: tempDateIn, 
       adults: Number(tempPax),
-      holdBagsIda: Number(tempBagsIda),
-      holdBagsVolta: Number(tempBagsVolta)
+      holdBags: Number(tempHoldBags)
     });
-    executarBuscaCompleta(resolvedOrig, resolvedDest, tempDateOut, tempDateIn, Number(tempPax), Number(tempBagsIda), Number(tempBagsVolta));
+    executarBuscaCompleta(resolvedOrig, resolvedDest, tempDateOut, tempDateIn, Number(tempPax), Number(tempHoldBags));
   };
 
-  const displayHotels = (hotelsResults || []).filter(h => {
-    if (hotelFilters.stars.length > 0 && !hotelFilters.stars.includes(h.categoria)) return false;
-    return true;
-  });
-
-  const displayFlights = (flightsResults || []).filter(v => {
-    if (flightFilters.stops !== 'all' && (v.ida?.escalas || 0) > parseInt(flightFilters.stops)) return false;
-    return true;
-  });
-
   const handleCheckoutPackage = () => {
-    if (!selectedFlight && !selectedHotel && !selectedTransfer) {
-      return alert("Selecione pelo menos um serviço para fechar o pacote.");
-    }
-    
+    if (!selectedFlight && !selectedHotel && !selectedTransfer) return alert("Selecione pelo menos um serviço.");
+    if (timeLeft === 0) return alert("A oferta expirou. Por favor, atualize a busca.");
+
     setLoadingCart(true);
     const packageSku = `PK-${Date.now()}`;
     const destName = searchParams.destination?.name?.split(',')[0] || 'Destino';
@@ -271,82 +389,50 @@ export default function FlightHotelPackage() {
     if (selectedFlight) {
       const ciaIda = getAirlineName(selectedFlight.ida?.companhiaPrincipal);
       const ciaVolta = selectedFlight.volta?.companhiaPrincipal ? getAirlineName(selectedFlight.volta.companhiaPrincipal) : null;
-      
-      let ciaStr = ciaIda;
-      if (ciaVolta && ciaVolta !== ciaIda) {
-        ciaStr = `Ida: ${ciaIda} / Volta: ${ciaVolta}`;
-      }
+      let ciaStr = ciaVolta && ciaVolta !== ciaIda ? `Ida: ${ciaIda} / Volta: ${ciaVolta}` : ciaIda;
 
       descLines.push(`✈️ PASSAGENS AÉREAS (${ciaStr}):`);
-      descLines.push(`• IDA (${ciaIda}): ${selectedFlight.ida?.origem} ➔ ${selectedFlight.ida?.destino} | ${formatDateBrFull(selectedFlight.ida?.partida)}`);
-      descLines.push(`  Horário: ${formatTime(selectedFlight.ida?.partida)}h às ${formatTime(selectedFlight.ida?.chegada)}h (${selectedFlight.ida?.duracao} • ${selectedFlight.ida?.escalas === 0 ? 'Direto' : selectedFlight.ida?.escalas + ' escala(s)'})`);
-      if (selectedFlight.volta) {
-        descLines.push(`• VOLTA (${ciaVolta || ciaIda}): ${selectedFlight.volta?.origem} ➔ ${selectedFlight.volta?.destino} | ${formatDateBrFull(selectedFlight.volta?.partida)}`);
-        descLines.push(`  Horário: ${formatTime(selectedFlight.volta?.partida)}h às ${formatTime(selectedFlight.volta?.chegada)}h (${selectedFlight.volta?.duracao} • ${selectedFlight.volta?.escalas === 0 ? 'Direto' : selectedFlight.volta?.escalas + ' escala(s)'})`);
-      }
-      descLines.push(`• BAGAGENS: 1 mala de mão (10kg) por passageiro${(searchParams.holdBagsIda > 0 || searchParams.holdBagsVolta > 0) ? ` | Malas de porão (23kg): ${searchParams.holdBagsIda} ida / ${searchParams.holdBagsVolta} volta` : ' | Sem bagagem de porão inclusa'}`);
-      descLines.push(`• Subtotal Voo: R$ ${flightTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
+      descLines.push(`• IDA: ${selectedFlight.ida?.origem} ➔ ${selectedFlight.ida?.destino} | ${formatDateBrFull(selectedFlight.ida?.partida)}`);
+      if (selectedFlight.volta) descLines.push(`• VOLTA: ${selectedFlight.volta?.origem} ➔ ${selectedFlight.volta?.destino} | ${formatDateBrFull(selectedFlight.volta?.partida)}`);
+      
+      descLines.push(`• BAGAGENS: 1 mala de mão (10kg) por passageiro${searchParams.holdBags > 0 ? ` | Malas de porão (23kg): ${searchParams.holdBags} inclusa(s)` : ' | Sem bagagem de porão inclusa'}`);
+      descLines.push(`• Subtotal Voo: R$ ${localFlightTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
       descLines.push(`──────────────────────────────────────────`);
     }
 
     if (selectedHotel) {
       descLines.push(`🏨 HOSPEDAGEM:`);
       descLines.push(`• Hotel: ${selectedHotel.nome || selectedHotel.name} (${'⭐'.repeat(selectedHotel.categoria || selectedHotel.stars || 3)})`);
-      if (selectedHotel.endereco) descLines.push(`• Endereço: ${selectedHotel.endereco}`);
       descLines.push(`• Quarto: ${selectedHotel.ofertas?.[0]?.tipoQuarto || 'Standard'}`);
-      descLines.push(`• Regime: ${selectedHotel.ofertas?.[0]?.nomeRegime || selectedHotel.mealPlan || 'Sem refeições'}`);
-      descLines.push(`• Estadia: ${noites} noites (${formatDateShort(searchParams.dateOut)} a ${formatDateShort(searchParams.dateIn)})`);
-      descLines.push(`• Subtotal Hotel: R$ ${hotelTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
+      descLines.push(`• Regime: ${selectedHotel.ofertas?.[0]?.nomeRegime || 'Sem refeições'}`);
+      descLines.push(`• Subtotal Hotel: R$ ${localHotelTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
       descLines.push(`──────────────────────────────────────────`);
     }
 
     if (selectedTransfer) {
       const trf = selectedTransfer.transferPayload || {};
       descLines.push(`🚘 TRANSFER PRIVATIVO:`);
-      descLines.push(`• Categoria: ${selectedTransfer.title || selectedTransfer.name}`);
       descLines.push(`• Trajeto: De ${trf.pickupName || 'Origem'} ➔ Para ${trf.dropoffName || 'Destino'}`);
-      descLines.push(`• Ida: ${trf.date || formatDateShort(searchParams.dateOut)} às ${trf.time || '12:00'}h`);
-      if (trf.tripType === 'roundtrip') {
-        descLines.push(`• Volta: ${trf.returnDate || formatDateShort(searchParams.dateIn)} às ${trf.returnTime || '12:00'}h`);
-      }
-      descLines.push(`• Ocupação: ${trf.adults || totalPax} Adulto(s)${trf.children ? `, ${trf.children} Criança(s)` : ''} | Bagagens: ${trf.largeBags || 0} Mala(s) G, ${trf.smallBags || 0} Mala(s) P`);
-      if (trf.flightNumber) descLines.push(`• Rastreio: Voo nº ${trf.flightNumber}`);
-      if (trf.needsChildSeat) descLines.push(`• Opcional: Cadeirinha infantil inclusa`);
-      if (trf.hasBabyStroller) descLines.push(`• Opcional: Espaço para carrinho de bebê`);
-      descLines.push(`• Subtotal Transfer: R$ ${transferTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
+      descLines.push(`• Subtotal Transfer: R$ ${localTransferTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
       descLines.push(`──────────────────────────────────────────`);
     }
 
-    descLines.push(`💰 TOTAL DO PACOTE: R$ ${totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})} (R$ ${precoPorPessoa.toLocaleString('pt-BR', {minimumFractionDigits: 2})} por passageiro)`);
-    descLines.push(`• Inclui R$ ${(taxasEImpostos || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})} de taxas e tributos por pessoa.`);
+    descLines.push(`💰 TOTAL DO PACOTE: R$ ${localTotalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})} (R$ ${localPrecoPorPessoa.toLocaleString('pt-BR', {minimumFractionDigits: 2})} por passageiro)`);
+    descLines.push(`• Inclui R$ ${(localTaxasEImpostos || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})} de taxas e tributos por pessoa.`);
     descLines.push(`• Condição: 5% de desconto à vista ou em até 12x.`);
 
-    const fullRichDescription = descLines.join('\n');
-
     addItem({
-      _id: packageSku, 
-      sku: packageSku, 
-      title: `Pacote: ${destName}`, 
+      _id: packageSku, sku: packageSku, title: `Pacote: ${destName}`, 
       variantName: `Período: ${formatDateShort(searchParams.dateOut)} a ${formatDateShort(searchParams.dateIn)} • ${totalPax} Viajante(s)`,
-      price: totalGeral,
-      quantity: 1,
-      pax: totalPax, 
-      image: selectedHotel?.imagensReais?.[0] || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=300',
-      isTravel: true, 
-      description: fullRichDescription, 
-      packageDetails: { 
-        flight: selectedFlight, 
-        hotel: selectedHotel, 
-        transfer: selectedTransfer,
-        totals: { totalGeral, precoPorPessoa, taxasEImpostos, flightTotal, hotelTotal, transferTotal }
-      }, 
+      price: localTotalGeral, quantity: 1, pax: totalPax, 
+      image: getSafeImageUrl(selectedHotel?.imagensReais) || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=300',
+      isTravel: true, description: descLines.join('\n'), 
+      packageDetails: { flight: selectedFlight, hotel: selectedHotel, transfer: selectedTransfer, totals: { totalGeral: localTotalGeral, precoPorPessoa: localPrecoPorPessoa, taxasEImpostos: localTaxasEImpostos, flightTotal: localFlightTotal, hotelTotal: localHotelTotal, transferTotal: localTransferTotal } }, 
       addedAt: Date.now()
     });
     
     setTimeout(() => { setLoadingCart(false); navigate('/cart'); }, 600);
   };
-
-  const getHotelImg = (h) => h?.imagensReais?.[0] ? (typeof h.imagensReais[0] === 'string' ? h.imagensReais[0].replace('{size}', '500x500') : h.imagensReais[0]) : 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=300';
 
   return (
     <div className="w-full bg-[#f4f6f8] font-sans min-h-screen pb-20">
@@ -362,7 +448,9 @@ export default function FlightHotelPackage() {
             <div className="w-px h-8 bg-white/20 mx-2 hidden md:block"></div>
             <div className="flex items-center gap-2"><Calendar size={18} className="text-[#E65100]"/> <span className="font-bold text-xs">{formatDateShort(searchParams?.dateOut)} - {formatDateShort(searchParams?.dateIn)}</span></div>
             <div className="w-px h-8 bg-white/20 mx-2 hidden md:block"></div>
-            <div className="flex items-center gap-2"><Users size={18} className="text-[#E65100]"/> <span className="font-bold text-xs">{searchParams?.rooms || 1} Quarto(s), {totalPax} Hóspedes</span></div>
+            <div className="flex items-center gap-2"><Users size={18} className="text-[#E65100]"/> <span className="font-bold text-xs">1 Quarto(s), {totalPax} Hóspedes</span></div>
+            <div className="w-px h-8 bg-white/20 mx-2 hidden md:block"></div>
+            <div className="flex items-center gap-2"><Luggage size={18} className="text-[#E65100]"/> <span className="font-bold text-xs">{searchParams?.holdBags || 0} Mala(s) 23kg</span></div>
           </div>
           <button onClick={() => setIsSearchModalOpen(true)} className="bg-[#E65100] hover:bg-orange-600 text-white font-bold px-6 py-2 rounded-full shadow transition text-xs uppercase tracking-wider">
             Alterar Busca
@@ -379,21 +467,23 @@ export default function FlightHotelPackage() {
           <h1 className="text-xl md:text-2xl font-black text-gray-800 mb-6">{selectedHotel.nome || selectedHotel.name} - {noites+1} dias / {noites} noites</h1>
         )}
 
-        {/* ========================================== */}
         {/* 2. PAINEL DE 4 COLUNAS (CVC STYLE) */}
-        {/* ========================================== */}
         <div className="bg-white rounded-xl shadow-md border border-gray-200 mb-8 overflow-hidden">
           
           <div className="hidden md:grid grid-cols-4 bg-white border-b border-gray-200">
             <div className="p-4 font-black text-gray-900 text-lg border-r border-gray-100">Hospedagem</div>
             <div className="p-4 font-black text-gray-900 text-lg border-r border-gray-100">Voo</div>
             <div className="p-4 font-black text-gray-900 text-lg border-r border-gray-100">Serviços</div>
-            <div className="p-4 font-black text-gray-900 text-lg">Resumo</div>
+            <div className="p-4 font-black text-gray-900 text-lg flex items-center justify-between">
+               <span>Resumo</span>
+               {/* MINI TIMER HEADER */}
+               <span className={`text-xs px-2 py-1 rounded ${timeLeft < 60 ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-gray-100 text-gray-600'} flex items-center gap-1`}><Timer size={12}/> {formatTimer(timeLeft)}</span>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4">
             
-            {/* COLUNA 1: HOTEL */}
+            {/* COLUNA 1: HOTEL (PADRÃO DE OURO ETG) */}
             <div className="p-5 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col justify-between">
               {selectedHotel ? (
                 <div>
@@ -403,10 +493,29 @@ export default function FlightHotelPackage() {
                   
                   <ul className="space-y-1.5 text-xs text-gray-600">
                     <li className="flex items-start gap-1.5"><Calendar size={14} className="text-gray-400 shrink-0 mt-0.5"/> {noites} noites | {formatDateShort(searchParams?.dateOut)} - {formatDateShort(searchParams?.dateIn)}</li>
-                    <li className="flex items-start gap-1.5"><Coffee size={14} className="text-gray-400 shrink-0 mt-0.5"/> {selectedHotel.ofertas?.[0]?.nomeRegime || selectedHotel.mealPlan || 'Consultar Regime'}</li>
+                    <li className="flex items-start gap-1.5"><Coffee size={14} className="text-gray-400 shrink-0 mt-0.5"/> {selectedHotel.ofertas?.[0]?.nomeRegime || 'Consultar Regime'}</li>
                     <li className="flex items-start gap-1.5"><Building size={14} className="text-gray-400 shrink-0 mt-0.5"/> {selectedHotel.ofertas?.[0]?.tipoQuarto || 'Quarto Standard'}</li>
                     <li className="flex items-start gap-1.5"><Users size={14} className="text-gray-400 shrink-0 mt-0.5"/> {totalPax} passageiros</li>
                   </ul>
+
+                  {/* ALERTAS ETG DIRETOS DA OFERTA */}
+                  {selectedHotel.ofertas?.[0] && (
+                     <div className="mt-3 bg-gray-50 border border-gray-100 p-2 rounded-lg text-[9px] font-medium text-gray-600 space-y-1">
+                        {selectedHotel.ofertas[0].freeCancellation ? (
+                           <div className="text-green-700 font-bold flex items-center gap-1">↩️ {selectedHotel.ofertas[0].cancellationDeadline}</div>
+                        ) : (
+                           <div className="text-red-600 font-bold flex items-center gap-1">❌ Não reembolsável</div>
+                        )}
+                        {selectedHotel.ofertas[0].deposit && <div><b className="text-orange-600">Deposit:</b> Payment may be required before check-in.</div>}
+                        {selectedHotel.ofertas[0].noShow && <div><b className="text-red-600">No-Show:</b> Fee applies if you don't arrive.</div>}
+                        {selectedHotel.ofertas[0].excludedTaxes?.length > 0 && (
+                           <div className="text-red-700 mt-1">
+                             <span className="font-bold block uppercase tracking-wider text-[8px] mb-0.5">⚠️ Payable at property:</span>
+                             {selectedHotel.ofertas[0].excludedTaxes.map((t, idx2) => <div key={idx2}>{t.name} {t.amount} {t.currency_code}</div>)}
+                           </div>
+                        )}
+                     </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2"><Building size={32}/><span>Nenhum hotel</span></div>
@@ -418,13 +527,13 @@ export default function FlightHotelPackage() {
               </div>
             </div>
 
-            {/* COLUNA 2: VOO */}
+            {/* COLUNA 2: VOO (COM CUSTO DE BAGAGEM UNIFICADA) */}
             <div className="p-5 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col justify-between">
               {selectedFlight ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between mb-2">
                      <div className="flex items-center gap-1.5 text-green-600 bg-green-50 w-fit px-2 py-0.5 rounded font-bold text-[10px] uppercase tracking-widest"><Check size={12}/> Selecionado</div>
-                     <span className="font-black text-[#4C1D95] text-sm">R$ {flightTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                     <span className="font-black text-[#4C1D95] text-sm">R$ {localFlightTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                   </div>
 
                   <div className="bg-gray-50/50 p-2 rounded-lg border border-gray-100">
@@ -459,7 +568,7 @@ export default function FlightHotelPackage() {
                       </div>
                     </div>
                   )}
-                  {bagCost > 0 && <p className="text-[10px] text-purple-700 font-bold">📦 Inclui {searchParams.holdBagsIda + searchParams.holdBagsVolta} mala(s) extra(s)</p>}
+                  {searchParams?.holdBags > 0 && <p className="text-[10px] text-purple-700 font-bold">📦 Inclui {searchParams.holdBags} mala(s) de porão unificada(s)</p>}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2"><Plane size={32}/><span>Nenhum voo</span></div>
@@ -471,13 +580,13 @@ export default function FlightHotelPackage() {
               </div>
             </div>
 
-            {/* COLUNA 3: SERVIÇOS (Transfer COM DADOS RICOS) */}
+            {/* COLUNA 3: SERVIÇOS (Transfers) */}
             <div className="p-5 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col justify-between">
               {selectedTransfer ? (
                 <div>
                   <div className="flex items-center justify-between mb-2">
                      <div className="flex items-center gap-1.5 text-green-600 bg-green-50 w-fit px-2 py-0.5 rounded font-bold text-[10px] uppercase tracking-widest"><Check size={12}/> Selecionado</div>
-                     <span className="font-black text-[#E65100] text-sm">R$ {selectedTransfer.price}</span>
+                     <span className="font-black text-[#E65100] text-sm">R$ {localTransferTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                   </div>
                   <h3 className="font-bold text-gray-900 text-[13px] leading-tight mb-3">{selectedTransfer.title || selectedTransfer.name}</h3>
                   
@@ -507,16 +616,6 @@ export default function FlightHotelPackage() {
                          <Briefcase size={12} className="text-gray-400 shrink-0"/> 
                          <span>{selectedTransfer.transferPayload.largeBags} Mala(s) G • {selectedTransfer.transferPayload.smallBags} Mala(s) P</span>
                       </li>
-                      {(selectedTransfer.transferPayload.needsChildSeat || selectedTransfer.transferPayload.hasBabyStroller || selectedTransfer.transferPayload.flightNumber) && (
-                        <li className="flex items-start gap-1.5 text-green-700 font-bold mt-1">
-                          <ShieldCheck size={12} className="shrink-0 mt-0.5"/>
-                          <span>
-                            {selectedTransfer.transferPayload.flightNumber && `Voo: ${selectedTransfer.transferPayload.flightNumber} `}
-                            {selectedTransfer.transferPayload.needsChildSeat && '• Cadeirinha '}
-                            {selectedTransfer.transferPayload.hasBabyStroller && '• Carrinho '}
-                          </span>
-                        </li>
-                      )}
                     </ul>
                   )}
                 </div>
@@ -534,28 +633,38 @@ export default function FlightHotelPackage() {
               </div>
             </div>
 
-            {/* COLUNA 4: RESUMO (COMPRAR COM SUBTOTAL TRANSPARENTE) */}
+            {/* COLUNA 4: RESUMO COM CRONÔMETRO DE VALIDADE */}
             <div className="p-5 bg-white flex flex-col justify-between">
               <div>
-                <p className="text-[11px] text-gray-500 mb-3 font-bold uppercase tracking-wider">Subtotais do Pacote</p>
+                {/* AVISO DE EXPIRAÇÃO */}
+                {timeLeft === 0 && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 text-[10px] font-bold p-2 rounded-lg mb-3 flex items-center gap-1.5 shadow-inner">
+                    <AlertCircle size={14} className="shrink-0"/> Oferta expirada. Refaça a busca para atualizar os preços.
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">Subtotais do Pacote</p>
+                  {timeLeft > 0 && <span className={`text-[10px] font-black ${timeLeft < 60 ? 'text-red-600 animate-pulse' : 'text-[#4C1D95]'}`}>⏱ {formatTimer(timeLeft)}</span>}
+                </div>
                 
                 <div className="space-y-1 mb-4 pb-3 border-b border-gray-100">
                   {selectedFlight && (
                     <div className="flex justify-between items-center">
-                      <span className="text-[11px] text-gray-600 flex items-center gap-1"><Plane size={10}/> Voo</span>
-                      <span className="text-[11px] font-bold text-gray-800">R$ {flightTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                      <span className="text-[11px] text-gray-600 flex items-center gap-1"><Plane size={10}/> Voo (+ Malas)</span>
+                      <span className="text-[11px] font-bold text-gray-800">R$ {localFlightTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                     </div>
                   )}
                   {selectedHotel && (
                     <div className="flex justify-between items-center">
                       <span className="text-[11px] text-gray-600 flex items-center gap-1"><Building size={10}/> Hospedagem</span>
-                      <span className="text-[11px] font-bold text-gray-800">R$ {hotelTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                      <span className="text-[11px] font-bold text-gray-800">R$ {localHotelTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                     </div>
                   )}
                   {selectedTransfer && (
                     <div className="flex justify-between items-center">
                       <span className="text-[11px] text-gray-600 flex items-center gap-1"><Car size={10}/> Transfer</span>
-                      <span className="text-[11px] font-bold text-gray-800">R$ {transferTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                      <span className="text-[11px] font-bold text-gray-800">R$ {localTransferTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                     </div>
                   )}
                 </div>
@@ -563,25 +672,25 @@ export default function FlightHotelPackage() {
                 <p className="text-[11px] text-gray-500 mb-2">Para {totalPax} viajante(s)</p>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs text-gray-600">Preço por viajante</span>
-                  <span className="text-sm font-medium text-gray-900">R$ {precoBasePessoa.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                  <span className="text-sm font-medium text-gray-900">R$ {localPrecoBasePessoa.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                 </div>
                 <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100">
                   <span className="text-xs text-gray-600">Taxas e impostos (por viajante)</span>
-                  <span className="text-sm font-medium text-gray-900">R$ {(taxasEImpostos || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                  <span className="text-sm font-medium text-gray-900">R$ {(localTaxasEImpostos || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                 </div>
               </div>
 
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs text-gray-900">Valor final</span>
-                  <span className="text-2xl font-black text-gray-900">R$ {totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                  <span className={`text-2xl font-black ${timeLeft === 0 ? 'text-gray-400 line-through' : 'text-gray-900'}`}>R$ {localTotalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                 </div>
                 <p className="text-[10px] text-right font-bold text-green-600 mb-4">5% de desconto à vista ou em até 12x</p>
 
                 <button 
                   onClick={handleCheckoutPackage}
-                  disabled={loadingCart || (!selectedFlight && !selectedHotel && !selectedTransfer)}
-                  className="w-full bg-[#FFD700] hover:bg-[#e5c100] text-gray-900 font-bold py-3 rounded shadow-sm transition flex items-center justify-center gap-2 text-sm"
+                  disabled={loadingCart || timeLeft === 0 || (!selectedFlight && !selectedHotel && !selectedTransfer)}
+                  className="w-full bg-[#FFD700] hover:bg-[#e5c100] disabled:bg-gray-200 disabled:text-gray-400 text-gray-900 font-bold py-3 rounded shadow-sm transition flex items-center justify-center gap-2 text-sm disabled:cursor-not-allowed"
                 >
                   {loadingCart ? 'Processando...' : <><ShoppingCart size={16}/> Comprar pacote</>}
                 </button>
@@ -636,7 +745,7 @@ export default function FlightHotelPackage() {
 
             <div className="p-6">
               
-              {/* 🚘 SE FOR TRANSFER */}
+              {/* RENDERIZAÇÃO DE TRANSFERS */}
               {activeView === 'transfer' && (
                 <PalastoreTransfers 
                   isPackageMode={true}
@@ -649,22 +758,37 @@ export default function FlightHotelPackage() {
                 />
               )}
 
-              {/* RENDERIZAÇÃO DOS HOTÉIS */}
+              {/* RENDERIZAÇÃO DOS HOTÉIS (COM FILTRO ETG) */}
               {activeView === 'hotel' && (
                 <div className="space-y-4">
-                  {displayHotels.map((hotel) => {
+                  {hotelsResults.map((hotel) => {
                     const isSelected = selectedHotel && hotel.hotelId === selectedHotel.hotelId;
-                    const img = getHotelImg(hotel);
+                    const oferta = hotel.ofertas?.[0];
+                    const roomImgs = findRoomImages(oferta, hotel.room_groups, hotel.imagensReais);
+                    const coverImg = roomImgs.length > 0 ? roomImgs[0] : (getSafeImageUrl(hotel.imagensReais) || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=300');
+                    
                     return (
                       <div key={hotel.hotelId} className={`flex flex-col sm:flex-row border rounded-lg overflow-hidden p-4 items-center gap-4 ${isSelected ? 'border-[#4C1D95] bg-purple-50/10' : 'border-gray-200'}`}>
-                        <img src={img} className="w-32 h-24 object-cover rounded" alt="Hotel"/>
+                        <img src={coverImg} className="w-32 h-24 object-cover rounded bg-gray-100" alt="Hotel"/>
                         <div className="flex-1">
                           <h4 className="font-bold text-gray-900">{hotel.nome}</h4>
-                          <p className="text-xs text-orange-400">{'⭐'.repeat(hotel.categoria || 3)}</p>
-                          <p className="text-xs text-gray-500 mt-1">{hotel.endereco}</p>
+                          <p className="text-xs text-orange-400 mb-1">{'⭐'.repeat(hotel.categoria || 3)}</p>
+                          <div className="text-[10px] text-gray-600 mb-2">
+                             <p><b>Quarto:</b> {oferta?.tipoQuarto || 'Standard'}</p>
+                             <p><b>Regime:</b> {oferta?.nomeRegime || 'Consultar'}</p>
+                          </div>
+                          
+                          {oferta?.excludedTaxes?.length > 0 && (
+                            <div className="mt-1 flex flex-col items-start">
+                              <span className="text-[8px] font-black text-red-600 uppercase tracking-wider">⚠️ Payable at property:</span>
+                              {oferta.excludedTaxes.map((t, idx2) => (
+                                <span key={idx2} className="text-[9px] text-red-700">{t.name} {t.amount} {t.currency_code}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div className="w-full sm:w-40 text-right">
-                          <span className="text-xl font-black block text-gray-900 mb-2">R$ {hotel.ofertas?.[0]?.precoVenda || 0}</span>
+                          <span className="text-xl font-black block text-gray-900 mb-2">R$ {oferta?.precoVenda || 0}</span>
                           <button onClick={() => { changeSelectedHotel(hotel); setActiveView('none'); window.scrollTo({top:0, behavior:'smooth'}); }} className="w-full bg-[#4C1D95] text-white font-bold py-2 rounded text-xs hover:bg-purple-900 transition">
                             {isSelected ? 'Selecionado' : 'Selecionar'}
                           </button>
@@ -678,9 +802,15 @@ export default function FlightHotelPackage() {
               {/* RENDERIZAÇÃO DOS VOOS */}
               {activeView === 'flight' && (
                 <div className="space-y-4">
-                  {displayFlights.map((voo) => {
+                  {flightsResults.map((voo) => {
                     const isSelected = selectedFlight && voo.id === selectedFlight.id;
                     const baseFare = parseInt(voo.precoFinal || voo.price, 10) || 0;
+                    
+                    const specUnitBag = voo.bags_price?.['1'] ? Math.ceil(voo.bags_price['1']) : 120;
+                    const specBagMulti = !voo.volta ? 2 : 1;
+                    const specBagCost = (searchParams?.holdBags || 0) > 0 ? (searchParams.holdBags * specUnitBag * specBagMulti) : 0;
+                    const displayTotal = baseFare + specBagCost;
+
                     return (
                       <div key={voo.id} className={`flex flex-col sm:flex-row border rounded-xl overflow-hidden p-5 items-center gap-6 ${isSelected ? 'border-[#4C1D95] bg-purple-50/10' : 'border-gray-200'}`}>
                         <div className="flex-1 space-y-3">
@@ -699,7 +829,8 @@ export default function FlightHotelPackage() {
                           <button onClick={() => setExpandedFlightId(voo.id)} className="text-xs text-blue-600 font-bold hover:underline">Ver detalhes do voo</button>
                         </div>
                         <div className="w-full sm:w-40 text-right">
-                          <span className="text-xl font-black block text-gray-900 mb-2">R$ {baseFare}</span>
+                          <span className="text-xl font-black block text-gray-900 mb-1">R$ {displayTotal}</span>
+                          {specBagCost > 0 && <span className="text-[9px] text-gray-500 block mb-2 font-bold">(Incluso R$ {specBagCost} ref a bagagens)</span>}
                           <button onClick={() => { changeSelectedFlight(voo); setActiveView('none'); window.scrollTo({top:0, behavior:'smooth'}); }} className="w-full bg-[#4C1D95] text-white font-bold py-2 rounded text-xs hover:bg-purple-900 transition">
                             {isSelected ? 'Selecionado' : 'Selecionar'}
                           </button>
@@ -716,7 +847,9 @@ export default function FlightHotelPackage() {
         )}
       </div>
 
-      {/* MODAL: ALTERAR BUSCA COM AUTOCOMPLETE */}
+      {/* ========================================== */}
+      {/* MODAL: ALTERAR BUSCA COM AUTOCOMPLETE (BAGAGEM UNIFICADA) */}
+      {/* ========================================== */}
       {isSearchModalOpen && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative">
@@ -800,23 +933,18 @@ export default function FlightHotelPackage() {
                 </div>
               </div>
 
+              {/* CONTROLES UNIFICADOS */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-gray-700 block mb-1">Viajantes</label>
-                  <input type="number" min="1" max="8" value={tempPax} onChange={e => setTempPax(e.target.value)} className="w-full border border-gray-300 rounded-xl p-3 text-sm font-bold outline-none focus:border-[#4C1D95]" required />
+                  <input type="number" min="1" max="8" value={tempPax} onChange={e => {setTempPax(e.target.value); setTempHoldBags(0);}} className="w-full border border-gray-300 rounded-xl p-3 text-sm font-bold outline-none focus:border-[#4C1D95]" required />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-gray-700 block mb-1">Malas Porão (Ida)</label>
-                  <select value={tempBagsIda} onChange={e => setTempBagsIda(e.target.value)} className="w-full border border-gray-300 rounded-xl p-3 text-sm font-bold outline-none bg-white cursor-pointer">
-                    {[0,1,2,3,4].map(n => <option key={n} value={n}>{n} mala(s)</option>)}
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Malas Porão (23kg)</label>
+                  <select value={tempHoldBags} onChange={e => setTempHoldBags(e.target.value)} className="w-full border border-gray-300 rounded-xl p-3 text-sm font-bold outline-none bg-white cursor-pointer">
+                    {[...Array(((parseInt(tempPax, 10) || 1) * 2) + 1).keys()].map(n => <option key={n} value={n}>{n} mala(s)</option>)}
                   </select>
                 </div>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-gray-700 block mb-1">Malas Porão (Volta)</label>
-                <select value={tempBagsVolta} onChange={e => setTempBagsVolta(e.target.value)} className="w-full border border-gray-300 rounded-xl p-3 text-sm font-bold outline-none bg-white cursor-pointer">
-                  {[0,1,2,3,4].map(n => <option key={n} value={n}>{n} mala(s)</option>)}
-                </select>
               </div>
 
               <button type="submit" className="w-full bg-[#4C1D95] hover:bg-purple-900 text-white font-black py-4 rounded-xl text-sm uppercase tracking-wider shadow-lg transition mt-4">
@@ -828,7 +956,7 @@ export default function FlightHotelPackage() {
         document.body
       )}
 
-      {/* MODAL GALERIA HOTEL */}
+      {/* MODAL GALERIA HOTEL ETG */}
       {activeGalleryHotel && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl rounded-xl relative overflow-hidden flex flex-col max-h-[85vh]">
@@ -838,8 +966,8 @@ export default function FlightHotelPackage() {
             </div>
             <div className="p-4 overflow-y-auto grid grid-cols-2 md:grid-cols-3 gap-3 bg-gray-100">
               {activeGalleryHotel.imagensReais && activeGalleryHotel.imagensReais.length > 0 ? (
-                activeGalleryHotel.imagensReais.map((imgUrl, i) => (
-                  <img key={i} src={typeof imgUrl === 'string' ? imgUrl.replace('{size}', '500x500') : imgUrl} className="w-full h-32 object-cover rounded border border-gray-200" alt="Foto"/>
+                parseImagesList(activeGalleryHotel.imagensReais).map((imgUrl, i) => (
+                  <img key={i} src={imgUrl} className="w-full h-32 object-cover rounded border border-gray-200" alt="Foto"/>
                 ))
               ) : (
                 <div className="col-span-full py-10 text-center text-gray-500 font-bold text-sm">Sem fotos disponíveis no banco.</div>
