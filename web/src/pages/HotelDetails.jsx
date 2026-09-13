@@ -708,7 +708,7 @@ export default function HotelDetails() {
         <div className="fixed inset-0 z-[9999999] bg-black/80 backdrop-blur-sm overflow-y-auto flex items-start justify-center pt-10 pb-10 px-4" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col relative overflow-hidden my-auto border border-gray-200">
             <div className="bg-gray-900 p-5 flex justify-between items-center text-white shrink-0">
-              <h3 className="font-black text-sm uppercase tracking-wide">Finalizar Reserva B2B</h3>
+              <h3 className="font-black text-sm uppercase tracking-wide">Finalizar Reserva</h3>
               {bookingStep !== 'booking' && <button onClick={() => setBookingStep('idle')} className="text-gray-400 hover:text-white text-xl">✕</button>}
             </div>
             <div className="p-6 sm:p-7">
@@ -716,7 +716,7 @@ export default function HotelDetails() {
                 <div className="text-center py-6">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto mb-4"></div>
                   <p className="text-gray-800 font-black text-lg">Validando disponibilidade e tarifas...</p>
-                  <p className="text-xs text-gray-500 mt-1">Conectando com a RateHawk (Prebook)</p>
+                  <p className="text-xs text-gray-500 mt-1">Conectando com ao fornecedor (Prebook)</p>
                 </div>
               )}
 
@@ -769,7 +769,7 @@ export default function HotelDetails() {
                   </div>
 
                   <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl shadow-lg uppercase text-sm tracking-wide transition transform active:scale-95">
-                    Confirmar Reserva B2B
+                    Confirmar Reserva
                   </button>
                 </form>
               )}
