@@ -11,7 +11,6 @@ const SUPABASE_URL = "https://vcqiilytjrrurdbscmio.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_leFg1lWGZlctiU3CXYR2Gw_FpOG2qR3"; 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// LISTA DE PAÍSES COMPLETA E MAPEADA OFICIALMENTE
 const COUNTRIES = [
   { code: 'br', name: 'Brasil' }, { code: 'aw', name: 'Aruba' }, { code: 'af', name: 'Afeganistão' }, { code: 'ao', name: 'Angola' },
   { code: 'ai', name: 'Anguilla' }, { code: 'ax', name: 'Ilhas Alanda' }, { code: 'al', name: 'Albânia' }, { code: 'ad', name: 'Andorra' },
@@ -108,7 +107,6 @@ const parseImagesList = (imagesData) => {
   return [];
 };
 
-// FORMATAÇÃO ESTRUTURADA EXIGIDA PELA ETG (Evita strings cruas)
 const formatRoomName = (r) => {
   if (r.room_data_trans) {
     const main = r.room_data_trans.main_room_type || r.room_data_trans.main_name || r.room_name;
@@ -119,7 +117,6 @@ const formatRoomName = (r) => {
   return r.room_name || 'Quarto Standard';
 };
 
-// FORMATO IMUTÁVEL DA ETG PARA CANCELAMENTO (Não traduzir)
 const formatCancellation = (deadlineUtc) => {
   if (!deadlineUtc) return null;
   const datePart = deadlineUtc.split('T')[0];
@@ -150,10 +147,9 @@ export default function HotelSearch() {
   const [rooms, setRooms] = useState([{ adults: 1, childrenAges: [] }]);
   const [showGuestDropdown, setShowGuestDropdown] = useState(false);
   
-  // NOVOS PARÂMETROS
   const [residency, setResidency] = useState('br'); 
-  const [earlyCheckin, setEarlyCheckin] = useState(''); // 01:00 às 13:00
-  const [lateCheckout, setLateCheckout] = useState(''); // 13:00 às 23:00
+  const [earlyCheckin, setEarlyCheckin] = useState(''); 
+  const [lateCheckout, setLateCheckout] = useState(''); 
 
   const [stars, setStars] = useState([]); 
   const [meals, setMeals] = useState([]); 
@@ -360,10 +356,17 @@ export default function HotelSearch() {
                 const taxes = r.payment_options?.payment_types?.[0]?.tax_data?.taxes?.filter(t => !t.included_by_supplier) || [];
                 const exactCancellation = r.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before;
                 
+                // MAPEAMENTO CORRETO DOS TIPOS DE REFEIÇÃO DE ACORDO COM A RATEHAWK/ETG
+                let codRegime = 'RO';
+                if (r.meal === 'breakfast') codRegime = 'BB';
+                else if (r.meal === 'half-board') codRegime = 'HB';
+                else if (r.meal === 'full-board') codRegime = 'FB';
+                else if (r.meal && r.meal.includes('all-inclusive')) codRegime = 'AI';
+                
                 return {
                   tipoQuarto: formatRoomName(r),
-                  codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO',
-                  nomeRegime: r.meal_data?.value || 'Sem refeições', 
+                  codigoRegime: codRegime,
+                  nomeRegime: r.meal_data?.value || (codRegime === 'RO' ? 'Sem refeições' : r.meal), 
                   precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0) * 5.1,
                   freeCancellation: exactCancellation != null,
                   cancellationDeadline: formatCancellation(exactCancellation),
