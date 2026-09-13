@@ -317,7 +317,7 @@ const PartnerWidgetViator = ({ title, url, noticeText, themeColor }) => {
        <h2 className="text-xl md:text-2xl font-black text-gray-800 mb-6 text-center uppercase italic tracking-tight">{title}</h2>
        <div className="w-full bg-white p-6 md:p-8 rounded-2xl shadow-md border border-orange-200 mb-8">
           <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2">Para onde você vai viajar?</h3>
-          <p className="text-sm text-gray-500 mb-6">Busque por cidades, monumentos ou atrações turísticas no mundo todo.</p>
+          <p className="text-sm text-gray-500 mb-6">Busque por cities, monumentos ou atrações turísticas no mundo todo.</p>
           <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
              <div className="relative flex-grow">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
@@ -385,7 +385,7 @@ export default function ViagensPage() {
     { id: 'cruzeiros_ncl', label: 'Cruzeiros NCL', icon: Anchor },
     { id: 'hoteis', label: 'Hotéis', icon: Building },
     { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Star },
-    { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
+    // Ocultado temporariamente: { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
     { id: 'carros', label: 'Carros (Trip)', icon: Car },
     { id: 'rentcars', label: 'Carros (Rent)', icon: Car },
     { id: 'onibus', label: 'Ônibus Nacionais', icon: Bus },
@@ -466,7 +466,7 @@ export default function ViagensPage() {
           
           {activeTab === 'onibus' && <PartnerIframe title="Passagens de Ônibus" url="https://www.awin1.com/cread.php?awinmid=65292&awinaffid=910543" noticeText="Compare e reserve passagens de ônibus para milhares de destinos em todo o Brasil. Processamento seguro via parceiro oficial." themeColor="green" />}
           {activeTab === 'seguros' && <PartnerIframe title="Seguro Viagem" url="https://seguroviagem.app/palastore" noticeText="Viaje protegido com cobertura completa e suporte 24h." themeColor="blue" />}
-          {activeTab === 'voo_hotel' && <FlightHotelPackage />} 
+          {/* Voo + Hotel foi removido do render */}
           {activeTab === 'hoteis' && <HotelSearch />}
           {activeTab === 'ofertas_hoteis' && <PartnerIframe title="Ofertas Especiais de Hotéis no Brasil" url="https://br.trip.com/hotels/list?flexType=1&cityId=-1&provinceId=0&countryId=19&cityName=&destName=Brasil&searchWord=Brasil&searchType=C&searchValue=140|19**19&checkin=2026-08-17&checkout=2026-08-18&crn=1&adult=2&listFilters=29~1*29*1~2*2,17~3*17*3,80~2~1*80*2&curr=BRL&locale=pt-BR&old=1&Allianceid=10111564&SID=328653368&trip_sub1=&trip_sub3=D19286374" noticeText="Aproveite tarifas reduzidas para hospedagens em todo o Brasil. Parceria oficial Trip.com." themeColor="indigo" />}
           {activeTab === 'rentcars' && <RentcarsWidget />}
