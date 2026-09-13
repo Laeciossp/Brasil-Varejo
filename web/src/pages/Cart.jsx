@@ -17,9 +17,8 @@ const client = createClient({
   token: 'skEcUJ41lyHwOuSuRVnjiBKUnsV0Gnn7SQ0i2ZNKC4LqB1KkYo2vciiOrsjqmyUcvn8vLMTxp019hJRmR11iPV76mXVH7kK8PDLvxxjHHD4yw7R8eHfpNPkKcHruaVytVs58OaG6hjxTcXHSBpz0Fr2DTPck19F7oCo4NCku1o5VLi2f4wqY', 
 });
 
-const getAirlineName = (code) => {
+const getAirlineInfo = (code) => {
   const airlines = {
-    // Nacionais e Regionais / América Latina
     'G3': 'GOL Linhas Aéreas',
     'AD': 'Azul Linhas Aéreas',
     'LA': 'LATAM Airlines',
@@ -35,8 +34,6 @@ const getAirlineName = (code) => {
     'OB': 'Boliviana de Aviación',
     'PZ': 'Paranair',
     'ZP': 'Paranair',
-
-    // América do Norte e Europa
     'AC': 'Air Canada',
     'TS': 'Air Transat',
     'AA': 'American Airlines',
@@ -65,8 +62,12 @@ const getAirlineName = (code) => {
     'LEVEL': 'Level'
   };
 
-  return airlines[code] || code;
+  return {
+    name: airlines[code] || code,
+    logo: `https://images.kiwi.com/airlines/64x64/${code}.png`
+  };
 };
+
 const MercadoPagoTrust = () => (
   <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col items-center gap-2">
     <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
@@ -102,7 +103,6 @@ export default function Cart() {
   const hasTravelItems = travelItems.length > 0;
   const isOnlyDigital = hasTravelItems && physicalItems.length === 0;
   
-  // 🎟️ CÁLCULO CORRIGIDO DO TOTAL DE PASSAGEIROS (SEM MULTIPLICAÇÃO DUPLICADA)
   const totalTickets = travelItems.reduce((max, item) => {
     let itemPax = item.quantity || 1;
 
@@ -138,6 +138,23 @@ export default function Cart() {
   const [timeLeft, setTimeLeft] = useState(null);
 
   const isDuffelFlight = flightItem && (flightItem.fornecedor === 'DUFFEL' || String(flightItem._id).startsWith('off_'));
+
+  // Função auxiliar para formatar datas amigavelmente
+  const fDate = (d) => {
+      if(!d) return '';
+      if(typeof d === 'string' && d.includes('T')) {
+          const [dataPart, timePart] = d.split('T');
+          const [y, m, day] = dataPart.split('-');
+          const time = timePart ? timePart.substring(0, 5) : '';
+          return `${day}/${m}/${y}${time ? ` às ${time}` : ''}`;
+      }
+      try {
+          const dt = new Date(d);
+          return dt.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+      } catch(e) {
+          return d;
+      }
+  };
 
   useEffect(() => {
     if (!flightItem || !flightItem.addedAt) return;
@@ -444,29 +461,15 @@ export default function Cart() {
             else if (item.flightDetails) {
                 sType = '✈️ Passagem Aérea';
                 const fd = item.flightDetails;
-                
-                // Formatação direta da string para evitar recuo de fuso horário do navegador
-                const fDate = (d) => {
-                    if(!d) return '';
-                    if(typeof d === 'string' && d.includes('T')) {
-                        const [dataPart, timePart] = d.split('T');
-                        const [y, m, day] = dataPart.split('-');
-                        const time = timePart.substring(0, 5);
-                        return `${day}/${m}/${y} às ${time}`;
-                    }
-                    const dt = new Date(d);
-                    return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} às ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
-                };
 
-                const fIda = getAirlineName(fd.ida.companhiaPrincipal);
+                const fIda = getAirlineInfo(fd.ida.companhiaPrincipal).name;
                 desc = `🛫 IDA: ${fd.ida.origem} ➔ ${fd.ida.destino}\n✈️ Cia: ${fIda}\n🕒 Embarque: ${fDate(fd.ida.partida)}\n`;
                 
                 if (fd.volta) {
-                    const fVolta = getAirlineName(fd.volta.companhiaPrincipal);
+                    const fVolta = getAirlineInfo(fd.volta.companhiaPrincipal).name;
                     desc += `\n🛬 VOLTA: ${fd.volta.origem} ➔ ${fd.volta.destino}\n✈️ Cia: ${fVolta}\n🕒 Embarque: ${fDate(fd.volta.partida)}\n`;
                 }
                 
-                // 🎒 FRANQUIA UNIFICADA DE MALAS NO SANITY
                 const numMalas = fd.holdBags || 0;
                 desc += `\n🏷️ Tarifa: ${fd.tier}\n🧳 Franquia: Mochila + Mala de Mão 10kg${numMalas > 0 ? ` + ${numMalas} Mala(s) de Porão (23kg)` : ''}`;
             }
@@ -483,7 +486,7 @@ export default function Cart() {
                 quantity: item.quantity, 
                 price: item.price, 
                 imageUrl: item.image,
-                // Injeção dos links da Kiwi capturados no Frontend
+                flightDetails: item.flightDetails || null,
                 deep_link: item.flightDetails?.deep_link || null,
                 booking_token: item.flightDetails?.booking_token || null
             };
@@ -504,14 +507,12 @@ export default function Cart() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             items: items.map(i => {
-                
                 let descForMP = i.description;
-                
                 if (i.packageDetails) {
                     let shortParts = [];
                     if (i.packageDetails.flight) {
-                        const fIda = getAirlineName(i.packageDetails.flight.ida?.companhiaPrincipal);
-                        const fVolta = i.packageDetails.flight.volta?.companhiaPrincipal ? getAirlineName(i.packageDetails.flight.volta.companhiaPrincipal) : null;
+                        const fIda = getAirlineInfo(i.packageDetails.flight.ida?.companhiaPrincipal).name;
+                        const fVolta = i.packageDetails.flight.volta?.companhiaPrincipal ? getAirlineInfo(i.packageDetails.flight.volta.companhiaPrincipal).name : null;
                         let cStr = fIda;
                         if (fVolta && fVolta !== fIda) {
                             cStr = `Ida: ${fIda} / Volta: ${fVolta}`;
@@ -524,8 +525,8 @@ export default function Cart() {
                     const paxCount = i.pax || i.quantity || 1;
                     descForMP = `${shortParts.join(' | ')} - ${paxCount} Viajante(s)`;
                 } else if (i.flightDetails && !i.transferPayload) {
-                    const fIda = getAirlineName(i.flightDetails.ida?.companhiaPrincipal);
-                    const fVolta = i.flightDetails.volta?.companhiaPrincipal ? getAirlineName(i.flightDetails.volta.companhiaPrincipal) : null;
+                    const fIda = getAirlineInfo(i.flightDetails.ida?.companhiaPrincipal).name;
+                    const fVolta = i.flightDetails.volta?.companhiaPrincipal ? getAirlineInfo(i.flightDetails.volta.companhiaPrincipal).name : null;
                     let cStr = fIda;
                     if (fVolta && fVolta !== fIda) {
                         cStr = `Ida: ${fIda}, Volta: ${fVolta}`;
@@ -557,28 +558,6 @@ export default function Cart() {
       if (data.id_preferencia && window.MercadoPago) {
         const mp = new window.MercadoPago('APP_USR-fb2a68f8-969b-4624-9c81-3725b56f8b4f', { locale: 'pt-BR' });
         mp.checkout({ preference: { id: data.id_preferencia } }).open(); 
-        
-        let modalAppeared = false;
-        const watchModal = setInterval(() => {
-            const iframes = Array.from(document.querySelectorAll('iframe'));
-            const mpIframe = iframes.find(f => f.src.includes('mercadopago') || f.src.includes('mlstatic') || f.name.includes('mercadopago'));
-            
-            let isVisible = false;
-            if (mpIframe) {
-                const rect = mpIframe.getBoundingClientRect();
-                if (rect.width > 0 && rect.height > 0) {
-                    isVisible = true;
-                }
-            }
-
-            if (isVisible) {
-                modalAppeared = true; 
-            } else if (modalAppeared) {
-                clearInterval(watchModal);
-                window.location.reload(); 
-            }
-        }, 1000);
-
       } else { 
         window.location.href = data.url; 
       }
@@ -611,16 +590,13 @@ export default function Cart() {
         
         <div className="flex justify-between items-center mb-6 border-b border-gray-200 pb-4">
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">Carrinho ({items.length})</h1>
-          <button 
-             onClick={() => navigate(-1)} 
-             className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm transition-all"
-          >
+          <button onClick={() => navigate(-1)} className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm transition-all">
              ← Continuar Comprando
           </button>
         </div>
         
         {flightItem && (
-            <div className="bg-red-50 border border-red-200 p-3 md:p-4 rounded-xl mb-6 flex flex-col md:flex-row items-center justify-center gap-3 shadow-sm animate-in fade-in slide-in-from-top-4">
+            <div className="bg-red-50 border border-red-200 p-3 md:p-4 rounded-xl mb-6 flex flex-col md:flex-row items-center justify-center gap-3 shadow-sm">
                 <div className="flex items-center gap-2">
                    <Clock className="text-red-500 animate-pulse" size={24} />
                    <span className="text-red-800 font-bold text-sm md:text-base">Conclua sua compra em</span>
@@ -633,13 +609,23 @@ export default function Cart() {
         <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
           <div className="flex-1 space-y-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-0 overflow-hidden space-y-0">
-                {items.map((item) => (
-                    item.flightDetails && !item.packageDetails ? (
+                {items.map((item) => {
+                    const isFlight = item.flightDetails && !item.packageDetails;
+                    const airlineCodes = new Set();
+                    if (isFlight) {
+                        item.flightDetails.ida?.trechos?.forEach(t => t.companhia && airlineCodes.add(t.companhia));
+                        item.flightDetails.volta?.trechos?.forEach(t => t.companhia && airlineCodes.add(t.companhia));
+                    }
+                    const codesArray = Array.from(airlineCodes);
+
+                    return isFlight ? (
                         <div key={item.sku || item._id} className="bg-white border border-purple-100 p-0 flex flex-col relative shadow-sm">
                             <div className="bg-purple-600 text-white p-4 flex justify-between items-center">
                                 <div className="flex items-center gap-3">
-                                    <div className="bg-white p-1.5 rounded-lg shadow-sm">
-                                         <img src={item.image} className="w-8 h-8 object-contain" alt="Cia" />
+                                    <div className="flex gap-1 bg-white p-1.5 rounded-lg shadow-sm">
+                                        {codesArray.slice(0, 3).map(code => (
+                                            <img key={code} src={getAirlineInfo(code).logo} className="w-6 h-6 object-contain" alt={code} title={getAirlineInfo(code).name} />
+                                        ))}
                                     </div>
                                     <div>
                                         <div className="text-[10px] font-bold uppercase tracking-widest text-purple-200">
@@ -649,10 +635,10 @@ export default function Cart() {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button onClick={() => { clearCart(); window.location.href = '/viagens'; }} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold transition-colors border border-white/30 shadow-sm whitespace-nowrap">
+                                    <button onClick={() => { clearCart(); window.location.href = '/viagens'; }} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold transition-colors border border-white/30">
                                         Alterar Viagem
                                     </button>
-                                    <button onClick={() => removeItem(item._id, item.sku)} className="bg-purple-700 hover:bg-red-500 text-white p-1.5 md:p-2 rounded-lg transition-colors shadow-sm">
+                                    <button onClick={() => removeItem(item._id, item.sku)} className="bg-purple-700 hover:bg-red-500 text-white p-1.5 md:p-2 rounded-lg transition-colors">
                                         <Trash2 size={18}/>
                                     </button>
                                 </div>
@@ -660,33 +646,74 @@ export default function Cart() {
 
                             <div className="p-6 flex flex-col md:flex-row gap-8">
                                 <div className="flex-1 space-y-6">
+                                    {/* IDA */}
                                     <div className="flex gap-4">
                                         <div className="flex flex-col items-center justify-start pt-1">
                                             <PlaneTakeoff size={24} className="text-purple-500"/>
-                                            {item.flightDetails.volta && <div className="w-px h-full bg-purple-100 my-2"></div>}
                                         </div>
-                                        <div>
-                                            <span className="text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 mb-1 inline-block">Ida</span>
-                                            <p className="font-bold text-gray-900 text-sm">{item.flightDetails.ida.origem} ➔ {item.flightDetails.ida.destino}</p>
-                                            <p className="text-xs text-gray-500">{item.flightDetails.ida.partida} • {item.flightDetails.ida.duracao}</p>
+                                        <div className="w-full">
+                                            <span className="text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 mb-2 inline-block">Ida</span>
+                                            <p className="font-bold text-gray-900 text-sm mb-3">{item.flightDetails.ida.origem} ➔ {item.flightDetails.ida.destino}</p>
+                                            
+                                            <div className="space-y-2">
+                                                {item.flightDetails.ida.trechos?.map((t, idx) => {
+                                                    const cia = getAirlineInfo(t.companhia);
+                                                    return (
+                                                        <div key={idx} className="bg-gray-50 border border-gray-100 p-3 rounded-lg flex justify-between items-center text-xs">
+                                                            <div className="flex items-center gap-3">
+                                                                <img src={cia.logo} className="w-6 h-6 object-contain" alt={cia.name} />
+                                                                <div>
+                                                                    <p className="font-bold text-gray-800">{cia.name} <span className="text-gray-400">({t.vooNumero})</span></p>
+                                                                    <p className="text-gray-500">{t.origemAero} ➔ {t.destinoAero}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right text-gray-600 font-medium">
+                                                                <p className="font-bold text-gray-900">{fDate(t.partida)}</p>
+                                                                <p className="text-[11px] text-gray-500">Chegada: {fDate(t.chegada)}</p>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
                                         </div>
                                     </div>
 
+                                    {/* VOLTA */}
                                     {item.flightDetails.volta && (
-                                        <div className="flex gap-4">
+                                        <div className="flex gap-4 pt-4 border-t border-gray-100">
                                             <div className="flex flex-col items-center justify-start pt-1">
                                                 <PlaneLanding size={24} className="text-orange-500"/>
                                             </div>
-                                            <div>
-                                                <span className="text-[10px] font-black uppercase text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100 mb-1 inline-block">Volta</span>
-                                                <p className="font-bold text-gray-900 text-sm">{item.flightDetails.volta.origem} ➔ {item.flightDetails.volta.destino}</p>
-                                                <p className="text-xs text-gray-500">{item.flightDetails.volta.partida} • {item.flightDetails.volta.duracao}</p>
+                                            <div className="w-full">
+                                                <span className="text-[10px] font-black uppercase text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100 mb-2 inline-block">Volta</span>
+                                                <p className="font-bold text-gray-900 text-sm mb-3">{item.flightDetails.volta.origem} ➔ {item.flightDetails.volta.destino}</p>
+                                                
+                                                <div className="space-y-2">
+                                                    {item.flightDetails.volta.trechos?.map((t, idx) => {
+                                                        const cia = getAirlineInfo(t.companhia);
+                                                        return (
+                                                            <div key={idx} className="bg-gray-50 border border-gray-100 p-3 rounded-lg flex justify-between items-center text-xs">
+                                                                <div className="flex items-center gap-3">
+                                                                    <img src={cia.logo} className="w-6 h-6 object-contain" alt={cia.name} />
+                                                                    <div>
+                                                                        <p className="font-bold text-gray-800">{cia.name} <span className="text-gray-400">({t.vooNumero})</span></p>
+                                                                        <p className="text-gray-500">{t.origemAero} ➔ {t.destinoAero}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right text-gray-600 font-medium">
+                                                                    <p className="font-bold text-gray-900">{fDate(t.partida)}</p>
+                                                                    <p className="text-[11px] text-gray-500">Chegada: {fDate(t.chegada)}</p>
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
                                             </div>
                                         </div>
                                     )}
                                 </div>
 
-                                <div className="w-full md:w-64 bg-purple-50 rounded-xl p-5 border border-purple-100 flex flex-col justify-between shadow-inner">
+                                <div className="w-full md:w-64 bg-purple-50 rounded-xl p-5 border border-purple-100 flex flex-col justify-between shadow-inner h-fit">
                                     <div>
                                         <h4 className="font-bold text-sm text-purple-900 mb-3 border-b border-purple-200 pb-2">Extrato do Carrinho</h4>
                                         <div className="space-y-2 text-xs text-purple-800">
@@ -725,9 +752,6 @@ export default function Cart() {
                         <div key={item.sku || item._id} className="flex flex-col sm:flex-row gap-5 p-6 border-b border-gray-100 last:border-0">
                           <div className="w-full sm:w-28 h-28 bg-white border border-gray-100 rounded-xl p-2 relative shrink-0 flex items-center justify-center overflow-hidden">
                               <img src={item.image || item.imageUrl} className="max-w-full max-h-full object-contain mix-blend-multiply" alt={item.title} />
-                              {item.freeShipping && !isItemTravel(item) && (
-                                   <div className="absolute bottom-0 left-0 right-0 bg-green-600 text-white text-[9px] font-bold text-center py-1">FRETE GRÁTIS</div>
-                               )}
                           </div>
                           <div className="flex-1 flex flex-col justify-between">
                             <div className="flex justify-between items-start">
@@ -752,8 +776,8 @@ export default function Cart() {
                             </div>
                           </div>
                         </div>
-                    )
-                ))}
+                    );
+                })}
             </div>
             
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
@@ -895,12 +919,7 @@ export default function Cart() {
                                     
                                     <div className="md:col-span-2 mt-2 pt-3 border-t border-gray-200">
                                        <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer w-fit">
-                                          <input 
-                                            type="checkbox" 
-                                            className="w-4 h-4 rounded text-blue-600 border-gray-300 cursor-pointer" 
-                                            onChange={(e) => handlePaxChange(index, 'saveToProfile', e.target.checked)} 
-                                            checked={pax.saveToProfile || false} 
-                                          />
+                                          <input type="checkbox" className="w-4 h-4 rounded text-blue-600 border-gray-300 cursor-pointer" onChange={(e) => handlePaxChange(index, 'saveToProfile', e.target.checked)} checked={pax.saveToProfile || false} />
                                           Salvar este passageiro no meu perfil para próximas viagens
                                        </label>
                                     </div>
@@ -927,10 +946,7 @@ export default function Cart() {
                     {isPix && discount > 0 && (<div className="flex justify-between text-green-600 font-bold bg-green-50 p-1 rounded"><span>Desconto PIX (5%)</span><span>-{formatCurrency(discount)}</span></div>)}
                     <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-center">
-                           <span className="flex gap-1 text-gray-600 font-medium">
-                              {isOnlyDigital ? <Ticket size={14}/> : <Truck size={14}/>} 
-                              {isOnlyDigital ? "Taxa de Emissão" : "Frete"}
-                           </span>
+                           <span className="flex gap-1 text-gray-600 font-medium">{isOnlyDigital ? <Ticket size={14}/> : <Truck size={14}/>} {isOnlyDigital ? "Taxa de Emissão" : "Frete"}</span>
                            {recalculatingShipping ? <span className="text-orange-500 text-xs">...</span> : <span className="font-bold">{selectedShipping ? (selectedShipping.price === 0 ? 'Grátis' : formatCurrency(selectedShipping.price)) : '--'}</span>}
                         </div>
                         
@@ -955,12 +971,8 @@ export default function Cart() {
                 
                 <div className="flex flex-col gap-3">
                     <button onClick={handleCheckout} disabled={loading || !canCheckout} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold flex justify-center gap-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-lg shadow-orange-200 transform active:scale-95">{loading ? 'Processando...' : 'Finalizar Compra'} <ArrowRight size={18}/></button>
-                    
-                    <button onClick={() => navigate(-1)} className="w-full py-3 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 rounded-xl font-bold transition-all text-sm">
-                        ← Continuar Comprando
-                    </button>
+                    <button onClick={() => navigate(-1)} className="w-full py-3 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 rounded-xl font-bold transition-all text-sm">← Continuar Comprando</button>
                 </div>
-                
                 <MercadoPagoTrust />
             </div>
           </div>

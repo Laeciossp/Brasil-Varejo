@@ -97,7 +97,7 @@ export default {
             {
               name: 'deep_link',
               title: 'Link de Emissão Direta (Kiwi Deep Link)',
-              type: 'url',
+              type: 'string', // 🚀 ALTERADO PARA STRING (HÍBRIDO)
               description: 'URL exclusiva para a agência concluir a compra diretamente na Kiwi.'
             },
             {
@@ -172,7 +172,7 @@ export default {
     { name: 'carrier', title: 'Forma de Envio / Operadora', type: 'string', group: 'logistics' },
     { name: 'shippingCost', title: 'Custo de Emissão/Frete', type: 'number', group: 'logistics' },
     { name: 'trackingCode', title: 'Código da Cia Aérea (PNR Oficial)', type: 'string', group: 'logistics' },
-    { name: 'trackingUrl', title: 'Link de Rastreamento (Correios/Transportadora)', type: 'url', group: 'logistics' },
+    { name: 'trackingUrl', title: 'Link de Rastreamento (Correios/Transportadora)', type: 'string', group: 'logistics' }, // 🚀 ALTERADO PARA STRING
     {
       name: 'shippingAddress', title: 'Endereço de Entrega (Físicos)', type: 'object', group: 'logistics',
       fields: [
@@ -203,7 +203,7 @@ export default {
     { 
       name: 'providerAdminLink', 
       title: 'Link de Emissão do Fornecedor (Deep Link)', 
-      type: 'url', 
+      type: 'string', // 🚀 ALTERADO PARA STRING
       group: 'admin',
       description: 'O link gerado pelo Firebase para você clicar e abrir direto o painel da Kiwi, Duffel ou Viator.' 
     },
