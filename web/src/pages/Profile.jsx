@@ -4,11 +4,11 @@ import { Link } from 'react-router-dom';
 import { 
   Package, User, MapPin, LogOut, MessageSquare, Send, 
   ShoppingBag, CheckCircle2, Trash2, CreditCard, Mail, Clock,
-  XCircle, ChevronRight, AlertCircle, Edit2, ExternalLink, Users
+  XCircle, ChevronRight, AlertCircle, Edit2, ExternalLink, Users, PlaneTakeoff, PlaneLanding
 } from 'lucide-react';
 import { useUser, SignOutButton } from "@clerk/clerk-react";
 import useCartStore from '../store/useCartStore';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, formatLongDate } from '../lib/utils';
 
 // --- CLIENTE SANITY ---
 const writeClient = createClient({
@@ -18,6 +18,24 @@ const writeClient = createClient({
   useCdn: false, 
   token: 'skmLtdy7ME2lnyS0blM3IWiNv0wuWzBG4egK7jUYdVVkBktLngwz47GbsPPdq5NLX58WJEiR3bmW0TBpeMtBhPNEIxf5mk6uQ14PvbGYKlWQdSiP2uWdBDafWhVAGMw5RYh3IyKhDSmqEqSLg1bEzzYVEwcGWDZ9tEPmZhNDkljeyvY6IcEO'
 });
+
+const getAirlineInfo = (code) => {
+  const airlines = {
+    'G3': 'GOL Linhas Aéreas', 'AD': 'Azul Linhas Aéreas', 'LA': 'LATAM Airlines',
+    'JJ': 'LATAM Airlines', '2Z': 'Voepass Linhas Aéreas', 'H2': 'Sky Airline',
+    'JA': 'JetSMART', 'DM': 'Arajet', 'AV': 'Avianca', 'CM': 'Copa Airlines',
+    'AM': 'AeroMexico', 'AR': 'Aerolíneas Argentinas', 'OB': 'Boliviana de Aviación',
+    'PZ': 'Paranair', 'ZP': 'Paranair', 'AC': 'Air Canada', 'TS': 'Air Transat',
+    'AA': 'American Airlines', 'DL': 'Delta Air Lines', 'UA': 'United Airlines',
+    'AF': 'Air France', 'KL': 'KLM Royal Dutch Airlines', 'LH': 'Lufthansa',
+    'LX': 'Swiss International Air Lines', 'OS': 'Austrian Airlines', 'IB': 'Iberia Airlines',
+    'UX': 'Air Europa', 'TP': 'TAP Portugal', 'AZ': 'ITA Airways', 'PU': 'Plus Ultra',
+    'CA': 'Air China', 'TK': 'Turkish Airlines', 'AT': 'Royal Air Maroc', 'ET': 'Ethiopian Airlines',
+    'EK': 'Emirates', 'QF': 'Qantas', 'DT': 'TAAG Angola Airlines', 'H1': 'Hahn Air',
+    'HR': 'Hahn Air Systems', 'Q4': 'Euroairlines', 'LEVEL': 'Level'
+  };
+  return { name: airlines[code] || code, logo: `https://images.kiwi.com/airlines/64x64/${code}.png` };
+};
 
 export default function Profile() {
   const { user, isLoaded } = useUser();
@@ -56,6 +74,22 @@ export default function Profile() {
     }).format(date);
   };
 
+  const fDate = (d) => {
+      if(!d) return '';
+      if(typeof d === 'string' && d.includes('T')) {
+          const [dataPart, timePart] = d.split('T');
+          const [y, m, day] = dataPart.split('-');
+          const time = timePart ? timePart.substring(0, 5) : '';
+          return `${day}/${m}/${y}${time ? ` às ${time}` : ''}`;
+      }
+      try {
+          const dt = new Date(d);
+          return dt.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+      } catch(e) {
+          return d;
+      }
+  };
+
   const getPaymentLabel = (method) => {
       const map = { 
           'pix': 'Pix (À Vista)', 
@@ -69,14 +103,14 @@ export default function Profile() {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-    // CORREÇÃO: Adicionado 'description' na consulta dos itens
+    // Consulta atualizada trazendo o objeto completo 'flightDetails' do Sanity
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, orderNumber, _createdAt, status, totalAmount, cancellationReason, paymentMethod, customer, customerEmail,
       "trackingCode": coalesce(trackingCode, logistics.trackingCode),
       "trackingUrl": coalesce(trackingUrl, logistics.trackingUrl),
       "carrier": coalesce(carrier, logistics.selectedCarrier, logistics.carrier),
       "items": items[]{ 
-        productName, description, quantity, price,
+        productName, description, quantity, price, flightDetails,
         "productSlug": coalesce(product->slug.current, *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].slug.current), 
         "imageUrl": coalesce(product->images[0].asset->url, *[_type == "product" && title match ^.productName && !(_id in path("drafts.**"))][0].images[0].asset->url, imageUrl)
       },
@@ -254,36 +288,90 @@ export default function Profile() {
                                         <div className="flex-1 space-y-4">
                                             <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider mb-2">Produtos Adquiridos</h4>
                                             {order.items?.map((item, i) => {
-                                                const hasSlug = item.productSlug && item.productSlug !== '';
-                                                const ItemWrapper = hasSlug ? Link : 'div';
-                                                const wrapperProps = hasSlug ? { to: `/produto/${encodeURIComponent(item.productSlug)}`, title: `Ver produto: ${item.productSlug}` } : {};
-                                                const cursorClass = hasSlug ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default opacity-90';
+                                                const isFlight = !!item.flightDetails;
+                                                const airlineCodes = new Set();
+                                                if (isFlight) {
+                                                    item.flightDetails.ida?.trechos?.forEach(t => t.companhia && airlineCodes.add(t.companhia));
+                                                    item.flightDetails.volta?.trechos?.forEach(t => t.companhia && airlineCodes.add(t.companhia));
+                                                }
+                                                const codesArray = Array.from(airlineCodes);
 
-                                                return (
-                                                    <ItemWrapper key={i} {...wrapperProps} className={`flex gap-4 items-start py-3 border-b border-dashed border-gray-100 last:border-0 group/item transition-colors p-2 -mx-2 rounded-lg ${cursorClass}`}>
-                                                        <div className="w-20 h-20 bg-white border border-gray-200 rounded-lg p-1 flex-shrink-0 relative overflow-hidden flex items-center justify-center">
+                                                return isFlight ? (
+                                                    <div key={i} className="bg-white border border-purple-100 p-4 rounded-xl shadow-sm space-y-4">
+                                                        <div className="flex items-center gap-3 border-b border-purple-100 pb-3">
+                                                            <div className="flex gap-1 bg-gray-50 p-1.5 rounded-lg border">
+                                                                {codesArray.map(code => (
+                                                                    <img key={code} src={getAirlineInfo(code).logo} className="w-6 h-6 object-contain" alt={code} title={getAirlineInfo(code).name} />
+                                                                ))}
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-[10px] font-bold uppercase tracking-widest text-purple-600">Passagem Aérea</div>
+                                                                <p className="text-sm font-bold text-gray-900">{item.productName}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* IDA TRECHOS */}
+                                                        <div className="space-y-2">
+                                                            <span className="text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 inline-block">Ida</span>
+                                                            <p className="text-xs font-bold text-gray-800">{item.flightDetails.ida.origem} ➔ {item.flightDetails.ida.destino}</p>
+                                                            {item.flightDetails.ida.trechos?.map((t, idx) => {
+                                                                const cia = getAirlineInfo(t.companhia);
+                                                                return (
+                                                                    <div key={idx} className="bg-gray-50 border border-gray-100 p-3 rounded-lg flex justify-between items-center text-xs">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <img src={cia.logo} className="w-6 h-6 object-contain" alt={cia.name} />
+                                                                            <div>
+                                                                                <p className="font-bold text-gray-800">{cia.name} <span className="text-gray-400">({t.vooNumero})</span></p>
+                                                                                <p className="text-gray-500">{t.origemAero} ➔ {t.destinoAero}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-right text-gray-600 font-medium">
+                                                                            <p className="font-bold text-gray-900">{fDate(t.partida)}</p>
+                                                                            <p className="text-[11px] text-gray-500">Chegada: {fDate(t.chegada)}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+
+                                                        {/* VOLTA TRECHOS */}
+                                                        {item.flightDetails.volta && (
+                                                            <div className="space-y-2 pt-3 border-t border-gray-100">
+                                                                <span className="text-[10px] font-black uppercase text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100 inline-block">Volta</span>
+                                                                <p className="text-xs font-bold text-gray-800">{item.flightDetails.volta.origem} ➔ {item.flightDetails.volta.destino}</p>
+                                                                {item.flightDetails.volta.trechos?.map((t, idx) => {
+                                                                    const cia = getAirlineInfo(t.companhia);
+                                                                    return (
+                                                                        <div key={idx} className="bg-gray-50 border border-gray-100 p-3 rounded-lg flex justify-between items-center text-xs">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <img src={cia.logo} className="w-6 h-6 object-contain" alt={cia.name} />
+                                                                                <div>
+                                                                                    <p className="font-bold text-gray-800">{cia.name} <span className="text-gray-400">({t.vooNumero})</span></p>
+                                                                                    <p className="text-gray-500">{t.origemAero} ➔ {t.destinoAero}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-right text-gray-600 font-medium">
+                                                                                <p className="font-bold text-gray-900">{fDate(t.partida)}</p>
+                                                                                <p className="text-[11px] text-gray-500">Chegada: {fDate(t.chegada)}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div key={i} className="flex gap-4 items-start py-3 border-b border-dashed border-gray-100 last:border-0">
+                                                        <div className="w-20 h-20 bg-white border border-gray-200 rounded-lg p-1 flex-shrink-0 flex items-center justify-center">
                                                             {item.imageUrl ? <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-contain" /> : <Package size={24} className="text-gray-300"/>}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className={`text-sm font-bold text-gray-800 leading-tight ${hasSlug ? 'group-hover/item:text-orange-600 transition-colors' : ''}`}>{item.productName}</p>
-                                                            
-                                                            {/* CORREÇÃO AQUI: EXIBINDO OS DETALHES ROBUSTOS NO PERFIL */}
-                                                            {item.description && (
-                                                                <p className="text-xs text-gray-500 mt-2 whitespace-pre-wrap leading-relaxed border-l-2 border-orange-200 pl-2">
-                                                                    {item.description}
-                                                                </p>
-                                                            )}
-
-                                                            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
-                                                                <span className="bg-gray-100 px-2 py-1 rounded font-bold">Qtd: {item.quantity}</span>
-                                                                {!hasSlug && !item.description && <span className="text-orange-400 flex items-center gap-1"><AlertCircle size={10}/> Produto Físico Oculto</span>}
-                                                            </div>
+                                                            <p className="text-sm font-bold text-gray-800">{item.productName}</p>
+                                                            {item.description && <p className="text-xs text-gray-500 mt-2 whitespace-pre-wrap leading-relaxed border-l-2 border-orange-200 pl-2">{item.description}</p>}
+                                                            <span className="bg-gray-100 px-2 py-1 rounded font-bold text-xs mt-2 inline-block">Qtd: {item.quantity}</span>
                                                         </div>
-                                                        <div className="flex flex-col items-end gap-1">
-                                                            <span className="text-sm font-black text-gray-900">{formatCurrency(item.price)}</span>
-                                                            {hasSlug && <ChevronRight size={16} className="text-gray-300 group-hover/item:text-orange-500 mt-2"/>}
-                                                        </div>
-                                                    </ItemWrapper>
+                                                        <span className="text-sm font-black text-gray-900">{formatCurrency(item.price)}</span>
+                                                    </div>
                                                 );
                                             })}
                                         </div>
