@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { 
   Package, User, MapPin, LogOut, MessageSquare, Send, 
   ShoppingBag, CheckCircle2, Trash2, CreditCard, Mail, Clock,
-  XCircle, ChevronRight, AlertCircle, Edit2, ExternalLink, Users, PlaneTakeoff, PlaneLanding
+  XCircle, ChevronRight, AlertCircle, Edit2, ExternalLink, Users, PlaneTakeoff, PlaneLanding, Download
 } from 'lucide-react';
 import { useUser, SignOutButton } from "@clerk/clerk-react";
 import useCartStore from '../store/useCartStore';
@@ -42,6 +42,7 @@ export default function Profile() {
   const [activeTab, setActiveTab] = useState('orders'); 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState(null);
   
   const { customer, addAddress, removeAddress, setActiveAddress, setDocument, addSavedPassenger, removeSavedPassenger, updateSavedPassenger } = useCartStore();
   
@@ -103,7 +104,6 @@ export default function Profile() {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-    // Consulta atualizada trazendo o objeto completo 'flightDetails' do Sanity
     const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, orderNumber, _createdAt, status, totalAmount, cancellationReason, paymentMethod, customer, customerEmail,
       "trackingCode": coalesce(trackingCode, logistics.trackingCode),
@@ -147,6 +147,30 @@ export default function Profile() {
         fetchData();
     } catch (err) { console.error(err); alert("Erro ao cancelar."); } 
     finally { setProcessing(false); }
+  };
+
+  const handleDownloadWebPdf = async (orderId) => {
+    try {
+      setDownloadingId(orderId);
+      const response = await fetch("https://southamerica-east1-palastore-turismo.cloudfunctions.net/generateVoucherPdfStream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: { bookingId: orderId } })
+      });
+      const json = await response.json();
+      const base64Pdf = json.result?.pdfBase64;
+      
+      if (!base64Pdf) throw new Error("Não foi possível gerar o PDF.");
+
+      const blob = await fetch(`data:application/pdf;base64,${base64Pdf}`).then(res => res.blob());
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+    } catch (err) {
+      alert("Erro ao abrir o comprovante em PDF.");
+      console.error(err);
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   const handleEditAddress = (addr) => {
@@ -408,6 +432,16 @@ export default function Profile() {
                                                         <span className="text-gray-500 font-bold text-xs uppercase">Total</span>
                                                         <span className="text-xl font-black text-gray-900">{formatCurrency(order.totalAmount)}</span>
                                                     </div>
+                                                    
+                                                    {/* BOTÃO DE BAIXAR O VOUCHER PDF NO PERFIL WEB */}
+                                                    <button 
+                                                        onClick={() => handleDownloadWebPdf(order._id)}
+                                                        disabled={downloadingId === order._id}
+                                                        className="w-full mb-3 bg-purple-700 hover:bg-purple-800 text-white py-2.5 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-2 transition-colors shadow-sm disabled:opacity-50"
+                                                    >
+                                                        <Download size={16} /> {downloadingId === order._id ? 'Gerando PDF...' : 'Baixar Comprovante (PDF)'}
+                                                    </button>
+
                                                     {['pending', 'paid'].includes(order.status) && (
                                                         <button onClick={() => handleCancelOrder(order._id)} disabled={processing} className="w-full border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2.5 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-2 transition-colors shadow-sm">
                                                             <XCircle size={16} /> Cancelar Pedido

@@ -93,11 +93,10 @@ export default {
               type: 'string',
               description: 'O ID gerado pela Duffel, Kiwi ou Viator (Essencial para emissão no painel deles).'
             },
-            // 👇 NOVOS CAMPOS PARA RECEBER OS LINKS DA KIWI 👇
             {
               name: 'deep_link',
               title: 'Link de Emissão Direta (Kiwi Deep Link)',
-              type: 'string', // 🚀 ALTERADO PARA STRING (HÍBRIDO)
+              type: 'string',
               description: 'URL exclusiva para a agência concluir a compra diretamente na Kiwi.'
             },
             {
@@ -106,8 +105,71 @@ export default {
               type: 'string',
               description: 'Token gerado pela Kiwi usado para automatização de compra via API.'
             },
-            // 👆 FIM DOS NOVOS CAMPOS 👆
             
+            // 🚀 NOVO CAMPO: Detalhes estruturados do voo para exibir os logos e trechos no site
+            {
+              name: 'flightDetails',
+              title: 'Detalhes Técnicos do Voo (Logos e Trechos)',
+              type: 'object',
+              fields: [
+                { name: 'tier', title: 'Tarifa', type: 'string' },
+                { name: 'pax', title: 'Passageiros', type: 'number' },
+                { name: 'holdBags', title: 'Malas de Porão', type: 'number' },
+                {
+                  name: 'ida',
+                  title: 'Trecho de Ida',
+                  type: 'object',
+                  fields: [
+                    { name: 'origem', title: 'Origem', type: 'string' },
+                    { name: 'destino', title: 'Destino', type: 'string' },
+                    { name: 'companhiaPrincipal', title: 'Cia Principal', type: 'string' },
+                    {
+                      name: 'trechos',
+                      title: 'Lista de Conexões / Voos',
+                      type: 'array',
+                      of: [{
+                        type: 'object',
+                        fields: [
+                          { name: 'companhia', title: 'Código Cia (ex: G3, LA, AD)', type: 'string' },
+                          { name: 'vooNumero', title: 'Número do Voo', type: 'string' },
+                          { name: 'origemAero', title: 'Aeroporto Origem', type: 'string' },
+                          { name: 'destinoAero', title: 'Aeroporto Destino', type: 'string' },
+                          { name: 'partida', title: 'Data/Hora Partida', type: 'string' },
+                          { name: 'chegada', title: 'Data/Hora Chegada', type: 'string' }
+                        ]
+                      }]
+                    }
+                  ]
+                },
+                {
+                  name: 'volta',
+                  title: 'Trecho de Volta',
+                  type: 'object',
+                  fields: [
+                    { name: 'origem', title: 'Origem', type: 'string' },
+                    { name: 'destino', title: 'Destino', type: 'string' },
+                    { name: 'companhiaPrincipal', title: 'Cia Principal', type: 'string' },
+                    {
+                      name: 'trechos',
+                      title: 'Lista de Conexões / Voos',
+                      type: 'array',
+                      of: [{
+                        type: 'object',
+                        fields: [
+                          { name: 'companhia', title: 'Código Cia (ex: G3, LA, AD)', type: 'string' },
+                          { name: 'vooNumero', title: 'Número do Voo', type: 'string' },
+                          { name: 'origemAero', title: 'Aeroporto Origem', type: 'string' },
+                          { name: 'destinoAero', title: 'Aeroporto Destino', type: 'string' },
+                          { name: 'partida', title: 'Data/Hora Partida', type: 'string' },
+                          { name: 'chegada', title: 'Data/Hora Chegada', type: 'string' }
+                        ]
+                      }]
+                    }
+                  ]
+                }
+              ]
+            },
+
             { name: 'product', title: 'Vínculo (Produto Físico)', type: 'reference', to: [{ type: 'product' }] },
             { name: 'productName', title: 'Serviço / Produto', type: 'string' },
             { name: 'serviceType', title: 'Categoria do Serviço', type: 'string' },
@@ -172,7 +234,7 @@ export default {
     { name: 'carrier', title: 'Forma de Envio / Operadora', type: 'string', group: 'logistics' },
     { name: 'shippingCost', title: 'Custo de Emissão/Frete', type: 'number', group: 'logistics' },
     { name: 'trackingCode', title: 'Código da Cia Aérea (PNR Oficial)', type: 'string', group: 'logistics' },
-    { name: 'trackingUrl', title: 'Link de Rastreamento (Correios/Transportadora)', type: 'string', group: 'logistics' }, // 🚀 ALTERADO PARA STRING
+    { name: 'trackingUrl', title: 'Link de Rastreamento (Correios/Transportadora)', type: 'string', group: 'logistics' },
     {
       name: 'shippingAddress', title: 'Endereço de Entrega (Físicos)', type: 'object', group: 'logistics',
       fields: [
@@ -203,7 +265,7 @@ export default {
     { 
       name: 'providerAdminLink', 
       title: 'Link de Emissão do Fornecedor (Deep Link)', 
-      type: 'string', // 🚀 ALTERADO PARA STRING
+      type: 'string', 
       group: 'admin',
       description: 'O link gerado pelo Firebase para você clicar e abrir direto o painel da Kiwi, Duffel ou Viator.' 
     },
