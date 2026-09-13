@@ -104,7 +104,7 @@ export default function Profile() {
     if (!isLoaded || !user) return;
     const email = user.primaryEmailAddress.emailAddress;
     
-   const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
+    const ordersQuery = `*[_type == "order" && (customer.email == $email || customerEmail == $email)] | order(_createdAt desc) {
       _id, orderNumber, _createdAt, status, totalAmount, cancellationReason, paymentMethod, customer, customerEmail,
       "trackingCode": coalesce(trackingCode, logistics.trackingCode),
       "trackingUrl": coalesce(trackingUrl, logistics.trackingUrl),
@@ -650,102 +650,4 @@ export default function Profile() {
       </div>
     </div>
   );
-}
-
-// ==========================================
-// FUNÇÃO GERADORA DE VOUCHER PDF (RESTAURADA E BLINDADA)
-// ==========================================
-async function gerarEstruturaPdfVoucher(nome: string, booking: any): Promise<Buffer> {
-    const URL_MINHA_LOGO = "https://firebasestorage.googleapis.com/v0/b/palastore-turismo.firebasestorage.app/o/Gemini_Generated_Image_o0bhkao0bhkao0bh.png?alt=media&token=f2a123a1-b332-4f9c-aa41-b86754aaf380"; 
-    let logoBuffer: Buffer | null = null;
-    let tourImageBuffer: Buffer | null = null;
-
-    try {
-        if (URL_MINHA_LOGO.startsWith("http")) {
-            const respLogo = await axios.get(URL_MINHA_LOGO, { responseType: 'arraybuffer' });
-            logoBuffer = Buffer.from(respLogo.data);
-        }
-    } catch (e) {}
-
-    try {
-        if (booking.imageUrl && booking.imageUrl.startsWith("http")) {
-            const respImg = await axios.get(booking.imageUrl, { responseType: 'arraybuffer' });
-            tourImageBuffer = Buffer.from(respImg.data);
-        }
-    } catch (e) {}
-
-    // Limpa emojis e caracteres estranhos para o PDF não quebrar
-    const limparTexto = (texto: string) => {
-        if (!texto) return "";
-        return String(texto)
-            .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
-            .replace(/[^\x00-\x7Fáàãâéêíóôõúçºª➔–—]/g, '')
-            .replace(/➔/g, '->');
-    };
-
-    return new Promise<Buffer>((resolve, reject) => {
-        const doc = new PDFDocument({ margin: 50 });
-        const chunks: Uint8Array[] = [];
-        
-        doc.on("data", (chunk: Uint8Array) => chunks.push(chunk));
-        doc.on("end", () => resolve(Buffer.concat(chunks)));
-        doc.on("error", reject);
-
-        if (logoBuffer) {
-            try {
-                doc.image(logoBuffer, (doc.page.width - 150) / 2, 30, { fit: [150, 100], align: 'center' });
-                doc.y = 140; 
-            } catch (err) { doc.y = 50; }
-        } else {
-            doc.y = 50;
-            doc.fillColor("#00897B").fontSize(22).font("Helvetica-Bold").text("PALASTORE VIAGENS", { align: "center" });
-            doc.moveDown(1);
-        }
-
-        doc.fontSize(9).font("Helvetica").fillColor("#777777").text("E-mail: contato@palastore.com.br | Tel: (71) 98381-0420", { align: "center" });
-        doc.moveDown(1.5);
-
-        doc.fillColor("#1E1E1E").fontSize(16).font("Helvetica-Bold").text("COMPROVANTE / VOUCHER DE VIAGEM", { align: "center" });
-        doc.moveDown(1);
-
-        doc.rect(50, doc.y, 500, 55).fill("#F4F6F8");
-        doc.fillColor("#E65100").fontSize(9).font("Helvetica-Bold").text("CODIGO LOCALIZADOR DA RESERVA", 65, doc.y + 10);
-        doc.fillColor("#00897B").fontSize(18).font("Helvetica-Bold").text(limparTexto(booking.locator || booking.bookingId || "N/A"), 65, doc.y + 2);
-        doc.moveDown(2.5);
-
-        doc.fillColor("#1E1E1E").fontSize(12).font("Helvetica-Bold").text("DADOS DO CLIENTE / TITULAR");
-        doc.font("Helvetica").fontSize(10).text(`Nome Principal: ${limparTexto(nome)}`);
-        doc.text(`Status do Pagamento: ${limparTexto(booking.status || "PAID")}`);
-        doc.moveDown(1);
-
-        if (booking.passengers && Array.isArray(booking.passengers) && booking.passengers.length > 0) {
-            doc.font("Helvetica-Bold").fontSize(12).text("PASSAGEIROS CADASTRADOS");
-            booking.passengers.forEach((p: any, idx: number) => {
-                const nomePax = p.name || `${p.firstName || ""} ${p.lastName || ""}`.trim();
-                doc.font("Helvetica").fontSize(10).text(limparTexto(`Passageiro ${idx + 1}: ${nomePax} | CPF: ${p.cpf || "N/A"} | RG: ${p.rg || "N/A"}`));
-            });
-            doc.moveDown(1);
-        }
-
-        if (tourImageBuffer) {
-            try {
-                const posicaoAtualDaCaneta = doc.y;
-                doc.image(tourImageBuffer, 50, posicaoAtualDaCaneta, { fit: [500, 140], align: 'center' });
-                doc.y = posicaoAtualDaCaneta + 155; 
-            } catch (err) { console.error("Erro ao inserir imagem no PDF."); }
-        }
-
-        doc.font("Helvetica-Bold").fontSize(12).text("DESCRICAO DO PRODUTO / SERVICO");
-        doc.font("Helvetica").fontSize(10).text(limparTexto(booking.details || "Reserva de Viagem Exclusiva Palastore"));
-        doc.moveDown(1);
-
-        doc.font("Helvetica-Bold").fontSize(12).text("FATURAMENTO E VALORES");
-        doc.font("Helvetica").fontSize(10).text(`Valor Total Pago: R$ ${(Number(booking.totalAmount) || 0).toFixed(2)}`);
-        doc.text(`Forma de Pagamento: ${limparTexto(booking.paymentMethod || "Mercado Pago")}`);
-        
-        doc.moveDown(3);
-        doc.fontSize(8).fillColor("#999999").text("Este documento e um comprovante digital oficial emitido pela plataforma Palastore Viagens.", { align: "center" });
-
-        doc.end();
-    });
 }
