@@ -528,13 +528,7 @@ export default function FlightSearch({ prefilledData }) {
                             type="date" 
                             min={getTodayStr()} 
                             value={dateFrom} 
-                            onChange={e => {
-                                setDateFrom(e.target.value);
-                                // GATILHO: Abre o calendário de volta assim que a ida for selecionada
-                                if (tripType === 'return' && returnDateRef.current && returnDateRef.current.showPicker) {
-                                    setTimeout(() => returnDateRef.current.showPicker(), 100);
-                                }
-                            }}
+                            onChange={(e) => setDateFrom(e.target.value)}
                             onClick={(e) => e.target.showPicker && e.target.showPicker()}
                             className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600 cursor-pointer"
                           />
@@ -546,7 +540,7 @@ export default function FlightSearch({ prefilledData }) {
                             ref={returnDateRef}
                             min={dateFrom || getTodayStr()} 
                             value={dateTo} 
-                            onChange={e=>setDateTo(e.target.value)} 
+                            onChange={(e) => setDateTo(e.target.value)} 
                             onClick={(e) => e.target.showPicker && e.target.showPicker()}
                             className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600 cursor-pointer"
                           />
