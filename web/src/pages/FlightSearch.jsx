@@ -6,14 +6,22 @@ import { ShieldCheck } from 'lucide-react';
 const WORKER_URL = "https://palastore-flights-api.laeciossp.workers.dev";
 
 const formatTime = (dateStr) => {
-  const d = new Date(dateStr);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  } catch (e) { return ''; }
 };
 
+// Formatação do Padrão Brasileiro (Evitando atrasos de fuso horário)
 const formatDateBr = (dateStr) => {
-  const d = new Date(dateStr);
-  const dias = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
-  return `${dias[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  if (!dateStr) return '';
+  try {
+    const safeDate = dateStr.includes('T') ? dateStr : `${dateStr}T12:00:00`;
+    const d = new Date(safeDate);
+    const dias = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+    return `${dias[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  } catch(e) { return ''; }
 };
 
 const formatSafeDate = (dateStr) => {
@@ -21,6 +29,16 @@ const formatSafeDate = (dateStr) => {
   const parts = dateStr.split('-');
   if (parts.length !== 3) return dateStr;
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
+};
+
+// =======================================================
+// CONVERSOR EXATO PARA A API DE VOOS DA KIWI (DD/MM/YYYY)
+// =======================================================
+const formatApiDate = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return dateStr;
 };
 
 const Counter = ({ label, subLabel, value, onChange, min = 0, max = 9, icon }) => {
@@ -36,9 +54,9 @@ const Counter = ({ label, subLabel, value, onChange, min = 0, max = 9, icon }) =
         </div>
       </div>
       <div className="flex items-center gap-1.5">
-        <button onClick={handleDec} disabled={parseInt(value, 10) <= min} className="w-6 h-6 flex items-center justify-center rounded-full border border-gray-300 text-gray-500 hover:border-purple-600 hover:text-purple-600 disabled:opacity-30 transition text-sm pb-0.5">-</button>
+        <button onClick={(e) => { e.preventDefault(); handleDec(); }} disabled={parseInt(value, 10) <= min} className="w-6 h-6 flex items-center justify-center rounded-full border border-gray-300 text-gray-500 hover:border-purple-600 hover:text-purple-600 disabled:opacity-30 transition text-sm pb-0.5">-</button>
         <input type="text" readOnly value={parseInt(value, 10) || 0} className="w-4 text-center font-bold text-xs text-gray-800 outline-none select-none bg-transparent" />
-        <button onClick={handleInc} disabled={parseInt(value, 10) >= max} className="w-6 h-6 flex items-center justify-center rounded-full border border-gray-300 text-gray-500 hover:border-purple-600 hover:text-purple-600 disabled:opacity-30 transition text-sm pb-0.5">+</button>
+        <button onClick={(e) => { e.preventDefault(); handleInc(); }} disabled={parseInt(value, 10) >= max} className="w-6 h-6 flex items-center justify-center rounded-full border border-gray-300 text-gray-500 hover:border-purple-600 hover:text-purple-600 disabled:opacity-30 transition text-sm pb-0.5">+</button>
       </div>
     </div>
   );
@@ -127,8 +145,6 @@ export default function FlightSearch({ prefilledData }) {
   const [lastAdultsCount, setLastAdultsCount] = useState(1);
   const [lastChildrenCount, setLastChildrenCount] = useState(0);
   const [lastInfantsCount, setLastInfantsCount] = useState(0);
-  
-  // 🎒 ESTADO SALVO DA BAGAGEM UNIFICADA PARA A BUSCA
   const [lastHoldBagsCount, setLastHoldBagsCount] = useState(0);
 
   const tripRef = useRef(null);
@@ -137,6 +153,7 @@ export default function FlightSearch({ prefilledData }) {
   const originRef = useRef(null);
   const destRef = useRef(null);
   const dateRef = useRef(null);
+  const returnDateRef = useRef(null); // Ref para auto-abrir a data de volta
 
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const getSixMonthsStr = () => { const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString().split('T')[0]; };
@@ -251,15 +268,28 @@ export default function FlightSearch({ prefilledData }) {
     const destIds = activeDestinations.map(d => d.id).join(',');
 
     try {
-      let url = `${WORKER_URL}/search-flights?origin=${origin.id}&destination=${destIds}&dateFrom=${effectiveDateFrom}&dateToRange=${searchDateToRange}&adults=${a}&children=${c}&infants=${i}&cabin=${cabin}&sort=${overrideSort}&max_stopovers=${overrideStops}`;
+      // 🚀 CONVERSÃO ESTRITA PARA A API DA KIWI AQUI: YYYY-MM-DD -> DD/MM/YYYY
+      let apiDateFrom = formatApiDate(effectiveDateFrom);
+      let apiDateToRange = formatApiDate(searchDateToRange);
+
+      let url = `${WORKER_URL}/search-flights?origin=${origin.id}&destination=${destIds}&dateFrom=${apiDateFrom}&dateToRange=${apiDateToRange}&adults=${a}&children=${c}&infants=${i}&cabin=${cabin}&sort=${overrideSort}&max_stopovers=${overrideStops}`;
       
       const activeTripType = customTripType || tripType;
+      
       if (customVolta || activeTripType === 'return') {
+        let effectiveReturnFrom = effectiveDateFrom;
         let effectiveDateTo = searchDateToRange;
+        
         if (dateType === 'specific' && dateTo) {
-          effectiveDateTo = customVolta || dateTo;
+          effectiveReturnFrom = customVolta || dateTo; // Puxa a data correta da volta e impede de ser no mesmo dia
+          effectiveDateTo = customVolta || dateTo;     // Trava a volta exatamente no dia escolhido
         }
-        url += `&returnFrom=${effectiveDateFrom}&returnToRange=${effectiveDateTo}`;
+        
+        // 🚀 CONVERSÃO DA DATA DE VOLTA
+        let apiReturnFrom = formatApiDate(effectiveReturnFrom);
+        let apiReturnToRange = formatApiDate(effectiveDateTo);
+
+        url += `&returnFrom=${apiReturnFrom}&returnToRange=${apiReturnToRange}`;
       }
 
       const res = await fetch(url);
@@ -288,11 +318,20 @@ export default function FlightSearch({ prefilledData }) {
     const flightDetails = {
       ida: voo.ida, volta: voo.volta, pax: lastSearchedPax, adults: lastAdultsCount,
       children: lastChildrenCount, infants: lastInfantsCount, 
-      holdBags: lastHoldBagsCount, // 🎒 Passando a mala unificada para o carrinho
+      holdBags: lastHoldBagsCount,
       tier: tierName,
       deep_link: voo.deep_link,
       booking_token: voo.booking_token
     };
+
+    let descLines = [];
+    descLines.push(`Tarifa: ${tierName} | Franquia (Por Pax):`);
+    descLines.push(`🎒 1x Mochila / Item Pessoal (Incluso)`);
+    descLines.push(`🧳 1x Mala de Cabine 10kg (Incluso)`);
+    if (lastHoldBagsCount > 0) {
+      descLines.push(`\nBagagens Extras Adquiridas (Total):`);
+      descLines.push(`🧳 ${lastHoldBagsCount}x Mala(s) de 23kg`);
+    }
 
     const flightToCart = {
         _id: finalOfferId, 
@@ -306,6 +345,7 @@ export default function FlightSearch({ prefilledData }) {
         isTravel: true,
         handlingTime: 0,
         freeShipping: true,
+        description: descLines.join('\n'),
         addedAt: Date.now(), 
         flightDetails
     };
@@ -396,7 +436,7 @@ export default function FlightSearch({ prefilledData }) {
                         icon="🧳" 
                       />
                     </div>
-                    <button onClick={(e) => executeSearch(e)} className="w-full py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 cursor-pointer transition">Aplicar Filtros</button>
+                    <button onClick={(e) => { setShowPaxMenu(false); executeSearch(e); }} className="w-full py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 cursor-pointer transition">Aplicar Filtros</button>
                   </div>
                 )}
               </div>
@@ -453,7 +493,7 @@ export default function FlightSearch({ prefilledData }) {
                 {showDest && destResults.length > 0 && (
                   <ul className="absolute left-0 right-0 top-[110%] bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
                     {destResults.map(loc => (
-                      <li key={loc.id} onMouseDown={(e) => { e.preventDefault(); if(!destinations.find(x=>x.id===loc.id)) setDestinations([...destinations, {id:loc.id, name:loc.name}]); setDestQuery(''); setShowDest(false); }} className="p-3 hover:bg-purple-50 cursor-pointer text-sm border-b border-gray-50 flex flex-col">
+                      <li key={loc.id} onMouseDown={(e) => { e.preventDefault(); if(!destinations.find(x=>x.id===loc.id)) setDestinations([{id:loc.id, name:loc.name}]); setDestQuery(''); setShowDest(false); }} className="p-3 hover:bg-purple-50 cursor-pointer text-sm border-b border-gray-50 flex flex-col">
                         <span className="font-bold text-gray-800">{loc.name} ({loc.code})</span>
                       </li>
                     ))}
@@ -461,7 +501,7 @@ export default function FlightSearch({ prefilledData }) {
                 )}
               </div>
 
-           <div className="col-span-1 md:col-span-4 z-[200] h-12 relative" ref={dateRef}>
+              <div className="col-span-1 md:col-span-4 z-[200] h-12 relative" ref={dateRef}>
                 <div onClick={() => setShowDateMenu(!showDateMenu)} className="flex items-center justify-between border border-gray-300 rounded-md px-4 h-full cursor-pointer hover:border-purple-600 bg-white">
                   <div className="flex flex-col justify-center">
                     <span className="text-[9px] uppercase font-bold text-gray-400 leading-tight">Partida</span>
@@ -488,7 +528,13 @@ export default function FlightSearch({ prefilledData }) {
                             type="date" 
                             min={getTodayStr()} 
                             value={dateFrom} 
-                            onChange={e=>setDateFrom(e.target.value)} 
+                            onChange={e => {
+                                setDateFrom(e.target.value);
+                                // GATILHO: Abre o calendário de volta assim que a ida for selecionada
+                                if (tripType === 'return' && returnDateRef.current && returnDateRef.current.showPicker) {
+                                    setTimeout(() => returnDateRef.current.showPicker(), 100);
+                                }
+                            }}
                             onClick={(e) => e.target.showPicker && e.target.showPicker()}
                             className="w-full border border-gray-300 rounded p-2 text-sm font-bold text-gray-800 outline-none focus:border-purple-600 cursor-pointer"
                           />
@@ -497,6 +543,7 @@ export default function FlightSearch({ prefilledData }) {
                           <label className="text-xs font-bold text-gray-500 uppercase block mb-1 cursor-pointer">Regresso</label>
                           <input 
                             type="date" 
+                            ref={returnDateRef}
                             min={dateFrom || getTodayStr()} 
                             value={dateTo} 
                             onChange={e=>setDateTo(e.target.value)} 
@@ -554,13 +601,12 @@ export default function FlightSearch({ prefilledData }) {
       <div className="space-y-6 relative z-0">
         {renderedFlights.map((voo) => {
           const isExpanded = expandedFlight === voo.id;
-        const baseFare = parseInt(voo.precoFinal || voo.price, 10) || 0;
+          const baseFare = parseInt(voo.precoFinal || voo.price, 10) || 0;
           const unitBagPrice = voo.bags_price?.['1'] ? Math.ceil(voo.bags_price['1']) : 120;
           
-          const bagMultiplier = !voo.volta ? 2 : 1;
+          const bagMultiplier = !voo.volta ? 1 : 2;
+          const totalBagsCost = lastHoldBagsCount > 0 ? (lastHoldBagsCount * unitBagPrice * bagMultiplier) : 0;
           
-          // 🧳 O preço unitário multiplicado pelo número de malas escolhidas (holdBags)
-          const totalBagsCost = holdBags > 0 ? (holdBags * unitBagPrice * bagMultiplier) : 0;
           const passengerTotal = baseFare;
           const adultSubtotal = lastAdultsCount > 0 ? Math.ceil(passengerTotal * (lastAdultsCount / (lastAdultsCount + lastChildrenCount || 1))) : 0;
           const childSubtotal = lastChildrenCount > 0 ? (passengerTotal - adultSubtotal) : 0;
@@ -641,7 +687,14 @@ export default function FlightSearch({ prefilledData }) {
                   {lastAdultsCount > 0 && <div className="flex justify-between"><span>{lastAdultsCount}x Adulto(s)</span><span>R$ {adultSubtotal || 0}</span></div>}
                   {lastChildrenCount > 0 && <div className="flex justify-between"><span>{lastChildrenCount}x Criança(s)</span><span>R$ {childSubtotal || 0}</span></div>}
                   {lastInfantsCount > 0 && <div className="flex justify-between"><span>{lastInfantsCount}x Bebê(s)</span><span>Incluso</span></div>}
-                  {lastHoldBagsCount > 0 && <div className="flex justify-between text-purple-700 font-semibold"><span>{lastHoldBagsCount}x Mala(s) de Porão (23kg)</span><span>R$ {totalBagsCost}</span></div>}
+                  
+                  {/* 🎒 EXTRATO UNIFICADO */}
+                  {lastHoldBagsCount > 0 && (
+                    <div className="flex justify-between text-purple-700 font-semibold">
+                      <span>{lastHoldBagsCount}x Mala(s) de Porão (23kg)</span>
+                      <span>R$ {totalBagsCost}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="text-center w-full mt-auto">
