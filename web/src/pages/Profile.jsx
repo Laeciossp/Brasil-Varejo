@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useUser, SignOutButton } from "@clerk/clerk-react";
 import useCartStore from '../store/useCartStore';
-import { formatCurrency, formatLongDate } from '../lib/utils';
+import { formatCurrency, } from '../lib/utils';
 
 // --- CLIENTE SANITY ---
 const writeClient = createClient({

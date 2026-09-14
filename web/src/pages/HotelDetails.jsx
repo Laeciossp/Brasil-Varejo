@@ -27,56 +27,29 @@ const parseImagesList = (imagesData) => {
   return [];
 };
 
-const findRoomImages = (oferta, roomGroups, hotelImages) => {
+// 1. CORREÇÃO EXIGIDA PELA ETG: MATCHING ESTRITO APENAS PELO RG_EXT (SEM FALLBACKS DE NOME)
+const findRoomImages = (oferta, roomGroups) => {
   let rGroups = roomGroups;
   if (typeof rGroups === 'string' && rGroups.trim().startsWith('[')) {
       try { rGroups = JSON.parse(rGroups); } catch(e) { rGroups = []; }
   }
+  if (!rGroups || !Array.isArray(rGroups) || rGroups.length === 0) return [];
+  if (!oferta.rg_ext || typeof oferta.rg_ext !== 'object') return [];
+
+  const matchedExact = rGroups.find(rg => {
+    if (!rg.rg_ext || typeof rg.rg_ext !== 'object') return false;
+    const searchKeys = Object.keys(oferta.rg_ext);
+    if (searchKeys.length === 0) return false;
+    // MATCH ESTRITO: Todas as chaves do rg_ext da busca devem bater com as do dump estático
+    return searchKeys.every(key => String(rg.rg_ext[key]) === String(oferta.rg_ext[key]));
+  });
+
+  if (matchedExact && matchedExact.images) {
+    return parseImagesList(matchedExact.images);
+  }
   
-  let foundImages = [];
-  const parsedHotelImages = parseImagesList(hotelImages);
-  const fachadaHotel = parsedHotelImages.length > 0 ? parsedHotelImages[0] : null;
-
-  if (rGroups && Array.isArray(rGroups) && rGroups.length > 0) {
-    if (oferta.rg_ext && typeof oferta.rg_ext === 'object') {
-      const matchedExact = rGroups.find(rg => {
-        if (!rg.rg_ext || typeof rg.rg_ext !== 'object') return false;
-        const searchKeys = Object.keys(oferta.rg_ext);
-        if (searchKeys.length === 0) return false;
-        return searchKeys.every(key => String(rg.rg_ext[key]) === String(oferta.rg_ext[key]));
-      });
-      if (matchedExact && matchedExact.images) foundImages = parseImagesList(matchedExact.images);
-    }
-    if (foundImages.length === 0 && oferta.rg_ext) {
-      const matchedPartial = rGroups.find(rg => {
-        return rg.rg_ext && String(rg.rg_ext.class) === String(oferta.rg_ext.class) && String(rg.rg_ext.quality) === String(oferta.rg_ext.quality);
-      });
-      if (matchedPartial && matchedPartial.images) foundImages = parseImagesList(matchedPartial.images);
-    }
-    if (foundImages.length === 0 && oferta.tipoQuartoRaw) {
-      const offerNameLower = oferta.tipoQuartoRaw.toLowerCase();
-      const matchedByName = rGroups.find(rg => {
-        if (!rg.name) return false;
-        const staticNameLower = rg.name.toLowerCase();
-        const mainWords = staticNameLower.split(' ').filter(w => w.length > 4); 
-        if (mainWords.length > 0) return mainWords.some(word => offerNameLower.includes(word));
-        return offerNameLower.includes(staticNameLower);
-      });
-      if (matchedByName && matchedByName.images) foundImages = parseImagesList(matchedByName.images);
-    }
-    if (foundImages.length === 0 && rGroups.length === 1) {
-      if (rGroups[0].images) foundImages = parseImagesList(rGroups[0].images);
-    }
-  }
-
-  if (foundImages.length > 0 && fachadaHotel) {
-    foundImages = foundImages.filter(img => img !== fachadaHotel);
-  }
-  if (foundImages.length === 0 && parsedHotelImages.length > 0) {
-    foundImages = parsedHotelImages.filter(img => img !== fachadaHotel);
-  }
-
-  return foundImages; 
+  // Se não encontrar match exato via rg_ext, retorna vazio para não mostrar fotos erradas (Regra ETG)
+  return []; 
 };
 
 const formatRoomName = (r) => {
@@ -122,6 +95,7 @@ export default function HotelDetails() {
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [bookingStep, setBookingStep] = useState('idle'); 
   const [bookingError, setBookingError] = useState(null);
+  const [priceChangeWarning, setPriceChangeWarning] = useState(null); // NOVO: Estado para alerta de preço
 
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
@@ -177,6 +151,16 @@ export default function HotelDetails() {
           return parsed[0]?.group_name ? parsed : [{ group_name: "Comodidades Gerais", amenities: parsed }];
         };
 
+        // 2. PARSER DO METAPOLICY STRUCT
+        const parseMetaPolicy = (metaData) => {
+           if (!metaData) return null;
+           let parsed = metaData;
+           if (typeof parsed === 'string' && parsed.trim().startsWith('{')) {
+               try { parsed = JSON.parse(parsed); } catch(e){}
+           }
+           return typeof parsed === 'object' ? parsed : null;
+        };
+
         let processedImages = parseImagesList(data?.images || hotel?.imagensReais);
         let parsedRoomGroups = data?.room_groups || [];
 
@@ -188,6 +172,7 @@ export default function HotelDetails() {
             room_groups: parsedRoomGroups,
             amenity_groups: parseAmenities(data.amenities || data.amenity_groups || hotel.comodidades),
             description: parseDescription(data.description || data.description_struct || hotel.descricao),
+            metapolicy_struct: parseMetaPolicy(data.metapolicy_struct || hotel.metapolicy_struct),
             metapolicy_extra_info: data.metapolicy_extra_info || hotel.metapolicy_extra_info || null
           });
         } else {
@@ -196,6 +181,7 @@ export default function HotelDetails() {
             latitude: hotel.latitude, longitude: hotel.longitude, images: processedImages,
             room_groups: [],
             amenity_groups: parseAmenities(hotel.comodidades), description: parseDescription(hotel.descricao),
+            metapolicy_struct: parseMetaPolicy(hotel.metapolicy_struct),
             metapolicy_extra_info: hotel.metapolicy_extra_info || null
           });
         }
@@ -216,7 +202,6 @@ export default function HotelDetails() {
           const safeCheckin = checkInDate || new Date().toISOString().split('T')[0];
           const safeCheckout = checkOutDate || new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-          // CACHE BUSTER SEGURO: Parâmetro via URL evita bloqueio de CORS no Worker
           const res = await fetch(`https://palastore-flights-api.laeciossp.workers.dev/hotel-page?_t=${Date.now()}`, {
               method: 'POST', 
               headers: { 'Content-Type': 'application/json' },
@@ -265,6 +250,8 @@ export default function HotelDetails() {
     if (String(hotel.hotelId).startsWith('rh_')) fetchFreshRates(); else setBuscandoTarifas(false);
   }, [hotel, navigate, checkInDate, checkOutDate, currentRooms, currentResidency]);
 
+
+  // 3. LOGICA DE ALERTA DE PREÇO EXIGIDA PELA ETG (Prebook Warning)
   const handleStartBooking = async (oferta) => {
     if (!oferta.bookHash) {
         setBookingStep('error');
@@ -277,14 +264,12 @@ export default function HotelDetails() {
     setBookingError(null);
 
     try {
-      // PREBOOK PAYLOAD SEGURO
       const prebookPayload = { 
         hash: oferta.bookHash, 
         book_hash: oferta.bookHash, 
         price_increase_percent: 10
       };
 
-      // CACHE BUSTER SEGURO: Evita o erro rate_not_found sem causar bloqueio de CORS
       const res = await fetch(`https://palastore-flights-api.laeciossp.workers.dev/hotel-prebook?_t=${Date.now()}`, {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
@@ -296,6 +281,21 @@ export default function HotelDetails() {
       
       const prebookRate = data.data?.hotels?.[0]?.rates?.[0];
       if (!prebookRate?.book_hash?.startsWith('p-')) throw new Error("Hash inválido retornado pelo fornecedor.");
+
+      const priceChanged = data.data?.changes?.price_changed;
+      const newPriceUSD = parseFloat(prebookRate?.payment_options?.payment_types?.[0]?.amount || 0);
+      const newPriceBRL = newPriceUSD * 5.1; 
+
+      // Se o preço subiu, intercepta e mostra o aviso ao usuário
+      if (priceChanged && newPriceBRL > oferta.precoVenda) {
+          setPriceChangeWarning({
+              oldPrice: oferta.precoVenda,
+              newPrice: newPriceBRL,
+              rateData: prebookRate
+          });
+          setBookingStep('price_increase_warning');
+          return; // Para a execução aqui até o usuário aceitar
+      }
 
       setSelectedOffer(prev => ({ 
           ...prev, bookHash: prebookRate.book_hash, paymentTypeObj: prebookRate?.payment_options?.payment_types?.[0] || prev.paymentTypeObj 
@@ -323,7 +323,7 @@ export default function HotelDetails() {
 
       const orderPayload = {
         partner_order_id: partnerOrderId, hash: selectedOffer.bookHash, language: "en",
-        user: { email: "reservations@palastore.com.br", phone: guestPhone || "+5571999999999", comment: "Reserva B2B" },
+        user: { email: guestEmail || "reservations@palastore.com.br", phone: guestPhone || "+5571999999999", comment: "Reserva B2B Web" },
         rooms: sanitizedGuestForms 
       };
 
@@ -372,6 +372,24 @@ export default function HotelDetails() {
         if (attempts >= 60) { clearInterval(interval); setBookingStep('error'); setBookingError("Timeout do fornecedor (180s excedido)."); }
       } catch (err) {}
     }, 3000);
+  };
+
+  // 4. RENDERIZADOR DO METAPOLICY_STRUCT EXIGIDO PELA ETG
+  const renderMetaPoliciesStruct = (policiesObj) => {
+    if (!policiesObj) return null;
+    const elements = [];
+    for (const [key, value] of Object.entries(policiesObj)) {
+        if (Array.isArray(value) && value.length > 0) {
+            value.forEach((v, i) => {
+                const texts = Object.entries(v).map(([k, val]) => `${k.replace(/_/g, ' ')}: ${val}`).join(' | ');
+                elements.push(<li key={`${key}-${i}`} className="text-xs text-gray-700"><b>{key.replace(/_/g, ' ').toUpperCase()}:</b> {texts}</li>);
+            });
+        } else if (typeof value === 'object' && value !== null && Object.keys(value).length > 0) {
+            const texts = Object.entries(value).map(([k, val]) => `${k.replace(/_/g, ' ')}: ${val}`).join(' | ');
+            elements.push(<li key={key} className="text-xs text-gray-700"><b>{key.replace(/_/g, ' ').toUpperCase()}:</b> {texts}</li>);
+        }
+    }
+    return elements.length > 0 ? <ul className="list-disc pl-4 space-y-2 mt-2">{elements}</ul> : null;
   };
 
   if (!hotel) return null;
@@ -486,14 +504,27 @@ export default function HotelDetails() {
               </div>
             )}
 
-           {/* HOTEL POLICIES */}
-            {staticData?.metapolicy_extra_info && (
+           {/* HOTEL POLICIES (EXIGÊNCIA DE CERTIFICAÇÃO ETG) */}
+            {(staticData?.metapolicy_extra_info || staticData?.metapolicy_struct) && (
               <div className="bg-orange-50 rounded-xl border border-orange-200 shadow-sm p-5">
                 <h3 className="font-black text-sm mb-3 text-orange-800 flex items-center gap-1.5">⚠️ Políticas e Informações Importantes</h3>
-                <div 
-                  className="text-xs text-orange-900 leading-relaxed [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-2 [&>ul>li]:mb-1"
-                  dangerouslySetInnerHTML={{ __html: staticData.metapolicy_extra_info }}
-                />
+                
+                {staticData.metapolicy_struct && (
+                   <div className="mb-4">
+                     <p className="text-xs font-bold text-orange-900 uppercase">Regras Estruturadas (Metapolicy Struct):</p>
+                     {renderMetaPoliciesStruct(staticData.metapolicy_struct)}
+                   </div>
+                )}
+
+                {staticData.metapolicy_extra_info && (
+                   <div>
+                     <p className="text-xs font-bold text-orange-900 uppercase mb-1">Informações Adicionais:</p>
+                     <div 
+                       className="text-xs text-orange-900 leading-relaxed [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-2 [&>ul>li]:mb-1"
+                       dangerouslySetInnerHTML={{ __html: staticData.metapolicy_extra_info }}
+                     />
+                   </div>
+                )}
               </div>
             )}
           </div>
@@ -518,7 +549,7 @@ export default function HotelDetails() {
                 </div>
 
                 {ofertasFiltradas.map((oferta, idx) => {
-                  const roomImgs = findRoomImages(oferta, staticData?.room_groups, staticData?.images);
+                  const roomImgs = findRoomImages(oferta, staticData?.room_groups);
                   const coverImg = roomImgs.length > 0 ? roomImgs[0] : null;
 
                   return (
@@ -668,55 +699,50 @@ export default function HotelDetails() {
         </div>, document.body
       )}
 
-      {/* LIGHTBOX EXCLUSIVO PARA O QUARTO EM TELA CHEIA */}
-      {roomLightboxIndex !== null && activeRoomDetail?.roomImgs && createPortal(
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 2147483647, display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none' }} onClick={() => setRoomLightboxIndex(null)}>
-          <button 
-            onClick={(e) => { e.stopPropagation(); setRoomLightboxIndex(null); }} 
-            style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 2147483647, width: '50px', height: '50px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >✕</button>
-          
-          {activeRoomDetail.roomImgs.length > 1 && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); setRoomLightboxIndex(prev => prev > 0 ? prev - 1 : activeRoomDetail.roomImgs.length - 1); }} 
-              style={{ position: 'absolute', left: '20px', zIndex: 2147483647, width: '60px', height: '60px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '35px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >‹</button>
-          )}
-          
-          <img 
-            src={activeRoomDetail.roomImgs[roomLightboxIndex]} 
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', zIndex: 2147483646 }} 
-            alt="Quarto Ampliado" 
-          />
-          
-          {activeRoomDetail.roomImgs.length > 1 && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); setRoomLightboxIndex(prev => prev < activeRoomDetail.roomImgs.length - 1 ? prev + 1 : 0); }} 
-              style={{ position: 'absolute', right: '20px', zIndex: 2147483647, width: '60px', height: '60px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '35px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >›</button>
-          )}
-
-          <div style={{ position: 'absolute', bottom: '20px', backgroundColor: 'rgba(0,0,0,0.7)', color: '#fff', padding: '8px 20px', borderRadius: '20px', fontSize: '14px', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)', zIndex: 2147483647 }}>
-            {roomLightboxIndex + 1} de {activeRoomDetail.roomImgs.length}
-          </div>
-        </div>, document.body
-      )}
-
-      {/* MODAL DE FINALIZAÇÃO DA RESERVA */}
+      {/* MODAL DE FINALIZAÇÃO DA RESERVA E ALERTA DE PREÇO */}
       {bookingStep !== 'idle' && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999999] bg-black/80 backdrop-blur-sm overflow-y-auto flex items-start justify-center pt-10 pb-10 px-4" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col relative overflow-hidden my-auto border border-gray-200">
             <div className="bg-gray-900 p-5 flex justify-between items-center text-white shrink-0">
-              <h3 className="font-black text-sm uppercase tracking-wide">Finalizar Reserva</h3>
+              <h3 className="font-black text-sm uppercase tracking-wide">
+                {bookingStep === 'price_increase_warning' ? 'Atenção ao Preço' : 'Finalizar Reserva'}
+              </h3>
               {bookingStep !== 'booking' && <button onClick={() => setBookingStep('idle')} className="text-gray-400 hover:text-white text-xl">✕</button>}
             </div>
             <div className="p-6 sm:p-7">
-               {bookingStep === 'prebooking' && (
+               
+              {bookingStep === 'prebooking' && (
                 <div className="text-center py-6">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto mb-4"></div>
                   <p className="text-gray-800 font-black text-lg">Validando disponibilidade e tarifas...</p>
                   <p className="text-xs text-gray-500 mt-1">Conectando com ao fornecedor (Prebook)</p>
+                </div>
+              )}
+
+              {/* TELA DE ALERTA DE PREÇO EXIGIDA PELA RATEHAWK */}
+              {bookingStep === 'price_increase_warning' && priceChangeWarning && (
+                <div className="text-center py-6">
+                  <span className="text-5xl mb-4 block">⚠️</span>
+                  <h4 className="text-xl font-black text-gray-900 mb-2">Atenção: O preço da tarifa foi alterado!</h4>
+                  <p className="text-sm text-gray-600 mb-6">Durante a verificação de disponibilidade, o fornecedor atualizou o valor final desta tarifa.</p>
+                  
+                  <div className="flex flex-col items-center justify-center gap-2 mb-8 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                     <span className="line-through text-red-500 font-bold text-lg">De: BRL {priceChangeWarning.oldPrice.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                     <span className="text-green-700 font-black text-2xl">Para: BRL {priceChangeWarning.newPrice.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                  </div>
+                  
+                  <div className="flex gap-3">
+                     <button onClick={() => setBookingStep('idle')} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 rounded-xl font-bold transition">Cancelar Reserva</button>
+                     <button onClick={() => {
+                         setSelectedOffer(prev => ({
+                             ...prev,
+                             bookHash: priceChangeWarning.rateData.book_hash,
+                             precoVenda: priceChangeWarning.newPrice,
+                             paymentTypeObj: priceChangeWarning.rateData.payment_options.payment_types[0]
+                         }));
+                         setBookingStep('details');
+                     }} className="flex-[2] bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold shadow-md transition">Aceitar Novo Preço</button>
+                  </div>
                 </div>
               )}
 
