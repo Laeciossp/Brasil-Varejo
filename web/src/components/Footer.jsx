@@ -108,7 +108,7 @@ export default function Footer() {
              <h4 className="font-black text-white uppercase mb-6 text-sm tracking-widest border-l-4 border-orange-500 pl-3">Siga a Palastore</h4>
              <div className="flex gap-4">
                 <a
-                    href="https://www.instagram.com/palastoreoficial/"
+                    href="https://www.instagram.com/palastore_viagens/"
                     target="_blank"
                     rel="noreferrer"
                     className="p-3 bg-white/10 rounded-full hover:bg-gradient-to-tr from-pink-500 to-orange-500 hover:text-white transition-all shadow-lg backdrop-blur-sm hover:-translate-y-1"

@@ -27,7 +27,7 @@ const parseImagesList = (imagesData) => {
   return [];
 };
 
-// 1. CORREÇÃO EXIGIDA PELA ETG: MATCHING ESTRITO APENAS PELO RG_EXT (SEM FALLBACKS DE NOME)
+// 1. CORREÇÃO ETG: MATCHING ESTRITO APENAS PELO RG_EXT E SUPORTE A IMAGES_EXT
 const findRoomImages = (oferta, roomGroups) => {
   let rGroups = roomGroups;
   if (typeof rGroups === 'string' && rGroups.trim().startsWith('[')) {
@@ -40,26 +40,19 @@ const findRoomImages = (oferta, roomGroups) => {
     if (!rg.rg_ext || typeof rg.rg_ext !== 'object') return false;
     const searchKeys = Object.keys(oferta.rg_ext);
     if (searchKeys.length === 0) return false;
-    // MATCH ESTRITO: Todas as chaves do rg_ext da busca devem bater com as do dump estático
     return searchKeys.every(key => String(rg.rg_ext[key]) === String(oferta.rg_ext[key]));
   });
 
-  if (matchedExact && matchedExact.images) {
-    return parseImagesList(matchedExact.images);
+  if (matchedExact) {
+    if (matchedExact.images_ext && Array.isArray(matchedExact.images_ext) && matchedExact.images_ext.length > 0) {
+       const extractedUrls = matchedExact.images_ext.map(img => img.url || img.URL).filter(Boolean);
+       if (extractedUrls.length > 0) return parseImagesList(extractedUrls);
+    }
+    if (matchedExact.images) {
+      return parseImagesList(matchedExact.images);
+    }
   }
-  
-  // Se não encontrar match exato via rg_ext, retorna vazio para não mostrar fotos erradas (Regra ETG)
   return []; 
-};
-
-const formatRoomName = (r) => {
-  if (r.room_data_trans) {
-    const main = r.room_data_trans.main_room_type || r.room_data_trans.main_name || r.room_name;
-    const bedding = r.room_data_trans.bedding_type ? ` (${r.room_data_trans.bedding_type})` : '';
-    const misc = r.room_data_trans.misc_room_type ? ` - ${r.room_data_trans.misc_room_type}` : '';
-    return `${main}${bedding}${misc}`.trim();
-  }
-  return r.room_name || 'Quarto Standard';
 };
 
 const formatCancellation = (deadlineUtc) => {
@@ -85,7 +78,7 @@ export default function HotelDetails() {
   
   const [activeRoomDetail, setActiveRoomDetail] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(null); 
-  const [roomLightboxIndex, setRoomLightboxIndex] = useState(null); 
+  const [roomLightboxIndex, setRoomLightboxIndex] = useState(null); // Lightbox individual restaurado
 
   const [ofertasAtuais, setOfertasAtuais] = useState([]);
   const [buscandoTarifas, setBuscandoTarifas] = useState(true);
@@ -95,7 +88,7 @@ export default function HotelDetails() {
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [bookingStep, setBookingStep] = useState('idle'); 
   const [bookingError, setBookingError] = useState(null);
-  const [priceChangeWarning, setPriceChangeWarning] = useState(null); // NOVO: Estado para alerta de preço
+  const [priceChangeWarning, setPriceChangeWarning] = useState(null);
 
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
@@ -151,7 +144,6 @@ export default function HotelDetails() {
           return parsed[0]?.group_name ? parsed : [{ group_name: "Comodidades Gerais", amenities: parsed }];
         };
 
-        // 2. PARSER DO METAPOLICY STRUCT
         const parseMetaPolicy = (metaData) => {
            if (!metaData) return null;
            let parsed = metaData;
@@ -219,7 +211,7 @@ export default function HotelDetails() {
 
                 return {
                   tipoQuartoRaw: r.room_name,
-                  tipoQuarto: formatRoomName(r), 
+                  tipoQuarto: r.room_name, 
                   codigoRegime: r.meal === 'breakfast' ? 'BB' : 'RO',
                   nomeRegime: r.meal_data?.value || 'Sem refeições', 
                   precoVenda: parseFloat(r.payment_options?.payment_types?.[0]?.amount || r.daily_prices?.[0] || 0) * 5.1,
@@ -250,8 +242,6 @@ export default function HotelDetails() {
     if (String(hotel.hotelId).startsWith('rh_')) fetchFreshRates(); else setBuscandoTarifas(false);
   }, [hotel, navigate, checkInDate, checkOutDate, currentRooms, currentResidency]);
 
-
-  // 3. LOGICA DE ALERTA DE PREÇO EXIGIDA PELA ETG (Prebook Warning)
   const handleStartBooking = async (oferta) => {
     if (!oferta.bookHash) {
         setBookingStep('error');
@@ -286,15 +276,10 @@ export default function HotelDetails() {
       const newPriceUSD = parseFloat(prebookRate?.payment_options?.payment_types?.[0]?.amount || 0);
       const newPriceBRL = newPriceUSD * 5.1; 
 
-      // Se o preço subiu, intercepta e mostra o aviso ao usuário
       if (priceChanged && newPriceBRL > oferta.precoVenda) {
-          setPriceChangeWarning({
-              oldPrice: oferta.precoVenda,
-              newPrice: newPriceBRL,
-              rateData: prebookRate
-          });
+          setPriceChangeWarning({ oldPrice: oferta.precoVenda, newPrice: newPriceBRL, rateData: prebookRate });
           setBookingStep('price_increase_warning');
-          return; // Para a execução aqui até o usuário aceitar
+          return; 
       }
 
       setSelectedOffer(prev => ({ 
@@ -323,7 +308,7 @@ export default function HotelDetails() {
 
       const orderPayload = {
         partner_order_id: partnerOrderId, hash: selectedOffer.bookHash, language: "en",
-        user: { email: guestEmail || "reservations@palastore.com.br", phone: guestPhone || "+5571999999999", comment: "Reserva B2B Web" },
+        user: { email: "contato@palastore.com.br", phone: guestPhone || "+5571999999999", comment: "Reserva B2B Web" },
         rooms: sanitizedGuestForms 
       };
 
@@ -345,7 +330,8 @@ export default function HotelDetails() {
       });
       const finishData = await finishRes.json();
       
-      if (finishData.status !== 'ok' && !['timeout', 'unknown'].includes(finishData.error)) {
+      const isRecoverableFinishError = ['timeout', 'unknown'].includes(finishData.error) || String(finishData.error || finishData.status).startsWith('5');
+      if (finishData.status !== 'ok' && !isRecoverableFinishError) {
          throw new Error(`Erro Finish: ${finishData.debug?.validation_error || finishData.error}`);
       }
       
@@ -365,29 +351,87 @@ export default function HotelDetails() {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ partner_order_id: partnerOrderId })
         });
         const data = await res.json();
-        if (data.status === 'ok') { clearInterval(interval); setBookingStep('success'); } 
-        else if (data.status !== 'processing' && !['timeout', 'unknown'].includes(data.error)) {
-          clearInterval(interval); setBookingStep('error'); setBookingError(`Falha final: ${JSON.stringify(data.error)}`);
+        
+        const isRecoverableStatusError = ['timeout', 'unknown'].includes(data.error) || String(data.error || data.status).startsWith('5');
+        
+        if (data.status === 'ok') { 
+            clearInterval(interval); setBookingStep('success'); 
+        } else if (data.status !== 'processing' && !isRecoverableStatusError) {
+            clearInterval(interval); setBookingStep('error'); setBookingError(`Falha final: ${JSON.stringify(data.error)}`);
         }
+        
         if (attempts >= 60) { clearInterval(interval); setBookingStep('error'); setBookingError("Timeout do fornecedor (180s excedido)."); }
       } catch (err) {}
     }, 3000);
   };
 
-  // 4. RENDERIZADOR DO METAPOLICY_STRUCT EXIGIDO PELA ETG
   const renderMetaPoliciesStruct = (policiesObj) => {
     if (!policiesObj) return null;
     const elements = [];
+
+    const formatRule = (key, rule) => {
+      if (!rule) return null;
+      const safe = (val) => (val && val !== 'unspecified' ? String(val) : '');
+
+      switch(key) {
+        case 'deposit': 
+          if(!safe(rule.availability)) return null;
+          return `Depósito: ${safe(rule.availability)}. Tipo: ${safe(rule.type)} ${safe(rule.payment_type)}. Valor: ${safe(rule.price)} ${safe(rule.currency)} ${safe(rule.price_unit)}`;
+        case 'internet': 
+          if(!safe(rule.inclusion)) return null;
+          return `Internet (${safe(rule.work_area)}): ${safe(rule.type)} - ${safe(rule.inclusion)}. Valor: ${safe(rule.price)} ${safe(rule.currency)}`;
+        case 'meal': 
+          return `Refeição Adulto: ${safe(rule.type)} (${safe(rule.inclusion)}). Valor: ${safe(rule.price)} ${safe(rule.currency)}`;
+        case 'children_meal': 
+          return `Refeição Infantil (${safe(rule.age_start)} a ${safe(rule.age_end)} anos): ${safe(rule.type)} (${safe(rule.inclusion)}). Valor: ${safe(rule.price)} ${safe(rule.currency)}`;
+        case 'extra_bed': 
+          return `Cama Extra: ${safe(rule.amount)} cama(s) (${safe(rule.inclusion)}). Valor: ${safe(rule.price)} ${safe(rule.currency)} ${safe(rule.price_unit)}`;
+        case 'cot': 
+          return `Berço: ${safe(rule.amount)} berço(s) (${safe(rule.inclusion)}). Valor: ${safe(rule.price)} ${safe(rule.currency)} ${safe(rule.price_unit)}`;
+        case 'pets': 
+          if(!safe(rule.inclusion)) return null;
+          return `Animais de estimação (${safe(rule.pets_type)}): ${safe(rule.inclusion)}. Valor: ${safe(rule.price)} ${safe(rule.currency)} ${safe(rule.price_unit)}`;
+        case 'shuttle': 
+          return `Transfer (${safe(rule.shuttle_type)} para ${safe(rule.destination_type)}): ${safe(rule.inclusion)}. Valor: ${safe(rule.price)} ${safe(rule.currency)}`;
+        case 'parking': 
+          if(!safe(rule.inclusion)) return null;
+          return `Estacionamento (${safe(rule.territory_type)}): ${safe(rule.inclusion)}. Valor: ${safe(rule.price)} ${safe(rule.currency)} ${safe(rule.price_unit)}`;
+        case 'children': 
+          return `Cama para criança (${safe(rule.age_start)} a ${safe(rule.age_end)} anos): ${safe(rule.extra_bed)}. Valor: ${safe(rule.price)} ${safe(rule.currency)}`;
+        case 'visa': 
+          return safe(rule.visa_support) ? `Suporte a Visto: ${safe(rule.visa_support)}` : null;
+        case 'no_show': 
+          if(!safe(rule.availability)) return null;
+          return `No-show: ${safe(rule.availability)}. Período: ${safe(rule.day_period)} às ${safe(rule.time)}`;
+        case 'add_fee': 
+          return `Taxa Adicional (${safe(rule.fee_type)}): Valor: ${safe(rule.price)} ${safe(rule.currency)} ${safe(rule.price_unit)}`;
+        case 'check_in_check_out': 
+          return `Check-in/Check-out (${safe(rule.check_in_check_out_type)}): ${safe(rule.inclusion)}. Valor: ${safe(rule.price)} ${safe(rule.currency)}`;
+        default: 
+          return `${key.replace(/_/g, ' ').toUpperCase()}: ${Object.entries(rule).filter(([k, v]) => v && v !== 'unspecified').map(([k, v]) => `${k}=${v}`).join(', ')}`;
+      }
+    };
+
     for (const [key, value] of Object.entries(policiesObj)) {
-        if (Array.isArray(value) && value.length > 0) {
-            value.forEach((v, i) => {
-                const texts = Object.entries(v).map(([k, val]) => `${k.replace(/_/g, ' ')}: ${val}`).join(' | ');
-                elements.push(<li key={`${key}-${i}`} className="text-xs text-gray-700"><b>{key.replace(/_/g, ' ').toUpperCase()}:</b> {texts}</li>);
-            });
-        } else if (typeof value === 'object' && value !== null && Object.keys(value).length > 0) {
-            const texts = Object.entries(value).map(([k, val]) => `${k.replace(/_/g, ' ')}: ${val}`).join(' | ');
-            elements.push(<li key={key} className="text-xs text-gray-700"><b>{key.replace(/_/g, ' ').toUpperCase()}:</b> {texts}</li>);
+      if (Array.isArray(value)) {
+        value.forEach((v, i) => {
+          const text = formatRule(key, v);
+          if (text) {
+            const cleanedText = text.replace(/Valor: \s/g, '').replace(/\(\)/g, '').replace(/:\s*\./g, '.').replace(/\s+/g, ' ').trim();
+            if (cleanedText && cleanedText.length > 10) {
+               elements.push(<li key={`${key}-${i}`} className="text-xs text-gray-700"><b>{key.replace(/_/g, ' ').toUpperCase()}:</b> {cleanedText}</li>);
+            }
+          }
+        });
+      } else if (typeof value === 'object' && value !== null && Object.keys(value).length > 0) {
+        const text = formatRule(key, value);
+        if (text) {
+           const cleanedText = text.replace(/Valor: \s/g, '').replace(/\(\)/g, '').replace(/:\s*\./g, '.').replace(/\s+/g, ' ').trim();
+           if (cleanedText && cleanedText.length > 10) {
+               elements.push(<li key={key} className="text-xs text-gray-700"><b>{key.replace(/_/g, ' ').toUpperCase()}:</b> {cleanedText}</li>);
+           }
         }
+      }
     }
     return elements.length > 0 ? <ul className="list-disc pl-4 space-y-2 mt-2">{elements}</ul> : null;
   };
@@ -405,7 +449,6 @@ export default function HotelDetails() {
     const lat = staticData?.latitude || hotel.latitude || -23.5505;
     const lng = staticData?.longitude || hotel.longitude || -46.6333;
     const hName = staticData?.name || hotel.nome || "Hotel";
-
     return `
       <!DOCTYPE html>
       <html>
@@ -413,10 +456,7 @@ export default function HotelDetails() {
         <meta charset="utf-8">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <style>
-          body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, sans-serif; }
-          #map { height: 100%; width: 100%; }
-        </style>
+        <style>body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, sans-serif; } #map { height: 100%; width: 100%; }</style>
       </head>
       <body>
         <div id="map"></div>
@@ -432,7 +472,6 @@ export default function HotelDetails() {
 
   return (
     <div className="w-full bg-[#f2f2f2] font-sans min-h-screen pb-20">
-      
       <div className="bg-white border-b border-gray-200 py-3 shadow-sm sticky top-0 z-40">
         <div className="max-w-[1400px] mx-auto px-4 flex justify-between items-center">
           <div className="flex gap-8 items-center text-xs">
@@ -446,22 +485,14 @@ export default function HotelDetails() {
       </div>
 
       <div className="max-w-[1400px] mx-auto px-4 mt-6">
-        
-        {/* CARROSSEL HORIZONTAL DE FOTOS DO HOTEL */}
         <div className="mb-6 relative">
           {staticData?.images?.length > 0 ? (
             <div className="flex overflow-x-auto gap-3 pb-3 snap-x scrollbar-thin">
               {staticData.images.map((imgUrl, index) => (
-                <div 
-                  key={index} 
-                  onClick={() => setLightboxIndex(index)}
-                  className="h-56 w-72 sm:w-80 shrink-0 snap-start rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-gray-100 cursor-pointer group relative"
-                >
-                  <img src={imgUrl} alt={`Foto do hotel ${index}`} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                <div key={index} onClick={() => setLightboxIndex(index)} className="h-56 w-72 sm:w-80 shrink-0 snap-start rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-gray-100 cursor-pointer group relative">
+                  <img src={imgUrl} alt={`Foto ${index}`} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition duration-300 flex items-center justify-center">
-                    <span className="opacity-0 group-hover:opacity-100 text-white font-bold bg-black/60 px-3 py-1.5 rounded-lg backdrop-blur-sm text-xs uppercase tracking-wider transition duration-300">
-                      Ampliar Imagem
-                    </span>
+                    <span className="opacity-0 group-hover:opacity-100 text-white font-bold bg-black/60 px-3 py-1.5 rounded-lg backdrop-blur-sm text-xs uppercase tracking-wider transition duration-300">Ampliar Imagem</span>
                   </div>
                 </div>
               ))}
@@ -474,7 +505,6 @@ export default function HotelDetails() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
           <div className="lg:col-span-3 space-y-6">
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
                <span className="text-[#84cc16] text-xs">{'★'.repeat(staticData?.star_rating || hotel.categoria || 4)}</span>
@@ -483,7 +513,7 @@ export default function HotelDetails() {
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-64 relative">
-              <iframe title="Localização do Hotel" width="100%" height="100%" style={{ border: 0 }} srcDoc={buildSingleHotelMapHtml()}></iframe>
+              <iframe title="Localização" width="100%" height="100%" style={{ border: 0 }} srcDoc={buildSingleHotelMapHtml()}></iframe>
             </div>
 
             {staticData?.amenity_groups?.length > 0 && (
@@ -504,25 +534,19 @@ export default function HotelDetails() {
               </div>
             )}
 
-           {/* HOTEL POLICIES (EXIGÊNCIA DE CERTIFICAÇÃO ETG) */}
             {(staticData?.metapolicy_extra_info || staticData?.metapolicy_struct) && (
               <div className="bg-orange-50 rounded-xl border border-orange-200 shadow-sm p-5">
                 <h3 className="font-black text-sm mb-3 text-orange-800 flex items-center gap-1.5">⚠️ Políticas e Informações Importantes</h3>
-                
                 {staticData.metapolicy_struct && (
                    <div className="mb-4">
-                     <p className="text-xs font-bold text-orange-900 uppercase">Regras Estruturadas (Metapolicy Struct):</p>
+                     <p className="text-xs font-bold text-orange-900 uppercase">Regras Estruturadas:</p>
                      {renderMetaPoliciesStruct(staticData.metapolicy_struct)}
                    </div>
                 )}
-
                 {staticData.metapolicy_extra_info && (
                    <div>
                      <p className="text-xs font-bold text-orange-900 uppercase mb-1">Informações Adicionais:</p>
-                     <div 
-                       className="text-xs text-orange-900 leading-relaxed [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-2 [&>ul>li]:mb-1"
-                       dangerouslySetInnerHTML={{ __html: staticData.metapolicy_extra_info }}
-                     />
+                     <div className="text-xs text-orange-900 leading-relaxed [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-2 [&>ul>li]:mb-1" dangerouslySetInnerHTML={{ __html: staticData.metapolicy_extra_info }} />
                    </div>
                 )}
               </div>
@@ -554,73 +578,45 @@ export default function HotelDetails() {
 
                   return (
                     <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-4 p-5 border-b border-gray-100 items-start hover:bg-gray-50 transition">
-                      
-                      {/* ACOMODAÇÃO */}
                       <div className="col-span-1 md:col-span-4 flex gap-4">
-                        <div 
-                           className="w-24 h-24 shrink-0 rounded-lg overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:opacity-80 transition bg-gray-100 flex items-center justify-center relative group"
-                           onClick={() => setActiveRoomDetail({ oferta, roomImgs })}
-                        >
+                        <div className="w-24 h-24 shrink-0 rounded-lg overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:opacity-80 transition bg-gray-100 flex items-center justify-center relative group" onClick={() => setActiveRoomDetail({ oferta, roomImgs })}>
                            {coverImg ? (
                              <>
                                <img src={coverImg} alt="Quarto" className="w-full h-full object-cover" />
-                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
-                                 <span className="opacity-0 group-hover:opacity-100 text-white text-[10px] font-bold">Ver +</span>
-                               </div>
+                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center"><span className="opacity-0 group-hover:opacity-100 text-white text-[10px] font-bold">Ver +</span></div>
                              </>
                            ) : (
-                             <div className="flex flex-col items-center justify-center p-2 text-center text-gray-400">
-                               <span className="text-2xl mb-1">🛏️</span>
-                               <span className="text-[9px] font-bold uppercase tracking-wider leading-tight">Sem Foto</span>
-                             </div>
+                             <div className="flex flex-col items-center justify-center p-2 text-center text-gray-400"><span className="text-2xl mb-1">🛏️</span><span className="text-[9px] font-bold uppercase tracking-wider leading-tight">Sem Foto</span></div>
                            )}
                         </div>
-
                         <div className="flex flex-col gap-1.5 flex-1">
                           <h3 onClick={() => setActiveRoomDetail({ oferta, roomImgs })} className="font-bold text-sm text-blue-600 cursor-pointer hover:underline leading-tight pr-2">{oferta.tipoQuarto}</h3>
-                          <span className="bg-[#4C1D95]/10 text-[#4C1D95] px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider block w-max border border-[#4C1D95]/20">
-                            Cobre {totalQuartos} Quarto(s)
-                          </span>
+                          <span className="bg-[#4C1D95]/10 text-[#4C1D95] px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider block w-max border border-[#4C1D95]/20">Cobre {totalQuartos} Quarto(s)</span>
                         </div>
                       </div>
 
-                      {/* REFEIÇÕES */}
                       <div className="col-span-1 md:col-span-2 text-xs font-bold text-[#15803d] pt-1">🍽️ {oferta.nomeRegime}</div>
                       
-                      {/* CANCELAMENTO & RATE POLICIES */}
                       <div className="col-span-1 md:col-span-3 text-xs font-bold pt-1 pr-2">
                         {oferta.freeCancellation ? <span className="text-[#15803d]">↩️ {oferta.cancellationDeadline}</span> : <span className="text-red-600">❌ Não reembolsável</span>}
-                        
-                        {oferta.deposit && (
-                           <div className="text-[9px] text-orange-600 mt-1 font-normal leading-tight">
-                             <b>Deposit:</b> Payment may be required before check-in.
-                           </div>
-                        )}
-                        {oferta.noShow && (
-                           <div className="text-[9px] text-red-600 mt-1 font-normal leading-tight">
-                             <b>No-Show:</b> Fee applies if you don't arrive.
-                           </div>
-                        )}
+                        {oferta.deposit && <div className="text-[9px] text-orange-600 mt-1 font-normal leading-tight"><b>Deposit:</b> Payment may be required before check-in.</div>}
+                        {oferta.noShow && <div className="text-[9px] text-red-600 mt-1 font-normal leading-tight"><b>No-Show:</b> Fee applies if you don't arrive.</div>}
                       </div>
 
-                      {/* PREÇO E TAXAS EXCLUÍDAS */}
                       <div className="col-span-1 md:col-span-2 pt-1 text-right pr-4">
                         <span className="text-base font-black text-gray-900 block tracking-tight">BRL {oferta.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                        
                         {oferta.excludedTaxes?.length > 0 && (
                           <div className="mt-1 flex flex-col items-end">
-                            <span className="text-[8px] font-black text-red-600 uppercase tracking-wider">⚠️ Payable at property:</span>
+                            <span className="text-[8px] font-black text-red-600 uppercase tracking-wider">⚠️ Mandatory Local Taxes</span>
                             {oferta.excludedTaxes.map((t, idx2) => (
-                              <span key={idx2} className="text-[9px] text-red-700">{t.name} {t.amount} {t.currency_code}</span>
+                              <span key={idx2} className="text-[9px] text-red-700">Payable upon check-in at the hotel: {t.name} {t.amount} {t.currency_code}</span>
                             ))}
                           </div>
                         )}
                       </div>
 
                       <div className="col-span-1 md:col-span-1 flex justify-center pt-1">
-                        <button onClick={() => setActiveRoomDetail({ oferta, roomImgs })} disabled={buscandoTarifas} className="w-full bg-[#ffc107] hover:bg-yellow-500 disabled:opacity-50 text-gray-900 font-bold py-2 rounded shadow text-xs transition uppercase">
-                          Reservar
-                        </button>
+                        <button onClick={() => setActiveRoomDetail({ oferta, roomImgs })} disabled={buscandoTarifas} className="w-full bg-[#ffc107] hover:bg-yellow-500 disabled:opacity-50 text-gray-900 font-bold py-2 rounded shadow text-xs transition uppercase">Reservar</button>
                       </div>
                     </div>
                   );
@@ -634,41 +630,19 @@ export default function HotelDetails() {
       {/* LIGHTBOX DA GALERIA GERAL DO HOTEL EM TELA CHEIA */}
       {lightboxIndex !== null && staticData?.images && createPortal(
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 2147483647, display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none' }} onClick={() => setLightboxIndex(null)}>
-          <button 
-            onClick={(e) => { e.stopPropagation(); setLightboxIndex(null); }} 
-            style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 2147483647, width: '50px', height: '50px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >✕</button>
-          
-          <button 
-            onClick={(e) => { e.stopPropagation(); setLightboxIndex(prev => prev > 0 ? prev - 1 : staticData.images.length - 1); }} 
-            style={{ position: 'absolute', left: '20px', zIndex: 2147483647, width: '60px', height: '60px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '35px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >‹</button>
-          
-          <img 
-            src={staticData.images[lightboxIndex]} 
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', zIndex: 2147483646 }} 
-            alt="Hotel Ampliada" 
-          />
-          
-          <button 
-            onClick={(e) => { e.stopPropagation(); setLightboxIndex(prev => prev < staticData.images.length - 1 ? prev + 1 : 0); }} 
-            style={{ position: 'absolute', right: '20px', zIndex: 2147483647, width: '60px', height: '60px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '35px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >›</button>
-
-          <div style={{ position: 'absolute', bottom: '20px', backgroundColor: 'rgba(0,0,0,0.7)', color: '#fff', padding: '8px 20px', borderRadius: '20px', fontSize: '14px', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)', zIndex: 2147483647 }}>
-            {lightboxIndex + 1} de {staticData.images.length}
-          </div>
+          <button onClick={(e) => { e.stopPropagation(); setLightboxIndex(null); }} style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 2147483647, width: '50px', height: '50px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          <button onClick={(e) => { e.stopPropagation(); setLightboxIndex(prev => prev > 0 ? prev - 1 : staticData.images.length - 1); }} style={{ position: 'absolute', left: '20px', zIndex: 2147483647, width: '60px', height: '60px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '35px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+          <img src={staticData.images[lightboxIndex]} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', zIndex: 2147483646 }} alt="Ampliada" />
+          <button onClick={(e) => { e.stopPropagation(); setLightboxIndex(prev => prev < staticData.images.length - 1 ? prev + 1 : 0); }} style={{ position: 'absolute', right: '20px', zIndex: 2147483647, width: '60px', height: '60px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '35px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
         </div>, document.body
       )}
 
-      {/* MODAL DE FOTOS DO QUARTO COM GRID */}
+      {/* MODAL DE FOTOS DO QUARTO COM GRID E LIGHTBOX RESTAURADO */}
       {activeRoomDetail && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col overflow-hidden relative p-6 max-h-[90vh]">
             <button onClick={() => setActiveRoomDetail(null)} className="absolute top-4 right-4 text-gray-400 hover:text-black font-black text-2xl z-10 cursor-pointer">✕</button>
             <h2 className="text-xl font-black text-gray-900 leading-tight mb-4 pr-6">{activeRoomDetail.oferta.tipoQuarto}</h2>
-            
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4 overflow-y-auto max-h-[50vh] pr-2 scrollbar-thin">
               {activeRoomDetail.roomImgs && activeRoomDetail.roomImgs.length > 0 ? (
                 activeRoomDetail.roomImgs.map((img, i) => (
@@ -681,21 +655,28 @@ export default function HotelDetails() {
                 ))
               ) : (
                 <div className="col-span-full py-16 text-center bg-gray-50 text-gray-500 text-xs font-bold uppercase rounded-xl border border-dashed border-gray-300">
-                  <span className="text-3xl block mb-2">🛏️</span>
-                  Nenhuma foto específica para este quarto fornecida pelo hotel.
+                  <span className="text-3xl block mb-2">🛏️</span> Nenhuma foto específica para este quarto fornecida.
                 </div>
               )}
             </div>
-
             <div className="text-center mb-6 pt-4 border-t border-gray-100 shrink-0">
               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Preço Total para ({totalQuartos} quartos)</p>
               <p className="text-3xl font-black text-gray-900">BRL {activeRoomDetail.oferta.precoVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
             </div>
-
             <button onClick={() => handleStartBooking(activeRoomDetail.oferta)} className="w-full bg-[#ffc107] hover:bg-yellow-500 text-gray-900 font-bold py-4 rounded-xl shadow-md transition text-sm uppercase tracking-wider shrink-0 cursor-pointer">
               Confirmar e Prosseguir
             </button>
           </div>
+        </div>, document.body
+      )}
+
+      {/* LIGHTBOX INDIVIDUAL PARA AS FOTOS DO QUARTO */}
+      {roomLightboxIndex !== null && activeRoomDetail?.roomImgs && createPortal(
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 2147483647, display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none' }} onClick={() => setRoomLightboxIndex(null)}>
+          <button onClick={(e) => { e.stopPropagation(); setRoomLightboxIndex(null); }} style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 2147483647, width: '50px', height: '50px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          <button onClick={(e) => { e.stopPropagation(); setRoomLightboxIndex(prev => prev > 0 ? prev - 1 : activeRoomDetail.roomImgs.length - 1); }} style={{ position: 'absolute', left: '20px', zIndex: 2147483647, width: '60px', height: '60px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '35px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+          <img src={activeRoomDetail.roomImgs[roomLightboxIndex]} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', zIndex: 2147483646 }} alt="Quarto Ampliada" />
+          <button onClick={(e) => { e.stopPropagation(); setRoomLightboxIndex(prev => prev < activeRoomDetail.roomImgs.length - 1 ? prev + 1 : 0); }} style={{ position: 'absolute', right: '20px', zIndex: 2147483647, width: '60px', height: '60px', backgroundColor: 'rgba(0,0,0,0.6)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '50%', color: '#fff', fontSize: '35px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
         </div>, document.body
       )}
 
@@ -704,9 +685,7 @@ export default function HotelDetails() {
         <div className="fixed inset-0 z-[9999999] bg-black/80 backdrop-blur-sm overflow-y-auto flex items-start justify-center pt-10 pb-10 px-4" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col relative overflow-hidden my-auto border border-gray-200">
             <div className="bg-gray-900 p-5 flex justify-between items-center text-white shrink-0">
-              <h3 className="font-black text-sm uppercase tracking-wide">
-                {bookingStep === 'price_increase_warning' ? 'Atenção ao Preço' : 'Finalizar Reserva'}
-              </h3>
+              <h3 className="font-black text-sm uppercase tracking-wide">{bookingStep === 'price_increase_warning' ? 'Atenção ao Preço' : 'Finalizar Reserva'}</h3>
               {bookingStep !== 'booking' && <button onClick={() => setBookingStep('idle')} className="text-gray-400 hover:text-white text-xl">✕</button>}
             </div>
             <div className="p-6 sm:p-7">
@@ -715,7 +694,6 @@ export default function HotelDetails() {
                 <div className="text-center py-6">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto mb-4"></div>
                   <p className="text-gray-800 font-black text-lg">Validando disponibilidade e tarifas...</p>
-                  <p className="text-xs text-gray-500 mt-1">Conectando com ao fornecedor (Prebook)</p>
                 </div>
               )}
 
@@ -725,21 +703,14 @@ export default function HotelDetails() {
                   <span className="text-5xl mb-4 block">⚠️</span>
                   <h4 className="text-xl font-black text-gray-900 mb-2">Atenção: O preço da tarifa foi alterado!</h4>
                   <p className="text-sm text-gray-600 mb-6">Durante a verificação de disponibilidade, o fornecedor atualizou o valor final desta tarifa.</p>
-                  
                   <div className="flex flex-col items-center justify-center gap-2 mb-8 bg-gray-50 p-4 rounded-xl border border-gray-200">
                      <span className="line-through text-red-500 font-bold text-lg">De: BRL {priceChangeWarning.oldPrice.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                      <span className="text-green-700 font-black text-2xl">Para: BRL {priceChangeWarning.newPrice.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                   </div>
-                  
                   <div className="flex gap-3">
                      <button onClick={() => setBookingStep('idle')} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 rounded-xl font-bold transition">Cancelar Reserva</button>
                      <button onClick={() => {
-                         setSelectedOffer(prev => ({
-                             ...prev,
-                             bookHash: priceChangeWarning.rateData.book_hash,
-                             precoVenda: priceChangeWarning.newPrice,
-                             paymentTypeObj: priceChangeWarning.rateData.payment_options.payment_types[0]
-                         }));
+                         setSelectedOffer(prev => ({ ...prev, bookHash: priceChangeWarning.rateData.book_hash, precoVenda: priceChangeWarning.newPrice, paymentTypeObj: priceChangeWarning.rateData.payment_options.payment_types[0] }));
                          setBookingStep('details');
                      }} className="flex-[2] bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold shadow-md transition">Aceitar Novo Preço</button>
                   </div>
@@ -757,11 +728,11 @@ export default function HotelDetails() {
 
                   {selectedOffer.excludedTaxes?.length > 0 && (
                     <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg shadow-sm">
-                      <p className="text-sm font-black text-red-700 mb-2 flex items-center gap-1.5">⚠️ Mandatory Fees</p>
+                      <p className="text-sm font-black text-red-700 mb-2 flex items-center gap-1.5">⚠️ Mandatory Local Taxes</p>
                       <ul className="list-disc pl-5">
                         {selectedOffer.excludedTaxes.map((t, i) => (
                           <li key={i} className="text-xs font-black text-red-800 tracking-wide mb-1">
-                            Payable at the property: {t.name} {t.amount} {t.currency_code}
+                            Payable upon check-in at the hotel: {t.name} {t.amount} {t.currency_code}
                           </li>
                         ))}
                       </ul>
@@ -769,12 +740,10 @@ export default function HotelDetails() {
                   )}
 
                   <div className="mb-6">
-                    <p className="text-xs font-black text-gray-900 mb-3 uppercase tracking-wide border-b border-gray-100 pb-2">Hóspedes da Reserva</p>
-                    
+                    <p className="text-xs font-black text-gray-900 mb-3 uppercase tracking-wide border-b border-gray-100 pb-2">Hóspedes</p>
                     {guestForms.map((room, rIdx) => (
                       <div key={rIdx} className="mb-4 p-4 border border-gray-200 rounded-xl bg-gray-50">
                         <p className="font-bold text-sm text-[#4C1D95] mb-3">Quarto {rIdx + 1}</p>
-                        
                         {room.guests.map((g, gIdx) => (
                           <div key={gIdx} className="flex gap-2 mb-3 items-center">
                             <span className="text-xs font-bold w-16 text-gray-600">{g.is_child ? `Criança` : 'Adulto'}</span>
@@ -789,22 +758,19 @@ export default function HotelDetails() {
                   <div className="mb-6">
                     <p className="text-xs font-black text-gray-900 mb-3 uppercase tracking-wide border-b border-gray-100 pb-2">Contato</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                      <input type="email" placeholder="E-mail" required value={guestEmail} onChange={e => setGuestEmail(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none" />
-                      <input type="text" placeholder="Telefone com DDD" required value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none" />
+                      <input type="email" placeholder="E-mail (Seu E-mail)" required value={guestEmail} onChange={e => setGuestEmail(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none" />
+                      <input type="text" placeholder="Telefone" required value={guestPhone} onChange={e => setGuestPhone(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-medium outline-none" />
                     </div>
                   </div>
 
-                  <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl shadow-lg uppercase text-sm tracking-wide transition transform active:scale-95">
-                    Confirmar Reserva
-                  </button>
+                  <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl shadow-lg uppercase text-sm tracking-wide transition transform active:scale-95">Confirmar Reserva</button>
                 </form>
               )}
 
               {bookingStep === 'booking' && (
                 <div className="text-center py-6">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-green-600 mx-auto mb-4"></div>
-                  <p className="text-gray-800 font-black text-lg">Processando sua reserva...</p>
-                  <p className="text-xs text-gray-500 mt-1">Aguardando confirmação do fornecedor</p>
+                  <p className="text-gray-800 font-black text-lg">Processando...</p>
                 </div>
               )}
 
@@ -812,8 +778,8 @@ export default function HotelDetails() {
                 <div className="text-center py-6">
                   <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">✓</div>
                   <h4 className="text-xl font-black text-gray-900 mb-2">Reserva Confirmada!</h4>
-                  <p className="text-sm text-gray-600 mb-5 bg-gray-50 py-2 px-4 rounded-lg border inline-block">ID do Pedido: <span className="font-bold">{finalPartnerOrderId}</span></p>
-                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wide transition hover:bg-gray-800 shadow-lg">Fechar e Voltar</button>
+                  <p className="text-sm text-gray-600 mb-5 bg-gray-50 py-2 px-4 rounded-lg border inline-block">ID: <span className="font-bold">{finalPartnerOrderId}</span></p>
+                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wide transition hover:bg-gray-800 shadow-lg">Fechar</button>
                 </div>
               )}
 
@@ -822,7 +788,7 @@ export default function HotelDetails() {
                   <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">✕</div>
                   <h4 className="text-xl font-black text-gray-900 mb-2">Ops! Ocorreu um problema.</h4>
                   <p className="text-sm text-red-600 mb-5 bg-red-50 p-3 rounded-lg border border-red-100 break-words max-h-40 overflow-y-auto">{bookingError}</p>
-                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wide transition hover:bg-gray-800 shadow-lg">Tentar Novamente</button>
+                  <button onClick={() => setBookingStep('idle')} className="w-full bg-gray-900 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wide transition hover:bg-gray-800 shadow-lg">Voltar</button>
                 </div>
               )}
             </div>

@@ -416,7 +416,7 @@ export default function ViagensPage() {
         
         <div className="text-center mb-8">
             <h1 className="text-3xl md:text-4xl font-black text-gray-800 uppercase tracking-tight italic mb-2">Central de Viagens</h1>
-            <p className="text-gray-500 font-medium">Sua próxima aventura começa aqui. Escolha o serviço desejado.</p>
+            <p className="text-gray-500 font-medium">Fábrica da felicidade.</p>
         </div>
 
         <div className="flex flex-wrap justify-center gap-3 md:gap-4 mb-10">
