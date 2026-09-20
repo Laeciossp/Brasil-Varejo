@@ -1,130 +1,248 @@
 const axios = require('axios');
 const { XMLParser } = require('fast-xml-parser');
-const { createClient } = require('@supabase/supabase-js');
+const { PrismaClient } = require('@prisma/client');
+const { PrismaPg } = require('@prisma/adapter-pg');
+const { Pool } = require('pg');
 
-// ============================================================================
-// 1. CONFIGURAÇÕES E CREDENCIAIS
-// ============================================================================
-const CREDENCIAIS = {
-    codigousu: 'PPAK',       
-    clausu: 'xml528786',     
-    afiliacio: 'RS',         
-    secacc: '164338',        
-    codusu: 'BJ0932'         
-};
-
-const SUPABASE_URL = 'https://vcqiilytjrrurdbscmio.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjcWlpbHl0anJydXJkYnNjbWlvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjYwODAyOCwiZXhwIjoyMTAyMTg0MDI4fQ.vhrjAMAazVKS1YPV9Ld9g-1f_ohlJ-s-Zydeo5gQo8M'; 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-const URL_RESTEL = `http://xml.hotelresb2b.com/xml/listen_xml.jsp?codigousu=${CREDENCIAIS.codigousu}&clausu=${CREDENCIAIS.clausu}&afiliacio=${CREDENCIAIS.afiliacio}&secacc=${CREDENCIAIS.secacc}`;
-const parser = new XMLParser({ ignoreAttributes: false });
-
-async function dispararAPI(xmlString) {
-    const payload = `xml=${encodeURIComponent(xmlString)}`;
-    return await axios.post(URL_RESTEL, payload, {
-        headers: { 
-            'Content-Type': 'application/x-www-form-urlencoded', 
-            'Accept-Encoding': 'gzip, deflate' 
-        },
-        timeout: 60000
-    });
-}
-
-// ============================================================================
-// 2. MOTOR DE FORÇA BRUTA (COM RADAR PARA O 000279)
-// ============================================================================
-async function iniciarTratorForcaBruta() {
-    console.log("🚀 INICIANDO IMPORTADOR RESTEL (MODO FORÇA BRUTA CORRIGIDO)");
-    
-    // Vamos testar apenas do 275 ao 285 para focar onde o 000279 está e ser mais rápido
-    const INICIO = 275;
-    const FIM = 285; 
-    
-    let salvos = 0;
-
-    console.log(`\n⏳ Varrendo Cobols do ${INICIO} ao ${FIM}...\n`);
-
-    for (let i = INICIO; i <= FIM; i++) {
-        const cobol = String(i).padStart(6, '0');
-        
-        const xml15 = `<?xml version="1.0" encoding="UTF-8"?>
-<peticion>
-  <tipo>15</tipo>
-  <nombre>Servicio de informacion de hotel</nombre>
-  <agencia>Palastore</agencia>
-  <parametros>
-    <codigo>${cobol}</codigo>
-    <idioma>1</idioma>
-  </parametros>
-</peticion>`;
-
-        try {
-            const res15 = await dispararAPI(xml15);
-            
-            // RADAR: Se for o 000279, imprime o XML cru que a Restel devolveu
-            if (cobol === "000279") {
-                console.log(`\n\n🎯 [RADAR] RESPOSTA BRUTA DA RESTEL PARA O COBOL 000279:`);
-                console.log(res15.data);
-                console.log(`------------------------------------------------------\n`);
-            }
-
-            const json15 = parser.parse(res15.data);
-            
-            // Correção: Aceita tanto <parametros> quanto <param> do sandbox
-            const param15 = json15?.respuesta?.parametros || json15?.respuesta?.param;
-            const details = param15?.hotel;
-            
-            if (!details || !details.nombre_h) {
-                process.stdout.write(`.`);
-                continue;
-            }
-
-            console.log(`\n🏨 [Cobol ${cobol}] ENCONTRADO: ${details.nombre_h}`);
-
-            let imagens = [];
-            if (details.fotos && details.fotos.foto) {
-                imagens = Array.isArray(details.fotos.foto) ? details.fotos.foto : [details.fotos.foto];
-            }
-
-            let comodidades = [];
-            if (details.servicios && details.servicios.servicio) {
-                const servs = Array.isArray(details.servicios.servicio) ? details.servicios.servicio : [details.servicios.servicio];
-                comodidades = servs.map(s => s.desc_serv);
-            }
-
-            const { error } = await supabase.from('RestelHotel').upsert({
-                cobol: cobol,
-                name: details.nombre_h || "Sem Nome",
-                category: parseInt(details.categoria) || 0,
-                countryCode: details.pais || "",
-                province: details.provincia || "",
-                city: details.poblacion || "",
-                address: details.direccion || "",
-                zipCode: details.cp || "",
-                latitude: parseFloat(details.latitud) || 0,
-                longitude: parseFloat(details.longitud) || 0,
-                description: details.desc_hotel || "",
-                images: imagens,
-                amenities: comodidades,
-                updatedAt: new Date().toISOString()
-            }, { onConflict: 'cobol' });
-
-            if (error) {
-                console.error(`❌ Erro DB - Cobol ${cobol}:`, error.message);
-            } else {
-                salvos++;
-                console.log(`✅ Salvo no Supabase com sucesso!`);
-            }
-
-        } catch (err) {
-            console.error(`\n❌ Erro de requisição no Cobol ${cobol}:`, err.message);
-        }
-
-        await new Promise(r => setTimeout(r, 200));
+class RestelCatalogImporter {
+    constructor(config) {
+        this.config = config;
+        this.urlBase = `http://xml.hotelresb2b.com/xml/listen_xml.jsp?codigousu=${config.codigousu}&clausu=${config.clausu}&afiliacio=${config.afiliacio}&secacc=${config.secacc}`;
+        this.parser = new XMLParser({ 
+            ignoreAttributes: false, 
+            attributeNamePrefix: "@_",
+            textNodeName: "text"
+        });
     }
 
-    console.log(`\n\n🎉 VARREDURA FINALIZADA! Total de hotéis importados: ${salvos}`);
+    async _enviarRequisicao(xmlString) {
+        try {
+            const response = await axios.post(this.urlBase, `xml=${encodeURIComponent(xmlString)}`, {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept-Encoding': 'gzip, deflate' },
+                timeout: 45000 // Aumentado para 45s pois requisições globais são mais pesadas
+            });
+            return this.parser.parse(response.data);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    _toArray(item) {
+        if (!item) return [];
+        return Array.isArray(item) ? item : [item];
+    }
+
+    // 1. XML 5 - BUSCA A LISTA DE TODOS OS PAÍSES DO MUNDO
+    async baixarListaPaises() {
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<peticion>
+    <tipo>5</tipo>
+    <nombre>Peticion de paises</nombre>
+    <agencia>PALASTORE XML INHOUSE BR XML @</agencia>
+    <parametros>
+        <usuario>${this.config.codusu}</usuario>
+        <idioma>1</idioma>
+    </parametros>
+</peticion>`;
+        const res = await this._enviarRequisicao(xml);
+        // Tenta capturar o array de países independente de como a Restel aninha o XML
+        const paises = res?.respuesta?.parametros?.paises?.pais || res?.respuesta?.param?.paises?.pais || [];
+        return this._toArray(paises);
+    }
+
+    // 2. XML 17 - BUSCA A LISTA DE HOTÉIS DE UM PAÍS ESPECÍFICO
+    async baixarListaHoteis(codPais) {
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<peticion>
+    <tipo>17</tipo>
+    <nombre>Peticion de listado de hoteles</nombre>
+    <agencia>PALASTORE XML INHOUSE BR XML @</agencia>
+    <parametros>
+        <pais>${codPais}</pais>
+    </parametros>
+</peticion>`;
+        const res = await this._enviarRequisicao(xml);
+        const hoteis = res?.respuesta?.parametros?.hoteles?.hotel || res?.respuesta?.param?.hotls?.hot || [];
+        return this._toArray(hoteis);
+    }
+
+    // 3. XML 15 - FAZ O DOWNLOAD PROFUNDO DE UM HOTEL ESPECÍFICO
+    async baixarDetalhesHotel(codigoCobol) {
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<peticion>
+    <tipo>15</tipo>
+    <nombre>Detalle de hotel</nombre>
+    <agencia>PALASTORE XML INHOUSE BR XML @</agencia>
+    <parametros>
+        <usuario>${this.config.codusu}</usuario>
+        <hotel>${String(codigoCobol).trim().padStart(6, '0')}</hotel>
+        <idioma>1</idioma>
+    </parametros>
+</peticion>`;
+        const res = await this._enviarRequisicao(xml);
+        return res?.respuesta?.param?.hotel || res?.respuesta?.parametros?.hotel || res?.respuesta?.hotel || null;
+    }
+
+    // 4. PROCESSADOR HÍBRIDO (POR PAÍS)
+    async importarEAtualizarHibrido(prismaClient, codPais) {
+        try {
+            console.log(`🌍 Baixando lista de hotéis para o país: ${codPais}...`);
+            const listaMestra = await this.baixarListaHoteis(codPais);
+            
+            if (listaMestra.length === 0) {
+                console.log(`📍 Nenhum hotel encontrado no país ${codPais}. Pulando...`);
+                return;
+            }
+
+            console.log(`📊 Encontrados ${listaMestra.length} hotéis em ${codPais}. Iniciando extração profunda...`);
+            
+            let processados = 0;
+            let erros = 0;
+
+            for (const item of listaMestra) {
+                const cobol = item['@_codigo'] || item.codigo || item.cobol;
+                if (!cobol) continue;
+
+                const ht = await this.baixarDetalhesHotel(cobol);
+                
+                if (ht) {
+                    const name = ht['@_nombre'] || ht.nombre || item.nombre || "Hotel Restel";
+                    const address = ht['@_direccion'] || ht.direccion || "";
+                    const zipCode = ht['@_cp'] || ht.cp || "";
+                    
+                    const catRaw = ht['@_categoria'] || ht.categoria || "0";
+                    const category = parseInt(String(catRaw).replace(/\D/g, '')) || 0;
+
+                    let latitude = 0, longitude = 0;
+                    if (ht.plano) {
+                        latitude = parseFloat(ht.plano['@_latitud'] || ht.plano.latitud) || 0;
+                        longitude = parseFloat(ht.plano['@_longitud'] || ht.plano.longitud) || 0;
+                    }
+
+                    let description = "";
+                    if (ht.descripciones && ht.descripciones.descripcion) {
+                        const descList = this._toArray(ht.descripciones.descripcion);
+                        const primeiraDesc = descList[0];
+                        description = typeof primeiraDesc === 'object' ? (primeiraDesc.text || primeiraDesc['#text'] || "") : primeiraDesc;
+                    }
+
+                    let images = [];
+                    if (ht.fotos && ht.fotos.foto) {
+                        const fotoList = this._toArray(ht.fotos.foto);
+                        images = fotoList.map(f => typeof f === 'object' ? (f.text || f['#text'] || f['@_url']) : f)
+                                         .filter(url => typeof url === 'string' && url.startsWith('http'));
+                    }
+
+                    let amenities = [];
+                    if (ht.servicios && ht.servicios.servicio) {
+                        const servList = this._toArray(ht.servicios.servicio);
+                        amenities = servList.map(s => typeof s === 'object' ? (s['@_desc'] || s.text || s['#text']) : s)
+                                            .filter(Boolean);
+                    }
+
+                    const dadosMapeados = {
+                        name: String(name).trim(),
+                        address: String(address).trim(),
+                        zipCode: String(zipCode).trim(),
+                        category: category,
+                        latitude: latitude,
+                        longitude: longitude,
+                        description: String(description).trim(),
+                        images: images,
+                        amenities: amenities,
+                        countryCode: codPais,
+                        updatedAt: new Date()
+                    };
+
+                    await prismaClient.restelHotel.upsert({
+                        where: { cobol: String(cobol) },
+                        update: dadosMapeados,
+                        create: {
+                            cobol: String(cobol),
+                            ...dadosMapeados
+                        }
+                    });
+
+                    processados++;
+                    if (processados % 20 === 0) {
+                        console.log(`✨ Progresso [${codPais}]: ${processados} hotéis importados...`);
+                    }
+                } else {
+                    erros++;
+                }
+
+                // Respiro de 150ms para evitar bloqueio por DDoS na API da Restel
+                await new Promise(resolve => setTimeout(resolve, 150));
+            }
+
+            console.log(`✅ País ${codPais} concluído! Sucesso: ${processados} | Falhas Restel: ${erros}`);
+        } catch (error) {
+            console.error(`❌ Erro crítico no país ${codPais}:`, error.message);
+        }
+    }
+
+    // 5. O GRANDE ORQUESTRADOR GLOBAL
+    async sincronizarMundo(prismaClient) {
+        console.log("🌍 Iniciando Mapeamento GLOBAL de Países (XML 5)...");
+        const paises = await this.baixarListaPaises();
+
+        if (paises.length === 0) {
+            console.log("❌ Nenhum país foi retornado pela API da Restel. Verifique se o IP do seu computador está liberado no painel da Restel de produção.");
+            return;
+        }
+
+        console.log(`🗺️ Catálogo de Produção confirmou: ${paises.length} países disponíveis. Iniciando varredura mundial!`);
+
+        for (const pais of paises) {
+            const codPais = pais['@_codigo'] || pais.codigo;
+            const nomePais = pais['@_nombre'] || pais.nombre || codPais;
+            
+            if (!codPais) continue;
+
+            console.log(`\n======================================================`);
+            console.log(`✈️  Iniciando importação do País: ${nomePais} (${codPais})`);
+            console.log(`======================================================`);
+            
+            await this.importarEAtualizarHibrido(prismaClient, codPais);
+        }
+
+        console.log("\n🎉 SINCRONIZAÇÃO MUNDIAL CONCLUÍDA COM SUCESSO!");
+    }
 }
 
-iniciarTratorForcaBruta();
+module.exports = RestelCatalogImporter;
+
+// ==========================================
+// BLOCO DE EXECUÇÃO AUTOMÁTICA
+// ==========================================
+if (require.main === module) {
+    // URL EXATA COM A PORTA 6543 QUE RESOLVEU O PROBLEMA DO BANCO
+    const DATABASE_URL = "postgresql://postgres.vcqiilytjrrurdbscmio:Saopedro31%23@aws-0-us-west-2.pooler.supabase.com:6543/postgres?pgbouncer=true";
+    
+    const pool = new Pool({ connectionString: DATABASE_URL });
+    const adapter = new PrismaPg(pool);
+    const prisma = new PrismaClient({ adapter });
+
+    const importer = new RestelCatalogImporter({
+        codigousu: "PPAK",      // Certifique-se de que estas credenciais 
+        clausu: "xml528786",    // são efetivamente as de PRODUÇÃO enviadas 
+        afiliacio: "RS",        // pela Restel (geralmente eles enviam senhas 
+        secacc: "164338",       // diferentes para o ambiente de produção).
+        codusu: "BJ0932"
+    });
+
+    console.log(`🚀 Acionando Robô de Sincronização GLOBAL Restel...`);
+    
+    // Chama o Orquestrador Mundial ao invés de um país só
+    importer.sincronizarMundo(prisma)
+        .then(async () => {
+            console.log("✅ Conexão com o Supabase encerrada com segurança.");
+            await prisma.$disconnect();
+            process.exit(0);
+        })
+        .catch(async (err) => {
+            console.error("❌ Erro fatal na execução:", err);
+            await prisma.$disconnect();
+            process.exit(1);
+        });
+}

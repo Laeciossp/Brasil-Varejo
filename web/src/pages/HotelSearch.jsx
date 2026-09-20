@@ -267,8 +267,9 @@ export default function HotelSearch() {
     } catch (err) {}
     setMapCenterLatLon(`${cityLat},${cityLng}`);
 
-    let ratehawkResults = [];
+    let combinadosFinal = [];
 
+    // 1. BUSCA NA RATEHAWK
     try {
       const queryLower = destinationQuery.toLowerCase();
       const isTestSearch = queryLower.includes('los angeles') || queryLower.includes('conrad') || queryLower.includes('us-lax') || queryLower.includes('dubai');
@@ -294,7 +295,7 @@ export default function HotelSearch() {
             if (data) dbHotels = data;
           }
 
-          ratehawkResults = combinados.map((h) => {
+          const ratehawkResults = combinados.map((h) => {
             const dbInfo = dbHotels.find(dbH => dbH.id === String(h.id));
             let imagensOficiais = dbInfo?.images || h.images || [];
 
@@ -331,11 +332,76 @@ export default function HotelSearch() {
               }).sort((a, b) => a.precoVenda - b.precoVenda) 
             };
           });
+          combinadosFinal.push(...ratehawkResults);
         }
       }
-    } catch (err) {}
+    } catch (err) { console.error("Erro na RateHawk:", err); }
 
-    if (ratehawkResults.length > 0) setResults(ratehawkResults);
+    // 2. BUSCA NA DUFFEL STAYS (Integração Direta)
+    try {
+      const duffelGuests = [];
+      rooms.forEach(room => {
+          for(let i=0; i<room.adults; i++) duffelGuests.push({ type: "adult" });
+          room.childrenAges.forEach(age => duffelGuests.push({ type: "child", age: Number(age) }));
+      });
+
+      const duffelPayload = {
+        location: { radius: 10, geographic_coordinates: { latitude: cityLat, longitude: cityLng } },
+        check_in_date: checkInDate,
+        check_out_date: checkOutDate,
+        rooms: rooms.length,
+        guests: duffelGuests
+      };
+
+      const resDuffel = await fetch(`https://palastore-flights-api.laeciossp.workers.dev/duffel-hotel-search`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(duffelPayload)
+      });
+      
+      const dataDuffel = await resDuffel.json();
+      
+      // 👇 ESPIÃO ADICIONADO AQUI! 👇
+      console.log("=== RETORNO DA DUFFEL STAYS ===", dataDuffel);
+      
+      if (dataDuffel.data?.results) {
+         const duffelHotels = dataDuffel.data.results.map(item => {
+            const acc = item.accommodation;
+            const cheapestRoom = acc?.rooms?.[0]; 
+            const fotos = acc?.photos?.map(p => p.url) || [];
+            const precoOriginal = parseFloat(item.cheapest_rate_total_amount || 0);
+            const precoBRL = item.cheapest_rate_total_currency === 'BRL' ? precoOriginal : precoOriginal * 5.1; 
+            
+            return {
+              hotelId: `duffel_${item.id}`, 
+              accId: acc.id,
+              nome: acc?.name || "Hotel Duffel",
+              categoria: acc?.rating || 4,
+              endereco: acc?.location?.address?.line_one || 'Endereço não informado',
+              distancia: 'Duffel Stays',
+              latitude: acc?.location?.geographic_coordinates?.latitude || cityLat,
+              longitude: acc?.location?.geographic_coordinates?.longitude || cityLng,
+              imagensReais: fotos,
+              ofertas: [{
+                tipoQuarto: cheapestRoom?.name || 'Quarto Padrão',
+                codigoRegime: 'RO', 
+                nomeRegime: 'Acomodação (Duffel)',
+                precoVenda: precoBRL,
+                freeCancellation: false, 
+                cancellationDeadline: null,
+                excludedTaxes: [],
+                deposit: null,
+                noShow: null
+              }]
+            };
+         });
+         combinadosFinal.push(...duffelHotels);
+      } else {
+         console.error("ERRO OU BLOQUEIO NA DUFFEL:", dataDuffel);
+      }
+    } catch (err) {
+      console.error("Erro Crítico na Duffel Stays:", err);
+    }
+
+    if (combinadosFinal.length > 0) setResults(combinadosFinal);
     else setError("Nenhum hotel encontrado para esta data e destino.");
     setLoading(false);
   };

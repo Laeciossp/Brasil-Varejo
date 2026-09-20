@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String    @id @default(uuid())
+  firstName    String
+  lastName     String
+  email        String    @unique
+  passwordHash String
+  document     String?   
+  createdAt    DateTime  @default(now())
+  bookings     Booking[] 
+}
+
+model Region {
+  id          Int      @id 
+  name        String
+  countryCode String
+  type        String
+  hotels      Hotel[]  
+}
+
+model Hotel {
+  id                    String   @id 
+  hid                   Int      @unique 
+  name                  String
+  regionId              Int
+  address               String?
+  latitude              Float?
+  longitude             Float?
+  starRating            Int?
+  images                Json?    
+  amenities             Json?
+  description           Json?    
+  room_groups           Json?    // <--- Adicionado para suportar room_groups e imagens estáticas dos quartos
+  metapolicy_extra_info String?  
+  updatedAt             DateTime @updatedAt
+  region                Region   @relation(fields: [regionId], references: [id])
+}
+model Booking {
+  id               String   @id @default(uuid()) 
+  userId           String
+  supplier         String   
+  supplierOrderId  String?  
+  status           String   @default("PENDING") 
+  totalPrice       Decimal  @db.Decimal(10, 2)
+  currency         String   @default("BRL")
+  checkinDate      DateTime
+  checkoutDate     DateTime
+  createdAt        DateTime @default(now())
+  user             User           @relation(fields: [userId], references: [id])
+  guests           BookingGuest[]
+}
+
+model BookingGuest {
+  id        String  @id @default(uuid())
+  bookingId String
+  firstName String
+  lastName  String
+  isChild   Boolean @default(false)
+  age       Int?
+  booking   Booking @relation(fields: [bookingId], references: [id])
+}
+
+model RestelHotel {
+  cobol       String   @id @unique
+  name        String
+  category    Int      @default(0)
+  countryCode String?
+  province    String?
+  city        String?
+  address     String?
+  zipCode     String?
+  latitude    Float?   @default(0.0)
+  longitude   Float?   @default(0.0)
+  description String?
+  images      String[] @default([])
+  amenities   String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
