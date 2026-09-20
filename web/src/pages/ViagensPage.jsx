@@ -384,7 +384,7 @@ export default function ViagensPage() {
     { id: 'cruzeiros_tematicos', label: 'Cruzeiros Temáticos', icon: PartyPopper },
     { id: 'cruzeiros_ncl', label: 'Cruzeiros NCL', icon: Anchor },
     // Ocultado temporariamente:{ id: 'hoteis', label: 'Hotéis', icon: Building },
-    { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Star },
+    { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Building },
     // Ocultado temporariamente: { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
     { id: 'carros', label: 'Carros (Trip)', icon: Car },
     { id: 'rentcars', label: 'Carros (Rent)', icon: Car },
