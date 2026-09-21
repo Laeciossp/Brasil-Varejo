@@ -383,7 +383,7 @@ export default function ViagensPage() {
     { id: 'cruzeiros', label: 'Cruzeiros (Palastore)', icon: Ship },
     { id: 'cruzeiros_tematicos', label: 'Cruzeiros Temáticos', icon: PartyPopper },
     { id: 'cruzeiros_ncl', label: 'Cruzeiros NCL', icon: Anchor },
-    { id: 'hoteis', label: 'Hotel ratwhNK', icon: Building },
+    { id: 'hoteis', label: 'Hotel RAtehawk', icon: Building },
     { id: 'ofertas_hoteis', label: 'Ofertas Hotéis', icon: Building },
     // Ocultado temporariamente: { id: 'voo_hotel', label: 'Voo + Hotel', icon: Briefcase },
     { id: 'carros', label: 'Carros (Trip)', icon: Car },
